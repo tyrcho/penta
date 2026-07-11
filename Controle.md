@@ -10,20 +10,11 @@
 
 ### **⚔️ Cycle Contrôle : Contre les Stratégies Adverses**
 
-- **G (Nature/Bois) ↔ B (Mort/Mort)** :
-    - **Narratif** : La vie (Nature) triomphe de la mort (Mort).
-
-- **R (Chaos/Feu) ↔ U (Science/Cristal)** :
-    - **Narratif** : Le chaos et la vitesse (Chaos) détruisent l’ordre intellectuel (Science), trop lent.
-
-- **B (Mort/Mort) ↔ W (Loi/Lumière)** :
-    - **Narratif** : La corruption (Mort) ronge les administrations (la pureté de la Loi).
-
-- **U (Science/Cristal) ↔ G (Nature/Bois)** :
-    - **Narratif** : La recherche (Science) permet de contrôler la croissance (Nature).
-
-- **W (Loi/Lumière) ↔ R (Chaos/Feu)** :
-    - **Narratif** : L’organisation et l’ordre (Loi) triomphent de la précipitation (Chaos).
+- Nature ↔ Mort / Bois ↔ Mort
+- Chaos ↔ Science / Feu ↔ Cristal
+- Mort ↔ Loi / Mort ↔ Lumière
+- Science ↔ Nature / Cristal ↔ Bois
+- Loi ↔ Chaos / Lumière ↔ Feu
 
 ---
 

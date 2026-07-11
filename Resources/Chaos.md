@@ -9,25 +9,25 @@ Le Chaos **se nourrit de** la [Nature](Nature.md).
 
 Chaque arbre abattu pour alimenter les forges d’armes attise la guerre. Abondance de nourriture et populations en pleine croissance entrent en compétition pour l’espace restant.
 
-**Cycle** : Nature (G) **engendre** Chaos (R) / Bois (G) **engendre** Feu (R)
+**Cycle** : Nature → Chaos / Bois → Feu
 
 ---
 
 #### **⚔️ Le Chaos et la Mort**
 Le Chaos **engendre** la [Mort](Mort.md).
 
-Les orcs, maîtres de la guerre, savent que le Chaos et la Mort forment une alliance redoutable. Leurs forges, alimentées par les volcans, produisent des armes capables de percer même les armures les plus résistantes. Les hommes-lézards, créatures des marécages sombres, utilisent le Feu pour corrompre leurs ennemis.
+Les orcs, maîtres de la guerre, savent que le Chaos et la Mort forment une alliance redoutable. Leurs forges, alimentées par les volcans, produisent des armes capables de percer même les armures les plus résistantes.
 
-**Cycle** : Chaos (R) **engendre** Mort (B) / Feu (R) **engendre** Mort (B)
+**Cycle** : Chaos → Mort / Feu → Mort
 
 ---
 
 #### **🔬 Le Chaos et la Science**
 Le Chaos **détruit** la [Science](Science.md).
 
-Le Chaos détruit la Science, car la chaleur brute fond les structures les plus solides. Les nains, maîtres forgerons, savent que leurs fours peuvent réduire en poussière les plus belles gemmes.
+Le Chaos détruit la Science, car la chaleur brute fond les structures les plus solides.
 
-**Cycle** : Chaos (R) **contrôle** Science (U) / Feu (R) **contrôle** Cristal (U)
+**Cycle** : Chaos → Science / Feu → Cristal
 
 ---
 
@@ -36,7 +36,7 @@ Le Chaos **est contrôlé par** la [Loi](Loi.md).
 
 Les dragons, symboles ultimes du Chaos, défient constamment la Loi. Leurs souffles de flammes réduisent en cendres les temples et les citadelles.
 
-**Cycle** : Loi (W) **contrôle** Chaos (R) / Lumière (W) **contrôle** Feu (R)
+**Cycle** : Loi → Chaos / Lumière → Feu
 
 ---
 

@@ -9,7 +9,7 @@ La Mort **est contrôlée par** la [Nature](Nature.md).
 
 Les zombies émergent des forêts maudites, où les arbres pourrissent sous l’effet des malédictions des [nécromants](Mort.md). La végétation dense ralentit les spectres et les créatures corrompues.
 
-**Cycle** : Nature (G) **contrôle** Mort (B) / Bois (G) **contrôle** Mort (B)
+**Cycle** : Nature → Mort / Bois → Mort
 
 ---
 
@@ -18,7 +18,7 @@ La Mort **est engendrée par** le [Chaos](Chaos.md).
 
 Les squelettes des guerriers tombés au combat, consumés par les flammes, se relèvent sous les ordres des liches. Les chauves-souris volent au-dessus des champs de bataille, attirées par l’odeur de la chair brûlée.
 
-**Cycle** : Chaos (R) **engendre** Mort (B) / Feu (R) **engendre** Mort (B)
+**Cycle** : Chaos → Mort / Feu → Mort
 
 ---
 
@@ -27,7 +27,7 @@ La Mort **contrôle** la [Science](Science.md).
 
 Les vampires, maîtres de l’illusion, utilisent des artefacts de **Cristal** pour piéger leurs victimes. Les nécromants étudient les propriétés des gemmes noires pour amplifier leurs sorts.
 
-**Cycle** : Mort (B) **contrôle** Science (U) / Mort (B) **contrôle** Cristal (U)
+**Cycle** : Mort → Science / Mort → Cristal
 
 ---
 
@@ -36,7 +36,7 @@ La Mort **est l’ennemie jurée** de la [Loi](Loi.md).
 
 Les paladins et les anges chassent les zombies et les vampires avec des épées flamboyantes. Les cimetières, lieux de pouvoir pour les morts-vivants, sont souvent ciblés par les juges.
 
-**Cycle** : Mort (B) **contrôle** Loi (W) / Mort (B) **contrôle** Lumière (W)
+**Cycle** : Mort → Loi / Mort → Lumière
 
 ---
 

@@ -10,20 +10,11 @@
 
 ### **🌿 Cycle Engendre : Synergies de Production**
 
-- **G (Nature/Bois) → R (Chaos/Feu)** :
-    - **Narratif** : La croissance (Nature) alimente le conflit (Chaos). La **Ressource Bois** permet de construire des bâtiments qui génèrent du **Feu**.
-
-- **R (Chaos/Feu) → B (Mort/Mort)** :
-    - **Narratif** : Le conflit amène la mort. Le **Feu** consume tout et ne laisse que des cendres, qui nourrissent la **Mort**.
-
-- **B (Mort/Mort) → U (Science/Cristal)** :
-    - **Narratif** : Ceux qui survivent ou profitent des morts sont les plus malins et cherchent à acquérir des connaissances. La **Mort** pousse à l’innovation, produisant du **Cristal**.
-
-- **U (Science/Cristal) → W (Loi/Lumière)** :
-    - **Narratif** : La science amène à la philosophie. La recherche permet de construire des bâtiments plus efficaces pour se défendre. Le **Cristal** condense la **Lumière**.
-
-- **W (Loi/Lumière) → G (Nature/Bois)** :
-    - **Narratif** : La lumière (Loi) fait pousser les plantes (Nature). La paix permet la croissance. La **Lumière** favorise la production de **Bois**.
+- Nature → Chaos / Bois → Feu
+- Chaos → Mort / Feu → Mort
+- Mort → Science / Mort → Cristal
+- Science → Loi / Cristal → Lumière
+- Loi → Nature / Lumière → Bois
 
 ---
 
