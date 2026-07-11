@@ -1,39 +1,48 @@
 ### **⚔️ Cycle "Contrôle" (Inspiré du Pentacle de Magic)**
 
-**Principe** : Chaque élément/couleur **neutralise** ou **domine** un autre, selon une logique d'**opposition philosophique**.
+**Principe** : Chaque **Thème** (et sa Ressource associée) **neutralise** ou **domine** un autre, selon une logique d’**opposition philosophique**.
+
+**Niveaux :**
+- **Thème** : Concept narratif (Nature, Chaos, Ombre, Science, Loi)
+- **Ressource** : Ressource de jeu (Bois, Feu, Ombre, Cristal, Lumière)
+
+---
 
 ### **⚔️ Cycle Contrôle : Contre les Stratégies Adverses**
 
-- **G ↔ B** :
-    - **Narratif** : La vie (G) triomphe de la mort (B).
+- **G (Nature/Bois) ↔ B (Ombre/Ombre)** :
+    - **Narratif** : La vie (Nature) triomphe de la mort (Ombre).
 
-- **R ↔ U** :
-    - **Narratif** : Le chaos et la vitesse (R) détruisent l'ordre intellectuel (U), trop lent.
+- **R (Chaos/Feu) ↔ U (Science/Cristal)** :
+    - **Narratif** : Le chaos et la vitesse (Chaos) détruisent l’ordre intellectuel (Science), trop lent.
 
-- **B ↔ W** :
-    - **Narratif** : La corruption ronge les administrations (la pureté).
+- **B (Ombre/Ombre) ↔ W (Loi/Lumière)** :
+    - **Narratif** : La corruption (Ombre) ronge les administrations (la pureté de la Loi).
 
-- **U ↔ G** :
-    - **Narratif** : La recherche permet de contrôler la croissance.
+- **U (Science/Cristal) ↔ G (Nature/Bois)** :
+    - **Narratif** : La recherche (Science) permet de contrôler la croissance (Nature).
 
-- **W ↔ R** :
-    - **Narratif** : L'organisation et l'ordre triomphent de la précipitation.
-
----
-
-| Élément/Couleur | Élément/Couleur Contrôlée | Explication Narrative |
-|-----------------|----------------------------|------------------------|
-| **G (Nature)** | **B (Ombre)** | La **vie (G)** triomphe de la **mort (B)** : une forêt repousse après une catastrophe. |
-| **R (Feu)** | **U (Cristal)** | Le **chaos (R)** détruit l'**ordre intellectuel (U)** : une guerre brûle les bibliothèques. |
-| **B (Ombre)** | **W (Lumière)** | La **corruption (B)** ronge la **pureté (W)** : les ténèbres absorbent la lumière. |
-| **U (Cristal)** | **G (Nature)** | Le **métal/la technologie (U)** structure la **nature (G)** : les machines dominent la forêt. |
-| **W (Lumière)** | **R (Feu)** | L'**ordre (W)** étouffe le **chaos (R)** : la loi calme la rébellion. |
+- **W (Loi/Lumière) ↔ R (Chaos/Feu)** :
+    - **Narratif** : L’organisation et l’ordre (Loi) triomphent de la précipitation (Chaos).
 
 ---
 
-**Visualisation du Cycle Contrôle** :
-G ↔ B ↔ W ↔ R ↔ U ↔ G
+| **Couleur** | **Thème** | **Ressource** | **Thème Contrôlé** | **Ressource Contrôlée** | Explication Narrative |
+|-------------|-----------|---------------|---------------------|-------------------------|------------------------|
+| **G** | Nature | Bois | Ombre | Ombre | La **vie (Nature)** triomphe de la **mort (Ombre)** : une forêt repousse après une catastrophe. |
+| **R** | Chaos | Feu | Science | Cristal | Le **chaos (Chaos)** détruit l’**ordre intellectuel (Science)** : une guerre brûle les bibliothèques. |
+| **B** | Ombre | Ombre | Loi | Lumière | La **corruption (Ombre)** ronge la **pureté (Loi)** : les ténèbres absorbent la lumière. |
+| **U** | Science | Cristal | Nature | Bois | Le **métal/la technologie (Science)** structure la **nature (Nature)** : les machines dominent la forêt. |
+| **W** | Loi | Lumière | Chaos | Feu | L’**ordre (Loi)** étouffe le **chaos (Chaos)** : la loi calme la rébellion. |
+
+---
+
+**Visualisation du Cycle Contrôle** (par Thème) :
+Nature ↔ Ombre ↔ Loi ↔ Chaos ↔ Science ↔ Nature
+
+**Visualisation du Cycle Contrôle** (par Ressource) :
+Bois ↔ Ombre ↔ Lumière ↔ Feu ↔ Cristal ↔ Bois
 
 **Impact en Jeu** :
 - **Contre les stratégies adverses** : Chaque couleur a un avantage contre une autre.
-- **Équilibrage** : Les joueurs doivent **diversifier** leurs bâtiments pour éviter d'être vulnérables.
+- **Équilibrage** : Les joueurs doivent **diversifier** leurs bâtiments pour éviter d’être vulnérables.
