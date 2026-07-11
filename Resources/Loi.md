@@ -9,7 +9,7 @@ La Loi **engendre** la [Nature](Nature.md).
 
 Les pégases survolent les forêts, bénissant les arbres de leur présence divine. Les licornes purifient les terres corrompues.
 
-**Cycle** : Loi → Nature / Lumière → Bois
+**Cycle** : Loi **engendre** [Nature](Nature.md) / Lumière **engendre** Bois
 
 ---
 
@@ -18,7 +18,7 @@ La Loi **contrôle** le [Chaos](Chaos.md).
 
 Les paladins affrontent les dragons avec des boucliers étincelants. Les soldats disciplinés éteignent les incendies avant qu’ils ne se propagent.
 
-**Cycle** : Loi → Chaos / Lumière → Feu
+**Cycle** : Loi **contrôle** [Chaos](Chaos.md) / Lumière **contrôle** Feu
 
 ---
 
@@ -27,7 +27,7 @@ La Loi **est engendrée par** la [Science](Science.md).
 
 Les érudits et les magiciens utilisent des licornes comme montures pour explorer les mystères de l’univers.
 
-**Cycle** : Science → Loi / Cristal → Lumière
+**Cycle** : Science **engendre** [Loi](Loi.md) / Cristal **engendre** Lumière
 
 ---
 
@@ -36,7 +36,7 @@ La Loi **contrôle** la [Mort](Mort.md).
 
 Les paladins traquent les vampires et les zombies. Les anges purifient les cimetières hantés.
 
-**Cycle** : Loi → Mort / Lumière → Mort
+**Cycle** : Loi **contrôle** [Mort](Mort.md) / Lumière **contrôle** Mort
 
 ---
 

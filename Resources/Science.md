@@ -9,7 +9,7 @@ La Science **contrôle** la [Nature](Nature.md).
 
 Les ondins utilisent des gemmes magiques pour faire pousser des jardins suspendus. Les changeformes étudient les plantes pour en extraire des propriétés uniques.
 
-**Cycle** : Science → Nature / Cristal → Bois
+**Cycle** : Science **contrôle** [Nature](Nature.md) / Cristal **contrôle** Bois
 
 ---
 
@@ -18,7 +18,7 @@ La Science **est contrôlée par** le [Chaos](Chaos.md).
 
 Le Cristal est contrôlé par le Feu, car la chaleur brute peut fondre même les structures les plus solides.
 
-**Cycle** : Chaos → Science / Feu → Cristal
+**Cycle** : Chaos **contrôle** [Science](Science.md) / Feu **contrôle** Cristal
 
 ---
 
@@ -27,7 +27,7 @@ La Science **est engendrée par** la [Mort](Mort.md).
 
 Les nécromants étudient les propriétés des gemmes noires pour amplifier leurs sorts. Les vampires utilisent des artefacts de Cristal pour piéger leurs victimes.
 
-**Cycle** : Mort → Science / Mort → Cristal
+**Cycle** : Mort **engendre** [Science](Science.md) / Mort **engendre** Cristal
 
 ---
 
@@ -36,7 +36,7 @@ La Science **engendre** la [Loi](Loi.md).
 
 Le Cristal engendre la Lumière, car la connaissance mène à la sagesse. Les licornes et les pégases sont souvent associés aux érudits.
 
-**Cycle** : Science → Loi / Cristal → Lumière
+**Cycle** : Science **engendre** [Loi](Loi.md) / Cristal **engendre** Lumière
 
 ---
 

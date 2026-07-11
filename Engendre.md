@@ -10,11 +10,11 @@
 
 ### **🌿 Cycle Engendre : Synergies de Production**
 
-- Nature → Chaos / Bois → Feu
-- Chaos → Mort / Feu → Mort
-- Mort → Science / Mort → Cristal
-- Science → Loi / Cristal → Lumière
-- Loi → Nature / Lumière → Bois
+- Nature **engendre** [Chaos](Chaos.md) / Bois **engendre** Feu
+- Chaos **engendre** [Mort](Mort.md) / Feu **engendre** Mort
+- Mort **engendre** [Science](Science.md) / Mort **engendre** Cristal
+- Science **engendre** [Loi](Loi.md) / Cristal **engendre** Lumière
+- Loi **engendre** [Nature](Nature.md) / Lumière **engendre** Bois
 
 ---
 

@@ -10,11 +10,11 @@
 
 ### **⚔️ Cycle Contrôle : Contre les Stratégies Adverses**
 
-- Nature ↔ Mort / Bois ↔ Mort
-- Chaos ↔ Science / Feu ↔ Cristal
-- Mort ↔ Loi / Mort ↔ Lumière
-- Science ↔ Nature / Cristal ↔ Bois
-- Loi ↔ Chaos / Lumière ↔ Feu
+- Nature **contrôle** [Mort](Mort.md) / Bois **contrôle** Mort
+- Chaos **contrôle** [Science](Science.md) / Feu **contrôle** Cristal
+- Mort **contrôle** [Loi](Loi.md) / Mort **contrôle** Lumière
+- Science **contrôle** [Nature](Nature.md) / Cristal **contrôle** Bois
+- Loi **contrôle** [Chaos](Chaos.md) / Lumière **contrôle** Feu
 
 ---
 
