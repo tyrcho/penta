@@ -4,19 +4,19 @@
 
 **Niveaux :**
 - **Thème** : Concept narratif (Nature, Chaos, Ombre, Science, Loi)
-- **Ressource** : Ressource de jeu (Bois, Feu, Ombre, Cristal, Lumière)
+- **Ressource** : Ressource de jeu (Bois, Feu, Mort, Cristal, Lumière)
 
 ---
 
 ### **⚔️ Cycle Contrôle : Contre les Stratégies Adverses**
 
-- **G (Nature/Bois) ↔ B (Ombre/Ombre)** :
+- **G (Nature/Bois) ↔ B (Ombre/Mort)** :
     - **Narratif** : La vie (Nature) triomphe de la mort (Ombre).
 
 - **R (Chaos/Feu) ↔ U (Science/Cristal)** :
     - **Narratif** : Le chaos et la vitesse (Chaos) détruisent l’ordre intellectuel (Science), trop lent.
 
-- **B (Ombre/Ombre) ↔ W (Loi/Lumière)** :
+- **B (Ombre/Mort) ↔ W (Loi/Lumière)** :
     - **Narratif** : La corruption (Ombre) ronge les administrations (la pureté de la Loi).
 
 - **U (Science/Cristal) ↔ G (Nature/Bois)** :
@@ -29,9 +29,9 @@
 
 | **Couleur** | **Thème** | **Ressource** | **Thème Contrôlé** | **Ressource Contrôlée** | Explication Narrative |
 |-------------|-----------|---------------|---------------------|-------------------------|------------------------|
-| **G** | Nature | Bois | Ombre | Ombre | La **vie (Nature)** triomphe de la **mort (Ombre)** : une forêt repousse après une catastrophe. |
+| **G** | Nature | Bois | Ombre | Mort | La **vie (Nature)** triomphe de la **mort (Ombre)** : une forêt repousse après une catastrophe. |
 | **R** | Chaos | Feu | Science | Cristal | Le **chaos (Chaos)** détruit l’**ordre intellectuel (Science)** : une guerre brûle les bibliothèques. |
-| **B** | Ombre | Ombre | Loi | Lumière | La **corruption (Ombre)** ronge la **pureté (Loi)** : les ténèbres absorbent la lumière. |
+| **B** | Ombre | Mort | Loi | Lumière | La **corruption (Ombre)** ronge la **pureté (Loi)** : les ténèbres absorbent la lumière. |
 | **U** | Science | Cristal | Nature | Bois | Le **métal/la technologie (Science)** structure la **nature (Nature)** : les machines dominent la forêt. |
 | **W** | Loi | Lumière | Chaos | Feu | L’**ordre (Loi)** étouffe le **chaos (Chaos)** : la loi calme la rébellion. |
 
@@ -41,7 +41,7 @@
 Nature ↔ Ombre ↔ Loi ↔ Chaos ↔ Science ↔ Nature
 
 **Visualisation du Cycle Contrôle** (par Ressource) :
-Bois ↔ Ombre ↔ Lumière ↔ Feu ↔ Cristal ↔ Bois
+Bois ↔ Mort ↔ Lumière ↔ Feu ↔ Cristal ↔ Bois
 
 **Impact en Jeu** :
 - **Contre les stratégies adverses** : Chaque couleur a un avantage contre une autre.

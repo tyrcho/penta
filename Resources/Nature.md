@@ -15,9 +15,9 @@ La Nature **nourrit le Chaos (R)**, mais cette relation est aussi une **malédic
 ---
 
 #### **⚔️ La Nature contre la Mort : La Lutte des Ombres**
-Les ents, ces arbres vivants et sages, se dressent comme les derniers remparts contre l’avancée de l’[Ombre](Ombre.md). Leurs racines s’enfoncent profondément dans la terre, étouffant les spectres et les créatures corrompues qui cherchent à tout consumer. La Nature **résiste à la mort (Ombre)**, car même dans les ténèbres les plus profondes, une graine peut germer.
+Les ents, ces arbres vivants et sages, se dressent comme les derniers remparts contre l’avancée de l’[Ombre](Ombre.md) (Thème). Leurs racines s’enfoncent profondément dans la terre, étouffant les spectres et les créatures corrompues qui cherchent à tout consumer. La Nature **résiste à la mort (Ombre)**, car même dans les ténèbres les plus profondes, une graine peut germer.
 
-**Cycle** : Nature (G) **contrôle** Ombre (B) / Bois (G) **contrôle** Ombre (B)
+**Cycle** : Nature (G) **contrôle** Ombre (B) / Bois (G) **contrôle** Mort (B)
 
 ---
 

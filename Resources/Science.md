@@ -22,9 +22,9 @@ Le Cristal (Ressource) **est contrôlé par le Chaos (R)**, car la chaleur brute
 ---
 
 #### **☠️ La Science et l’Ombre : La Connaissance des Ténèbres**
-Le Cristal (Ressource) **est engendré par l’Ombre (B)**, car la mort pousse à l’innovation. Les nécromants étudient les propriétés des gemmes noires pour amplifier leurs sorts, tandis que les vampires utilisent des artefacts de Cristal pour piéger leurs victimes. Pourtant, la science peut aussi se retourner contre l’[Ombre](Ombre.md) : les érudits découvrent des moyens de briser les malédictions, et les ondins purifient les eaux corrompues avec des cristaux de lumière.
+Le Cristal (Ressource) **est engendré par l’Ombre (B)** (Thème), car la mort pousse à l’innovation. Les nécromants étudient les propriétés des gemmes noires pour amplifier leurs sorts, tandis que les vampires utilisent des artefacts de Cristal pour piéger leurs victimes. Pourtant, la science peut aussi se retourner contre l’[Ombre](Ombre.md) : les érudits découvrent des moyens de briser les malédictions, et les ondins purifient les eaux corrompues avec des cristaux de lumière.
 
-**Cycle** : Science (U) **engendre** Ombre (B) / Cristal (U) **engendre** Ombre (B)
+**Cycle** : Science (U) **engendre** Ombre (B) / Cristal (U) **engendre** Mort (B)
 
 ---
 
@@ -36,6 +36,6 @@ Le Cristal (Ressource) **engendre la Loi (W)**, car la connaissance mène à la 
 ---
 
 #### **🏆 La Victoire par la Science : La Maîtrise des Arcanes**
-Pour l’emporter avec la Science, il faut incarner l’esprit des magiciens et des érudits : **innover sans relâche** en utilisant la **Ressource Cristal**, percer les mystères de l’univers jusqu’à ce que la connaissance soit absolue. Le **Sanctuaire des Arcanes**, cœur battant de la science, symbolise cette victoire. Ses laboratoires brillent d’une lumière bleutée, et chaque bâtiment de Cristal ou d’Ombre rapporte des **points de victoire**. Si la Science domine la [Nature](Nature.md) (**U > G**), le sanctuaire entre en **fureur scientifique**, réduisant la production de Bois de 30%.
+Pour l’emporter avec la Science, il faut incarner l’esprit des magiciens et des érudits : **innover sans relâche** en utilisant la **Ressource Cristal**, percer les mystères de l’univers jusqu’à ce que la connaissance soit absolue. Le **Sanctuaire des Arcanes**, cœur battant de la science, symbolise cette victoire. Ses laboratoires brillent d’une lumière bleutée, et chaque bâtiment de Cristal ou de Mort rapporte des **points de victoire**. Si la Science domine la [Nature](Nature.md) (**U > G**), le sanctuaire entre en **fureur scientifique**, réduisant la production de Bois de 30%.
 
 Pour en savoir plus sur les [cycles qui régissent ces relations](Engendre.md) ou sur les [mécanismes de contrôle](Controle.md), explorez les liens entre les éléments. Les [conditions de victoire](Victoire.md) détaillent comment la Science peut triompher.

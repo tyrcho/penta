@@ -29,9 +29,9 @@ La Loi **est engendrée par la Science (U)**, car la connaissance mène à la sa
 ---
 
 #### **☠️ La Loi et l’Ombre : La Guerre Sans Fin**
-La Loi **est l’ennemie jurée de l’Ombre (B)**. Les paladins traquent les vampires et les zombies, tandis que les anges purifient les cimetières hantés. Les spectres fuient devant les pégases, dont la simple présence les force à se disperser. Pourtant, sans l’[Ombre](Ombre.md), la Loi n’aurait aucune raison d’exister : c’est dans les ténèbres que la pureté trouve son but.
+La Loi **est l’ennemie jurée de l’Ombre (B)** (Thème). Les paladins traquent les vampires et les zombies, tandis que les anges purifient les cimetières hantés. Les spectres fuient devant les pégases, dont la simple présence les force à se disperser. Pourtant, sans l’[Ombre](Ombre.md), la Loi n’aurait aucune raison d’exister : c’est dans les ténèbres que la pureté trouve son but.
 
-**Cycle** : Loi (W) **contrôle** Ombre (B) / Lumière (W) **contrôle** Ombre (B)
+**Cycle** : Loi (W) **contrôle** Ombre (B) / Lumière (W) **contrôle** Mort (B)
 
 ---
 

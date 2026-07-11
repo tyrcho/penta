@@ -15,9 +15,9 @@ Le Chaos **se nourrit de la Nature (G)**, mais cette relation est aussi une **ma
 ---
 
 #### **⚔️ Le Chaos et l’Ombre : L’Alliance des Ténèbres Flamboyantes**
-Les orcs, maîtres de la guerre, savent que le Chaos et l’[Ombre](Ombre.md) forment une alliance redoutable. Leurs forges, alimentées par les volcans, produisent des armes capables de percer même les armures les plus résistantes. Les hommes-lézards, créatures des marécages sombres, utilisent le Feu pour corrompre leurs ennemis.
+Les orcs, maîtres de la guerre, savent que le Chaos et l’[Ombre](Ombre.md) (Thème) forment une alliance redoutable. Leurs forges, alimentées par les volcans, produisent des armes capables de percer même les armures les plus résistantes. Les hommes-lézards, créatures des marécages sombres, utilisent le Feu pour corrompre leurs ennemis.
 
-**Cycle** : Chaos (R) **engendre** Ombre (B) / Feu (R) **engendre** Ombre (B)
+**Cycle** : Chaos (R) **engendre** Ombre (B) / Feu (R) **engendre** Mort (B)
 
 ---
 
