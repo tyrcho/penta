@@ -9,7 +9,7 @@ La Nature **engendre** le [Chaos](Chaos.md).
 
 Chaque arbre abattu pour alimenter les forges d’armes attise la guerre. Abondance de nourriture et populations en pleine croissance entrent en compétition pour l’espace restant.
 
-**Cycle** : Nature **engendre** [Chaos](Chaos.md) / Bois **engendre** Feu
+**Cycle** : Nature **engendre** [Chaos](Chaos.md)
 
 ---
 
@@ -18,7 +18,7 @@ La Nature **contrôle** la [Mort](Mort.md).
 
 Les arbres se dressent comme **derniers** remparts contre l’avancée de la [Mort](Mort.md). La végétation dense ralentit les spectres et les créatures corrompues.
 
-**Cycle** : Nature **contrôle** [Mort](Mort.md) / Bois **contrôle** Mort
+**Cycle** : Nature **contrôle** [Mort](Mort.md)
 
 ---
 
@@ -27,7 +27,7 @@ La [Science](Science.md) **contrôle** la Nature.
 
 Les ondins utilisent des gemmes magiques pour faire pousser des jardins suspendus. Les créatures mécaniques, êtres hybrides entre vie et technologie, symbolisent cette tension.
 
-**Cycle** : Science **contrôle** [Nature](Nature.md) / Cristal **contrôle** Bois
+**Cycle** : Science **contrôle** [Nature](Nature.md)
 
 ---
 
@@ -36,7 +36,7 @@ La [Loi](Loi.md) **engendre** la Nature.
 
 Dans la Loi, l’ordre permet aux villes de **prospérer** et de **se développer**. La lumière **accélère** la pousse des arbres et des champs.
 
-**Cycle** : Loi **engendre** [Nature](Nature.md) / Lumière **engendre** Bois
+**Cycle** : Loi **engendre** [Nature](Nature.md)
 
 ---
 

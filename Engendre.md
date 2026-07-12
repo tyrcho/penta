@@ -4,15 +4,15 @@
 
 **Niveaux :**
 - **Thème** : Concept narratif (Nature, Chaos, Mort, Science, Loi)
-- **Ressource** : Ressource de jeu (Bois, Feu, Mort, Cristal, Lumière)
+- **Ressource** : Ressource de jeu (Bois, Feu, Ombre, Cristal, Lumière)
 
 ---
 
 ### **🌿 Cycle Engendre : Synergies de Production**
 
 - Nature **engendre** [Chaos](Chaos.md) / Bois **engendre** Feu
-- Chaos **engendre** [Mort](Mort.md) / Feu **engendre** Mort
-- Mort **engendre** [Science](Science.md) / Mort **engendre** Cristal
+- Chaos **engendre** [Mort](Mort.md) / Feu **engendre** Ombre
+- Mort **engendre** [Science](Science.md) / Ombre **engendre** Cristal
 - Science **engendre** [Loi](Loi.md) / Cristal **engendre** Lumière
 - Loi **engendre** [Nature](Nature.md) / Lumière **engendre** Bois
 
@@ -22,7 +22,7 @@
 Nature → Chaos → Mort → Science → Loi → Nature
 
 **Visualisation du Cycle Engendre** (par Ressource) :
-Bois → Feu → Mort → Cristal → Lumière → Bois
+Bois → Feu → Ombre → Cristal → Lumière → Bois
 
 **Impact en Jeu** :
 - **Synergie** : Construire des bâtiments dans l’ordre du cycle **boost la production** (ex: Nature → Chaos → Mort donne des bonus cumulatifs).
