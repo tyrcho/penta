@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="description" content="Tower defense POC — ScalaJS + PixiJS v8.">
+  <title>tower-defense-poc</title>
+  <script src="https://cdn.jsdelivr.net/npm/pixi.js@8.6.0/dist/pixi.min.js"
+          integrity="sha384-WgaQEQzzPID7Pm7lYsOUogCUPFybLCtoH+DjLfzzH3xQBvJAAul6CNqfWEdbtC6u"
+          crossorigin="anonymous"
+          defer></script>
+  <style>
+    :root {
+      --color-brand:   #7c3aed;
+      --color-bg:      #1a1a2e;
+      --color-surface: #16213e;
+      --color-text:    #e8e8e8;
+      --color-muted:   #888;
+      --color-border:  #2a2a4a;
+      --color-gold:    #eab308;
+      --color-lives:   #f87171;
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; overflow: hidden; touch-action: none; }
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      background: var(--color-bg);
+      color: var(--color-text);
+      display: flex;
+      flex-direction: column;
+    }
+    #toolbar {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      padding: 0.5rem 1rem;
+      background: var(--color-surface);
+      border-bottom: 1px solid var(--color-border);
+      flex-shrink: 0;
+      z-index: 1;
+    }
+    #toolbar h1 { font-size: 1rem; font-weight: 700; color: var(--color-brand); }
+    #toolbar .spacer { flex: 1; }
+    .stat { font-size: 0.9rem; font-weight: 600; }
+    .stat.gold { color: var(--color-gold); }
+    .stat.lives { color: var(--color-lives); }
+    #game-container {
+      flex: 1;
+      overflow: hidden;
+      position: relative;
+    }
+    #game-container canvas {
+      display: block;
+      touch-action: none;
+    }
+  </style>
+</head>
+<body>
+  <div id="toolbar">
+    <h1>tower-defense-poc</h1>
+    <span class="spacer"></span>
+    <span class="stat gold">Gold: <span id="gold-value">0</span></span>
+    <span class="stat lives">Lives: <span id="lives-value">0</span></span>
+  </div>
+  <div id="game-container"></div>
+  <script type="module" src="./main.js"></script>
+</body>
+</html>
