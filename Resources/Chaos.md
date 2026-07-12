@@ -5,42 +5,31 @@ Le **Chaos** incarne la **destruction créatrice**, l’énergie brute qui consu
 ---
 
 #### **🌱 Le Chaos et la Nature**
-Le Chaos **est engendré par** la [Nature](Nature.md).
 
-Chaque arbre abattu pour alimenter les forges d’armes attise la guerre. Abondance de nourriture et populations en pleine croissance entrent en compétition pour l’espace restant.
-
-**Cycle** : Nature **engendre** [Chaos](Chaos.md)
+Voir [Nature engendre Chaos](Relations/Engendre/Nature-Chaos.md).
 
 ---
 
 #### **⚔️ Le Chaos et la Mort**
-Le Chaos **engendre** la [Mort](Mort.md).
 
-Les orcs, maîtres de la guerre, savent que le Chaos et la Mort forment une alliance redoutable. Leurs forges, alimentées par les volcans, produisent des armes capables de percer même les armures les plus résistantes.
-
-**Cycle** : Chaos **engendre** [Mort](Mort.md)
+Voir [Chaos engendre Mort](Relations/Engendre/Chaos-Mort.md).
 
 ---
 
 #### **🔬 Le Chaos et la Science**
-Le Chaos **contrôle** la [Science](Science.md).
 
-Le Chaos contrôle la Science, car la chaleur brute fond les structures les plus solides.
-
-**Cycle** : Chaos **contrôle** [Science](Science.md)
+Voir [Chaos contrôle Science](Relations/Contrôle/Chaos-Science.md).
 
 ---
 
 #### **☀️ Le Chaos et la Loi**
-Le Chaos **est contrôlé par** la [Loi](Loi.md).
 
-Les dragons, symboles ultimes du Chaos, défient constamment la Loi. Leurs souffles de flammes réduisent en cendres les temples et les citadelles.
-
-**Cycle** : Loi **contrôle** [Chaos](Chaos.md)
+Voir [Loi contrôle Chaos](Relations/Contrôle/Loi-Chaos.md).
 
 ---
 
 #### **🏆 La Victoire par le Chaos : La Guerre Totale**
+
 Pour l’emporter avec le Chaos, il faut incarner l’esprit des orcs et des dragons : **détruire sans pitié** en utilisant la **Ressource Feu**, consumer tout sur son passage jusqu’à ce qu’il ne reste plus rien.
 
-**Condition** : 500 unités ennemies tuées = Victoire
+**Condition** : voir [Conditions de Victoire](../Victoire.md)

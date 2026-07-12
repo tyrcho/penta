@@ -5,42 +5,31 @@ La **Nature** incarne la **vie sous toutes ses formes** : les forêts luxuriante
 ---
 
 #### **🌱 La Nature et le Chaos**
-La Nature **engendre** le [Chaos](Chaos.md).
 
-Chaque arbre abattu pour alimenter les forges d’armes attise la guerre. Abondance de nourriture et populations en pleine croissance entrent en compétition pour l’espace restant.
-
-**Cycle** : Nature **engendre** [Chaos](Chaos.md)
+Voir [Nature engendre Chaos](Relations/Engendre/Nature-Chaos.md).
 
 ---
 
 #### **⚔️ La Nature contre la Mort**
-La Nature **contrôle** la [Mort](Mort.md).
 
-Les arbres se dressent comme **derniers** remparts contre l’avancée de la [Mort](Mort.md). La végétation dense ralentit les spectres et les créatures corrompues.
-
-**Cycle** : Nature **contrôle** [Mort](Mort.md)
+Voir [Nature contrôle Mort](Relations/Contrôle/Nature-Mort.md).
 
 ---
 
 #### **🔬 La Nature face à la Science**
-La [Science](Science.md) **contrôle** la Nature.
 
-Les ondins utilisent des gemmes magiques pour faire pousser des jardins suspendus. Les créatures mécaniques, êtres hybrides entre vie et technologie, symbolisent cette tension.
-
-**Cycle** : Science **contrôle** [Nature](Nature.md)
+Voir [Science contrôle Nature](Relations/Contrôle/Science-Nature.md).
 
 ---
 
 #### **☀️ La Nature et la Loi**
-La [Loi](Loi.md) **engendre** la Nature.
 
-Dans la Loi, l’ordre permet aux villes de **prospérer** et de **se développer**. La lumière **accélère** la pousse des arbres et des champs.
-
-**Cycle** : Loi **engendre** [Nature](Nature.md)
+Voir [Loi engendre Nature](Relations/Engendre/Loi-Nature.md).
 
 ---
 
 #### **🏆 La Victoire par la Nature : L’Expansion Inarrêtable**
+
 Pour l’emporter avec la Nature, il faut incarner l’esprit des elfes et des ents : **croître sans relâche**, étendre son influence jusqu’à ce que la nature recouvre tout.
 
-**Condition** : XX bâtiments Nature = Victoire
+**Condition** : voir [Conditions de Victoire](../Victoire.md)

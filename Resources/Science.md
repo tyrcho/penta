@@ -5,42 +5,31 @@ La **Science** incarne la **connaissance absolue**, la **précision** et le **po
 ---
 
 #### **🌱 La Science et la Nature**
-La Science **contrôle** la [Nature](Nature.md).
 
-Les ondins utilisent des gemmes magiques pour faire pousser des jardins suspendus. Les changeformes étudient les plantes pour en extraire des propriétés uniques.
-
-**Cycle** : Science **contrôle** [Nature](Nature.md) / Cristal **contrôle** Bois
+Voir [Science contrôle Nature](Relations/Contrôle/Science-Nature.md).
 
 ---
 
 #### **⚔️ La Science et le Chaos**
-La Science **est contrôlée par** le [Chaos](Chaos.md).
 
-Le Cristal est contrôlé par le Feu, car la chaleur brute peut fondre même les structures les plus solides.
-
-**Cycle** : Chaos **contrôle** [Science](Science.md) / Feu **contrôle** Cristal
+Voir [Chaos contrôle Science](Relations/Contrôle/Chaos-Science.md).
 
 ---
 
 #### **☠️ La Science et la Mort**
-La Science **est engendrée par** la [Mort](Mort.md).
 
-Les nécromants étudient les propriétés des gemmes noires pour amplifier leurs sorts. Les vampires utilisent des artefacts de Cristal pour piéger leurs victimes.
-
-**Cycle** : Mort **engendre** [Science](Science.md) / Mort **engendre** Cristal
+Voir [Mort engendre Science](Relations/Engendre/Mort-Science.md).
 
 ---
 
 #### **☀️ La Science et la Loi**
-La Science **engendre** la [Loi](Loi.md).
 
-Le Cristal engendre la Lumière, car la connaissance mène à la sagesse. Les licornes et les pégases sont souvent associés aux érudits.
-
-**Cycle** : Science **engendre** [Loi](Loi.md) / Cristal **engendre** Lumière
+Voir [Science engendre Loi](Relations/Engendre/Science-Loi.md).
 
 ---
 
 #### **🏆 La Victoire par la Science : La Maîtrise des Arcanes**
+
 Pour l’emporter avec la Science, il faut incarner l’esprit des magiciens et des érudits : **innover sans relâche** en utilisant la **Ressource Cristal**, percer les mystères de l’univers jusqu’à ce que la connaissance soit absolue.
 
-**Condition** : 20 recherches = Victoire
+**Condition** : voir [Conditions de Victoire](../Victoire.md)
