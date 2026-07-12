@@ -22,6 +22,8 @@ make build   # production JS build → public/
 
 **Maze pathfinding** (`core/domain/Pathfinding.scala`, `CombatEngine.scala`): enemies don't follow a fixed path. Every tick, a grid BFS finds the shortest route from each enemy's current cell to the goal cell, treating tower cells as obstacles, and the enemy steps one cell towards that route. Placing a tower re-routes everyone in flight automatically, since the path is never cached. `Placement.tryPlaceTower` rejects any tower that would fully block the only route from spawn to goal.
 
-**Rendering** (`js/main/GameApp.scala`): `PIXI.Graphics` primitives only (rects for the grid, circles for towers/enemies/projectiles) — no textures/asset pipeline. A root `Container` is scaled to fit the window every tick against a fixed 800×450 logical design size, so the same build works on any viewport.
+**Rendering** (`js/main/GameApp.scala`): grid cells are `PIXI.Graphics` rects; towers, enemies and projectiles are `PIXI.Sprite`s using real art (`assets/`, Kenney's CC0 "Tower Defense Top-Down" pack). A root `Container` is scaled to fit the window every tick against a fixed 800×450 logical design size, so the same build works on any viewport.
+
+**Animation:** towers rotate their turret to aim at their current target; enemies rotate to face their next path step (reusing the same `Pathfinding` BFS the domain uses to move them); projectiles rotate to face the enemy they're chasing. Firing a shot and a projectile hitting/expiring both spawn a short `PIXI.AnimatedSprite` flame effect (`assets/flame1-4.png`) that plays once and removes itself.
 
 Decisions are recorded as ADRs in `docs/adr/`.

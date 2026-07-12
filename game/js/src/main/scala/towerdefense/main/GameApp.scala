@@ -11,6 +11,18 @@ import towerdefense.pixi.*
 
 private case class ViewTransform(scale: Double, offsetX: Double, offsetY: Double)
 
+private object AssetPaths:
+  val Tower = "./assets/tower.png"
+  val Enemy = "./assets/enemy.png"
+  val Projectile = "./assets/projectile.png"
+  val Flames = List("./assets/flame1.png", "./assets/flame2.png", "./assets/flame3.png", "./assets/flame4.png")
+  val All: List[String] = List(Tower, Enemy, Projectile) ++ Flames
+
+// Sprites are drawn facing a default direction; rotation math adds this offset
+// to atan2(dy, dx) so `rotation = 0` matches how the artwork was drawn.
+private val FacingUp = math.Pi / 2
+private val FacingRight = 0.0
+
 @main def main(): Unit =
   if document.readyState == "loading" then
     document.addEventListener("DOMContentLoaded", (_: dom.Event) => setup())
@@ -20,18 +32,21 @@ private case class ViewTransform(scale: Double, offsetX: Double, offsetY: Double
 def setup(): Unit =
   val app = new Application()
   val options = js.Dynamic.literal(resizeTo = dom.window, backgroundColor = 0x0f172a, antialias = true)
-  app.init(options.asInstanceOf[js.Object]).toFuture.foreach(_ => onReady(app))
+  app.init(options.asInstanceOf[js.Object]).toFuture
+    .flatMap(_ => Assets.load(js.Array(AssetPaths.All*)).toFuture)
+    .foreach(textures => onReady(app, textures))
 
-def onReady(app: Application): Unit =
+def onReady(app: Application, textures: js.Dictionary[Texture]): Unit =
   document.getElementById("game-container").appendChild(app.canvas)
   val world = new Container()
   app.stage.addChild(world)
   world.addChild(drawGrid())
 
+  val flameFrames = js.Array(AssetPaths.Flames.map(textures(_))*)
   var state = GameState.initial
-  val enemySprites = mutable.Map.empty[Long, Graphics]
-  val towerSprites = mutable.Map.empty[Long, Graphics]
-  val projectileSprites = mutable.Map.empty[Long, Graphics]
+  val enemySprites = mutable.Map.empty[Long, Sprite]
+  val towerSprites = mutable.Map.empty[Long, Sprite]
+  val projectileSprites = mutable.Map.empty[Long, Sprite]
 
   app.stage.eventMode = "static"
   app.stage.on("pointerdown", (e: FederatedPointerEvent) => {
@@ -40,9 +55,9 @@ def onReady(app: Application): Unit =
 
   app.ticker.add { t =>
     state = CombatEngine.tick(state, t.deltaMS)
-    syncEnemies(world, state, enemySprites)
-    syncTowers(world, state, towerSprites)
-    syncProjectiles(world, state, projectileSprites)
+    syncEnemies(world, state, enemySprites, textures, flameFrames)
+    syncTowers(world, state, towerSprites, textures)
+    syncProjectiles(world, state, projectileSprites, textures, flameFrames)
     applyViewTransform(app, world)
     updateOverlay(state)
   }
@@ -90,39 +105,99 @@ private def applyViewTransform(app: Application, world: Container): Unit =
   world.x = vt.offsetX
   world.y = vt.offsetY
 
-// ── Sprite sync (domain GameState → Pixi Graphics) ─────────────────────
+// ── Sprite sync (domain GameState → Pixi sprites) ───────────────────────
 
-private def syncEnemies(world: Container, state: GameState, sprites: mutable.Map[Long, Graphics]): Unit =
-  removeStale(world, sprites, state.enemies.map(_.id).toSet)
+private def syncEnemies(
+  world: Container, state: GameState, sprites: mutable.Map[Long, Sprite],
+  textures: js.Dictionary[Texture], flames: js.Array[Texture],
+): Unit =
+  val blocked = state.towers.map(t => (t.col, t.row)).toSet
+  removeStaleWithEffect(world, sprites, state.enemies.map(_.id).toSet, flames, scale = 1.0)
   state.enemies.foreach { e =>
-    val g = sprites.getOrElseUpdate(e.id, addTo(world, new Graphics().circle(0, 0, 12).fill(0xf97316)))
+    val g = sprites.getOrElseUpdate(e.id, addTo(world, newSprite(textures(AssetPaths.Enemy), GridConfig.cellSize * 0.8)))
     setPos(g, e.pos)
+    enemyFacingAngle(e, blocked).foreach(a => g.rotation = a)
   }
 
-private def syncTowers(world: Container, state: GameState, sprites: mutable.Map[Long, Graphics]): Unit =
+private def syncTowers(
+  world: Container, state: GameState, sprites: mutable.Map[Long, Sprite], textures: js.Dictionary[Texture],
+): Unit =
   state.towers.foreach { t =>
-    val g = sprites.getOrElseUpdate(t.id, addTo(world, new Graphics().circle(0, 0, 16).fill(0x60a5fa)))
+    val g = sprites.getOrElseUpdate(t.id, addTo(world, newSprite(textures(AssetPaths.Tower), GridConfig.cellSize * 0.9)))
     setPos(g, GridConfig.cellCenter(t.col, t.row))
+    towerAimAngle(t, state.enemies).foreach(a => g.rotation = a)
   }
 
-private def syncProjectiles(world: Container, state: GameState, sprites: mutable.Map[Long, Graphics]): Unit =
-  removeStale(world, sprites, state.projectiles.map(_.id).toSet)
+private def syncProjectiles(
+  world: Container, state: GameState, sprites: mutable.Map[Long, Sprite],
+  textures: js.Dictionary[Texture], flames: js.Array[Texture],
+): Unit =
+  removeStaleWithEffect(world, sprites, state.projectiles.map(_.id).toSet, flames, scale = 0.6)
   state.projectiles.foreach { p =>
-    val g = sprites.getOrElseUpdate(p.id, addTo(world, new Graphics().circle(0, 0, 4).fill(0xfacc15)))
+    val isNew = !sprites.contains(p.id)
+    val g = sprites.getOrElseUpdate(p.id, addTo(world, newSprite(textures(AssetPaths.Projectile), GridConfig.cellSize * 0.5)))
     setPos(g, p.pos)
+    state.enemies.find(_.id == p.targetId).foreach(target => g.rotation = angleTo(p.pos, target.pos) + FacingUp)
+    if isNew then spawnEffect(world, p.pos, flames, scale = 0.5)
   }
 
-private def removeStale(world: Container, sprites: mutable.Map[Long, Graphics], liveIds: Set[Long]): Unit =
+private def removeStaleWithEffect(
+  world: Container, sprites: mutable.Map[Long, Sprite], liveIds: Set[Long], flames: js.Array[Texture], scale: Double,
+): Unit =
   sprites.keySet.diff(liveIds).foreach { id =>
-    world.removeChild(sprites(id))
+    val g = sprites(id)
+    spawnEffect(world, Vec2(g.x, g.y), flames, scale)
+    world.removeChild(g)
     sprites.remove(id)
   }
 
-private def addTo(world: Container, g: Graphics): Graphics =
-  world.addChild(g)
-  g
+// ── Facing angles ────────────────────────────────────────────────────────
 
-private def setPos(g: Graphics, pos: Vec2): Unit =
+private def angleTo(from: Vec2, to: Vec2): Double =
+  math.atan2(to.y - from.y, to.x - from.x)
+
+private def enemyFacingAngle(e: Enemy, blocked: Set[(Int, Int)]): Option[Double] =
+  val currentCell = GridConfig.cellOf(e.pos)
+  if currentCell == GridConfig.goalCell then None
+  else
+    Pathfinding.shortestPath(currentCell, GridConfig.goalCell, blocked).collect { case path if path.size > 1 =>
+      angleTo(e.pos, GridConfig.cellCenter(path(1)._1, path(1)._2)) + FacingRight
+    }
+
+private def towerAimAngle(tower: Tower, enemies: List[Enemy]): Option[Double] =
+  val towerPos = GridConfig.cellCenter(tower.col, tower.row)
+  enemies
+    .filter(e => towerPos.distanceTo(e.pos) <= tower.rangePx)
+    .minByOption(e => towerPos.distanceTo(e.pos))
+    .map(e => angleTo(towerPos, e.pos) + FacingUp)
+
+// ── Sprite/effect helpers ───────────────────────────────────────────────
+
+private def newSprite(texture: Texture, size: Double): Sprite =
+  val s = new Sprite(texture)
+  s.anchor.set(0.5)
+  s.width = size
+  s.height = size
+  s
+
+private def spawnEffect(world: Container, pos: Vec2, frames: js.Array[Texture], scale: Double): Unit =
+  val fx = new AnimatedSprite(frames)
+  fx.anchor.set(0.5)
+  fx.width = GridConfig.cellSize * scale
+  fx.height = GridConfig.cellSize * scale
+  fx.x = pos.x
+  fx.y = pos.y
+  fx.loop = false
+  fx.animationSpeed = 0.3
+  fx.onComplete = () => world.removeChild(fx)
+  world.addChild(fx)
+  fx.play()
+
+private def addTo(world: Container, s: Sprite): Sprite =
+  world.addChild(s)
+  s
+
+private def setPos(g: Sprite, pos: Vec2): Unit =
   g.x = pos.x
   g.y = pos.y
 

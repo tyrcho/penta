@@ -17,6 +17,7 @@ build:
 	@mkdir -p public
 	@cp js/target/scala-3.3.3/towerdefense-js-opt/*.js js/target/scala-3.3.3/towerdefense-js-opt/*.js.map public/
 	@cp index.html public/
+	@cp -r assets public/
 
 clean:
 	sbt --batch clean

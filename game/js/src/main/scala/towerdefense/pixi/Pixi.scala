@@ -54,3 +54,34 @@ trait Ticker extends js.Object:
 trait FederatedPointerEvent extends js.Object:
   val globalX: Double = js.native
   val globalY: Double = js.native
+
+@js.native
+trait Texture extends js.Object
+
+@js.native
+@JSGlobal("PIXI.Assets")
+object Assets extends js.Object:
+  def load(urls: js.Array[String]): js.Promise[js.Dictionary[Texture]] = js.native
+
+@js.native
+@JSGlobal("PIXI.Sprite")
+class Sprite(texture: Texture) extends Container:
+  var anchor: AnchorObj = js.native
+  var rotation: Double = js.native
+  var width: Double = js.native
+  var height: Double = js.native
+
+@js.native
+trait AnchorObj extends js.Object:
+  def set(v: Double): Unit = js.native
+
+@js.native
+@JSGlobal("PIXI.AnimatedSprite")
+class AnimatedSprite(textures: js.Array[Texture]) extends Container:
+  var anchor: AnchorObj = js.native
+  var loop: Boolean = js.native
+  var animationSpeed: Double = js.native
+  var onComplete: js.Function0[Unit] = js.native
+  var width: Double = js.native
+  var height: Double = js.native
+  def play(): Unit = js.native
