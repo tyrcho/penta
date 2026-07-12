@@ -1,0 +1,19 @@
+stages:
+  - deploy
+
+pages:
+  stage: deploy
+  image: sbtscala/scala-sbt:eclipse-temurin-21.0.3_9_1.10.1_3.3.3
+  script:
+    - cd game
+    - sbt --batch "js/fullLinkJS"
+    - mkdir -p public
+    - cp js/target/scala-3.3.3/towerdefense-js-opt/*.js js/target/scala-3.3.3/towerdefense-js-opt/*.js.map public/
+    - cp index.html public/
+    - cp -r assets public/
+    - mv public ../public
+  artifacts:
+    paths:
+      - public
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
