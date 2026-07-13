@@ -28,7 +28,7 @@ object Pathfinding:
       }
     found
 
-  private def neighbors(cell: (Int, Int)): List[(Int, Int)] =
+  def neighbors(cell: (Int, Int)): List[(Int, Int)] =
     val (col, row) = cell
     neighborOffsets
       .map { case (dx, dy) => (col + dx, row + dy) }

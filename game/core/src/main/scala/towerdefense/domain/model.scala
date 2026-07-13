@@ -2,6 +2,8 @@ package towerdefense.domain
 
 import towerdefense.domain.geometry.Vec2
 
+// A unit currently walking this maze. From this maze owner's point of view it's
+// always hostile — it's either a generic intruder or an Elfe sent by the opponent's Foret.
 case class Enemy(
   id: Long,
   pos: Vec2,
@@ -10,43 +12,30 @@ case class Enemy(
   speedPerMs: Double,
 )
 
-case class Tower(
+case class Foret(
   id: Long,
   col: Int,
   row: Int,
-  rangePx: Double,
-  damage: Double,
-  cooldownMs: Double,
-  reloadMs: Double, // time until next shot is ready; 0 = ready now
+  elfeSpawnInMs: Double, // countdown to the next Elfe sent to the opponent's maze
 )
 
-case class Projectile(
-  id: Long,
-  targetId: Long,
-  pos: Vec2,
-  speedPerMs: Double,
-  damage: Double,
-)
-
-case class GameState(
+// One player's maze: grid, economy and units currently walking it. A battle is two of these.
+case class MazeState(
   enemies: List[Enemy],
-  towers: List[Tower],
-  projectiles: List[Projectile],
-  gold: Int,
+  forets: List[Foret],
+  bois: Double,
   lives: Int,
-  elapsedMs: Double,
-  nextSpawnAtMs: Double,
   nextId: Long,
 )
 
-object GameState:
-  val initial: GameState = GameState(
+object MazeState:
+  // Starting stipend covers exactly one Foret (POC default, not specified in the
+  // vault) — otherwise neither side could ever afford the first Foret that would
+  // start their wood production.
+  val initial: MazeState = MazeState(
     enemies = Nil,
-    towers = Nil,
-    projectiles = Nil,
-    gold = 100,
+    forets = Nil,
+    bois = Balance.ForetCostBois,
     lives = 10,
-    elapsedMs = 0.0,
-    nextSpawnAtMs = Balance.SpawnIntervalMs,
     nextId = 1L,
   )

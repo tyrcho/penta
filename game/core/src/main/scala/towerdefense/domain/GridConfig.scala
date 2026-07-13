@@ -3,8 +3,8 @@ package towerdefense.domain
 import towerdefense.domain.geometry.Vec2
 
 object GridConfig:
-  val cols: Int = 16
-  val rows: Int = 9
+  val cols: Int = 12
+  val rows: Int = 12
   val cellSize: Double = 50.0
   val width: Double = cols * cellSize
   val height: Double = rows * cellSize

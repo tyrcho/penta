@@ -19,6 +19,7 @@
       --color-border:  #2a2a4a;
       --color-gold:    #eab308;
       --color-lives:   #f87171;
+      --color-ai:      #a78bfa;
     }
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     html, body { height: 100%; overflow: hidden; touch-action: none; }
@@ -42,8 +43,11 @@
     #toolbar h1 { font-size: 1rem; font-weight: 700; color: var(--color-brand); }
     #toolbar .spacer { flex: 1; }
     .stat { font-size: 0.9rem; font-weight: 600; }
-    .stat.gold { color: var(--color-gold); }
+    .stat.bois { color: var(--color-gold); }
     .stat.lives { color: var(--color-lives); }
+    .player-label { font-size: 0.85rem; font-weight: 700; color: var(--color-text); }
+    .player-label.ai { color: var(--color-ai); }
+    .panel { display: flex; align-items: center; gap: 0.6rem; }
     #game-container {
       flex: 1;
       overflow: hidden;
@@ -59,8 +63,16 @@
   <div id="toolbar">
     <h1>tower-defense-poc</h1>
     <span class="spacer"></span>
-    <span class="stat gold">Gold: <span id="gold-value">0</span></span>
-    <span class="stat lives">Lives: <span id="lives-value">0</span></span>
+    <div class="panel">
+      <span class="player-label">You</span>
+      <span class="stat bois">Bois: <span id="player-bois">0</span></span>
+      <span class="stat lives">Lives: <span id="player-lives">0</span></span>
+    </div>
+    <div class="panel">
+      <span class="player-label ai">AI</span>
+      <span class="stat bois">Bois: <span id="ai-bois">0</span></span>
+      <span class="stat lives">Lives: <span id="ai-lives">0</span></span>
+    </div>
   </div>
   <div id="game-container"></div>
   <script type="module" src="./main.js"></script>
