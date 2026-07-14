@@ -3,4 +3,8 @@ public/
 .bloop/
 .metals/
 .bsp/
+.idea/
+.mcp.json
+project/metals.sbt
+project/project/
 *.class

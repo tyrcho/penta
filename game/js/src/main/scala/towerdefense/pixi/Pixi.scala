@@ -70,6 +70,7 @@ class Sprite(texture: Texture) extends Container:
   var rotation: Double = js.native
   var width: Double = js.native
   var height: Double = js.native
+  var tint: Int = js.native
 
 @js.native
 trait AnchorObj extends js.Object:

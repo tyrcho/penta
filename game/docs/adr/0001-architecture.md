@@ -4,7 +4,7 @@
 
 Tech-focused POC to prove out a tower-defense-like game with ScalaJS + PixiJS v8, deployable to GitLab Pages, mirroring the sibling project `text-maps` (sbt + ScalaJS, no npm/Vite, CDN-loaded JS library wrapped in a thin `js.native` facade, in-process Java dev server with live reload). Scope is intentionally minimal: one tower type, one enemy type, maze-style pathfinding. Not tied to this repo's 5-theme game design vault.
 
-**Superseded by [ADR 0002](0002-nature-two-maze-battle.md):** the generic "Tower"/"Projectile"/gold economy described below was replaced by the vault's actual Nature faction (Forêt/Elfe/bois) and a 12×12 two-maze battle. Kept here for history; where the two disagree, ADR 0002 and the current code win.
+**Superseded by [ADR 0002](0002-nature-two-maze-battle.md):** the generic "Tower"/"Projectile"/gold economy described below was replaced by the vault's actual Nature faction (Forêt/Elf/wood) and a 12×12 two-maze battle. Kept here for history; where the two disagree, ADR 0002 and the current code win.
 
 ## Decisions
 

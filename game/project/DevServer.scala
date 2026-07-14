@@ -1,6 +1,7 @@
 import com.sun.net.httpserver.{HttpExchange, HttpServer}
-import java.net.{InetAddress, InetSocketAddress}
+import java.net.{InetSocketAddress, NetworkInterface}
 import java.nio.file.{Files, Path}
+import scala.jdk.CollectionConverters.*
 
 object DevServer {
   private val POLL_SCRIPT =
@@ -18,7 +19,7 @@ object DevServer {
 """.getBytes("UTF-8")
 
   def start(root: Path, jsFile: Path, port: Int = 8080): Unit = {
-    val server = HttpServer.create(new InetSocketAddress(InetAddress.getLoopbackAddress, port), 0)
+    val server = HttpServer.create(new InetSocketAddress(port), 0)
     server.createContext("/", exchange => {
       val path = exchange.getRequestURI.getPath
       path match {
@@ -35,6 +36,15 @@ object DevServer {
     t.setDaemon(true)
     t.start()
   }
+
+  // Best-effort: first non-loopback IPv4 address, so the caller can print a LAN URL
+  // (e.g. for opening the dev server from a phone on the same WiFi).
+  def lanAddress(): Option[String] =
+    NetworkInterface.getNetworkInterfaces.asScala
+      .filter(nif => nif.isUp && !nif.isLoopback && !nif.isVirtual)
+      .flatMap(_.getInetAddresses.asScala)
+      .find(addr => addr.getAddress.length == 4 && !addr.isLoopbackAddress)
+      .map(_.getHostAddress)
 
   private def serveMtime(exchange: HttpExchange, jsFile: Path): Unit = {
     val mtime = if (Files.exists(jsFile)) Files.getLastModifiedTime(jsFile).toMillis.toString else "0"

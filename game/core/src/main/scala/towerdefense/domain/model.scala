@@ -2,40 +2,53 @@ package towerdefense.domain
 
 import towerdefense.domain.geometry.Vec2
 
+enum UnitKind derives CanEqual:
+  case Elf, Goblin
+
 // A unit currently walking this maze. From this maze owner's point of view it's
-// always hostile — it's either a generic intruder or an Elfe sent by the opponent's Foret.
+// always hostile — it's either an Elf (Nature) or a Goblin (Chaos) sent by the
+// opponent's building. Only Goblin does anything special on arrival (plunder).
 case class Enemy(
   id: Long,
   pos: Vec2,
   hp: Double,
   maxHp: Double,
   speedPerMs: Double,
+  kind: UnitKind,
 )
 
-case class Foret(
+case class Forest(
   id: Long,
   col: Int,
   row: Int,
-  elfeSpawnInMs: Double, // countdown to the next Elfe sent to the opponent's maze
+  elfSpawnInMs: Double, // countdown to the next Elf sent to the opponent's maze
+)
+
+case class Cave(
+  id: Long,
+  col: Int,
+  row: Int,
+  goblinSpawnInMs: Double, // countdown to the next Goblin sent to the opponent's maze
 )
 
 // One player's maze: grid, economy and units currently walking it. A battle is two of these.
 case class MazeState(
   enemies: List[Enemy],
-  forets: List[Foret],
-  bois: Double,
-  lives: Int,
+  forests: List[Forest],
+  caves: List[Cave],
+  wood: Double,
+  fire: Double,
+  resourcesPlundered: Double, // this maze's own progress toward the Chaos victory condition
   nextId: Long,
 )
 
 object MazeState:
-  // Starting stipend covers exactly one Foret (POC default, not specified in the
-  // vault) — otherwise neither side could ever afford the first Foret that would
-  // start their wood production.
   val initial: MazeState = MazeState(
     enemies = Nil,
-    forets = Nil,
-    bois = Balance.ForetCostBois,
-    lives = 10,
+    forests = Nil,
+    caves = Nil,
+    wood = Balance.StartingWood,
+    fire = Balance.StartingFire,
+    resourcesPlundered = 0.0,
     nextId = 1L,
   )
