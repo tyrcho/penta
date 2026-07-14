@@ -1,8 +1,8 @@
-Goblin sprite (assets/goblin.png) is derived from:
+Goblin walk-cycle frames (front/back/left/right-walk-NN.png) are derived from:
 
 Free Top Down Goblin Character Pack
 https://free-game-assets.itch.io/free-top-down-goblin-character-pack
-by CraftPix.net
+by CraftPix.net ("Male Goblin" variant, Walking animation, every other frame)
 
 License: https://craftpix.net/file-licenses/ (Freebie License)
 No attribution required; modification and use in shipped commercial/hobby

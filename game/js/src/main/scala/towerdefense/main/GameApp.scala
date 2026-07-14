@@ -35,7 +35,10 @@ private class GameSpeed:
 
 // Per-maze sprite state. One instance for the player's maze, one for the AI's.
 private class MazeSprites:
-  val enemies = mutable.Map.empty[Long, Sprite]
+  val enemies = mutable.Map.empty[Long, Container]
+  // Which of the goblin's 4 direction frame sets is currently applied — avoids
+  // resetting the walk-cycle animation every tick, only when the facing changes.
+  val goblinFacing = mutable.Map.empty[Long, String]
   val forests = mutable.Map.empty[Long, Sprite]
   val forestTimers = mutable.Map.empty[Long, Double]
   val caves = mutable.Map.empty[Long, Sprite]
@@ -45,10 +48,15 @@ private object AssetPaths:
   val Forest = "./assets/forest.png"
   val CaveRock = "./assets/cave.png"
   val Elf = "./assets/enemy.png"
-  val Goblin = "./assets/goblin.png"
   val Flames =
     List("./assets/flame1.png", "./assets/flame2.png", "./assets/flame3.png", "./assets/flame4.png")
-  val All: List[String] = List(Forest, CaveRock, Elf, Goblin) ++ Flames
+  val GoblinFrameCount = 10
+  val GoblinDirections = List("front", "back", "left", "right")
+  val GoblinFrames: Map[String, List[String]] =
+    GoblinDirections
+      .map(d => d -> (0 until GoblinFrameCount).map(i => f"./assets/goblin/$d-walk-$i%02d.png").toList)
+      .toMap
+  val All: List[String] = List(Forest, CaveRock, Elf) ++ GoblinFrames.values.flatten ++ Flames
 
 private val CaveTint = 0xff7a45 // warm/fiery recolor for an otherwise cool-gray rock tile
 
@@ -92,6 +100,8 @@ def onReady(app: Application, textures: js.Dictionary[Texture]): Unit =
   aiWorld.addChild(drawGrid())
 
   val flameFrames = js.Array(AssetPaths.Flames.map(textures(_))*)
+  val goblinFrames: Map[String, js.Array[Texture]] =
+    AssetPaths.GoblinFrames.map { case (dir, paths) => dir -> js.Array(paths.map(textures(_))*) }
   var battle = Persistence.load().getOrElse(BattleState.initial)
   var selectedBuilding: BuildingChoice = BuildingChoice.Forest
   var hovered: Option[HoverTarget] = None
@@ -129,6 +139,7 @@ def onReady(app: Application, textures: js.Dictionary[Texture]): Unit =
       battle.player,
       playerSprites,
       textures,
+      goblinFrames,
       flameFrames,
       isPlayer = true,
       h => hovered = h
@@ -138,6 +149,7 @@ def onReady(app: Application, textures: js.Dictionary[Texture]): Unit =
       battle.ai,
       aiSprites,
       textures,
+      goblinFrames,
       flameFrames,
       isPlayer = false,
       h => hovered = h
@@ -269,6 +281,7 @@ private def clearSprites(world: Container, sprites: MazeSprites): Unit =
     world.removeChild
   )
   sprites.enemies.clear()
+  sprites.goblinFacing.clear()
   sprites.forests.clear()
   sprites.forestTimers.clear()
   sprites.caves.clear()
@@ -319,12 +332,13 @@ private def syncMaze(
     maze: MazeState,
     sprites: MazeSprites,
     textures: js.Dictionary[Texture],
+    goblinFrames: Map[String, js.Array[Texture]],
     flames: js.Array[Texture],
     isPlayer: Boolean,
     setHovered: Option[HoverTarget] => Unit
 ): Unit =
   val blocked = maze.buildingCells
-  syncEnemies(world, maze, sprites, textures, flames, blocked, isPlayer, setHovered)
+  syncEnemies(world, maze, sprites, textures, goblinFrames, flames, blocked, isPlayer, setHovered)
   syncForests(world, maze, sprites, textures, flames, isPlayer, setHovered)
   syncCaves(world, maze, sprites, textures, flames, isPlayer, setHovered)
 
@@ -333,30 +347,64 @@ private def syncEnemies(
     maze: MazeState,
     sprites: MazeSprites,
     textures: js.Dictionary[Texture],
+    goblinFrames: Map[String, js.Array[Texture]],
     flames: js.Array[Texture],
     blocked: Set[(Int, Int)],
     isPlayer: Boolean,
     setHovered: Option[HoverTarget] => Unit
 ): Unit =
-  removeStaleWithEffect(world, sprites.enemies, maze.enemies.map(_.id).toSet, flames)
+  val liveIds = maze.enemies.map(_.id).toSet
+  removeStaleWithEffect(world, sprites.enemies, liveIds, flames)
+  sprites.goblinFacing.filterInPlace((id, _) => liveIds.contains(id))
   maze.enemies.foreach { e =>
     val g = sprites.enemies.getOrElseUpdate(
       e.id,
-      newHoverSprite(
+      newEnemySprite(
         world,
-        enemyTexture(e.kind, textures),
-        GridConfig.cellSize * 0.8,
+        e.kind,
+        textures,
+        goblinFrames,
         HoverTarget(isPlayer, HoverKind.EnemyH, e.id),
         setHovered
       )
     )
     setPos(g, e.pos)
-    enemyFacingAngle(e, blocked).foreach(a => g.rotation = a)
+    val angle = enemyFacingAngle(e, blocked)
+    e.kind match
+      case UnitKind.Elf => angle.foreach(a => g.rotation = a)
+      case UnitKind.Goblin =>
+        angle.map(facingDirection).foreach { dir =>
+          if !sprites.goblinFacing.get(e.id).contains(dir) then
+            sprites.goblinFacing(e.id) = dir
+            val anim = g.asInstanceOf[AnimatedSprite]
+            anim.textures = goblinFrames(dir)
+            anim.play()
+        }
   }
 
-private def enemyTexture(kind: UnitKind, textures: js.Dictionary[Texture]): Texture = kind match
-  case UnitKind.Elf    => textures(AssetPaths.Elf)
-  case UnitKind.Goblin => textures(AssetPaths.Goblin)
+private def newEnemySprite(
+    world: Container,
+    kind: UnitKind,
+    textures: js.Dictionary[Texture],
+    goblinFrames: Map[String, js.Array[Texture]],
+    target: HoverTarget,
+    setHovered: Option[HoverTarget] => Unit
+): Container = kind match
+  case UnitKind.Elf =>
+    newHoverSprite(world, textures(AssetPaths.Elf), GridConfig.cellSize * 0.8, target, setHovered)
+  case UnitKind.Goblin =>
+    val s = newAnimatedSprite(goblinFrames("front"), GridConfig.cellSize * 0.8)
+    wireHover(s, target, setHovered)
+    addTo(world, s)
+
+// Which of the 4 walk-cycle frame sets to show, from the enemy's facing angle
+// (Pixi's y-axis points down, so "front" = walking toward the viewer, i.e. down).
+private def facingDirection(angle: Double): String =
+  val deg = ((math.toDegrees(angle) % 360) + 360) % 360
+  if deg < 45 || deg >= 315 then "right"
+  else if deg < 135 then "front"
+  else if deg < 225 then "left"
+  else "back"
 
 private def syncForests(
     world: Container,
@@ -437,7 +485,7 @@ private def newHoverCaveSprite(
 // the sprite itself just reports "I'm hovered" / "I'm not" — the ticker reads current
 // stats from the latest BattleState each frame so the tooltip stays live while it's up.
 private def wireHover(
-    g: Sprite,
+    g: Container,
     target: HoverTarget,
     setHovered: Option[HoverTarget] => Unit
 ): Unit =
@@ -451,7 +499,7 @@ private def hasWrapped(previous: Double, current: Double): Boolean = current > p
 
 private def removeStaleWithEffect(
     world: Container,
-    sprites: mutable.Map[Long, Sprite],
+    sprites: mutable.Map[Long, Container],
     liveIds: Set[Long],
     flames: js.Array[Texture]
 ): Unit =
@@ -485,6 +533,16 @@ private def newSprite(texture: Texture, size: Double): Sprite =
   s.height = size
   s
 
+private def newAnimatedSprite(frames: js.Array[Texture], size: Double): AnimatedSprite =
+  val s = new AnimatedSprite(frames)
+  s.anchor.set(0.5)
+  s.width = size
+  s.height = size
+  s.loop = true
+  s.animationSpeed = 0.15
+  s.play()
+  s
+
 private def spawnEffect(
     world: Container,
     pos: Vec2,
@@ -503,11 +561,11 @@ private def spawnEffect(
   world.addChild(fx)
   fx.play()
 
-private def addTo(world: Container, s: Sprite): Sprite =
+private def addTo[T <: Container](world: Container, s: T): T =
   world.addChild(s)
   s
 
-private def setPos(g: Sprite, pos: Vec2): Unit =
+private def setPos(g: Container, pos: Vec2): Unit =
   g.x = pos.x
   g.y = pos.y
 

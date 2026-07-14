@@ -28,6 +28,9 @@ class Container extends js.Object:
   def removeChild(child: Container): Container = js.native
   var x: Double = js.native
   var y: Double = js.native
+  var rotation: Double = js.native
+  var width: Double = js.native
+  var height: Double = js.native
   var scale: ScaleObj = js.native
   var eventMode: String = js.native
   def on(event: String, handler: js.Function1[FederatedPointerEvent, Unit]): Unit = js.native
@@ -67,9 +70,6 @@ object Assets extends js.Object:
 @JSGlobal("PIXI.Sprite")
 class Sprite(texture: Texture) extends Container:
   var anchor: AnchorObj = js.native
-  var rotation: Double = js.native
-  var width: Double = js.native
-  var height: Double = js.native
   var tint: Int = js.native
 
 @js.native
@@ -78,11 +78,10 @@ trait AnchorObj extends js.Object:
 
 @js.native
 @JSGlobal("PIXI.AnimatedSprite")
-class AnimatedSprite(textures: js.Array[Texture]) extends Container:
+class AnimatedSprite(frames: js.Array[Texture]) extends Container:
   var anchor: AnchorObj = js.native
   var loop: Boolean = js.native
   var animationSpeed: Double = js.native
   var onComplete: js.Function0[Unit] = js.native
-  var width: Double = js.native
-  var height: Double = js.native
+  var textures: js.Array[Texture] = js.native
   def play(): Unit = js.native
