@@ -1,9 +1,9 @@
 package towerdefense.domain
 
 // Two mazes, same rules, one human-controlled and one AI-controlled — symmetric: either
-// side can build a Forest, a Cave, or a Labyrinthe (see CLAUDE.md). Each Forest sends its
-// Elf, each Cave its Goblin, and each Labyrinthe its Minotaur, into the *opponent's*
-// maze — that's the whole game.
+// side can build a Forest, a Cave, a Labyrinthe, or an Eglise (see CLAUDE.md). Each
+// Forest sends its Elf, each Cave its Goblin, each Labyrinthe its Minotaur, and each
+// Eglise its Paladin, into the *opponent's* maze — that's the whole game.
 // aiBuildCooldownMs paces the AI's own building rate (see Balance.AiBuildCooldownMs).
 // outcome freezes the battle once a side has won.
 case class BattleState(
@@ -30,13 +30,15 @@ object BattleEngine:
         creditPlunder(aiBuilt, playerResult.stolenWood, playerResult.stolenFire),
         playerResult.spawnedElf,
         playerResult.spawnedGoblin,
-        playerResult.spawnedMinotaur
+        playerResult.spawnedMinotaur,
+        playerResult.spawnedPaladin
       )
       val playerFinal = deliverUnits(
         creditPlunder(playerResult.state, aiResult.stolenWood, aiResult.stolenFire),
         aiResult.spawnedElf,
         aiResult.spawnedGoblin,
-        aiResult.spawnedMinotaur
+        aiResult.spawnedMinotaur,
+        aiResult.spawnedPaladin
       )
 
       val next = BattleState(playerFinal, aiFinal, nextCooldown)
@@ -51,7 +53,8 @@ object BattleEngine:
       val built = AiController.maybeBuild(state)
       val didBuild = built.forests.size > state.forests.size ||
         built.caves.size > state.caves.size ||
-        built.labyrinths.size > state.labyrinths.size
+        built.labyrinths.size > state.labyrinths.size ||
+        built.eglises.size > state.eglises.size
       if didBuild then (built, Balance.AiBuildCooldownMs) else (built, 0.0)
 
   // Resources a Goblin plundered from the opponent land in the attacker's own economy
@@ -67,7 +70,8 @@ object BattleEngine:
       state: MazeState,
       elfCount: Int,
       goblinCount: Int,
-      minotaurCount: Int
+      minotaurCount: Int,
+      paladinCount: Int
   ): MazeState =
     val withElf = (0 until elfCount).foldLeft(state)((s, _) =>
       spawnUnit(s, UnitKind.Elf, Balance.ElfMaxHp, Balance.ElfSpeedPerMs)
@@ -75,8 +79,11 @@ object BattleEngine:
     val withGoblin = (0 until goblinCount).foldLeft(withElf)((s, _) =>
       spawnUnit(s, UnitKind.Goblin, Balance.GoblinMaxHp, Balance.GoblinSpeedPerMs)
     )
-    (0 until minotaurCount).foldLeft(withGoblin)((s, _) =>
+    val withMinotaur = (0 until minotaurCount).foldLeft(withGoblin)((s, _) =>
       spawnUnit(s, UnitKind.Minotaur, Balance.MinotaurMaxHp, Balance.MinotaurSpeedPerMs)
+    )
+    (0 until paladinCount).foldLeft(withMinotaur)((s, _) =>
+      spawnUnit(s, UnitKind.Paladin, Balance.PaladinMaxHp, Balance.PaladinSpeedPerMs)
     )
 
   private def spawnUnit(

@@ -51,3 +51,34 @@ class VictoryConditionsTest extends munit.FunSuite:
       Some(true)
     )
   }
+
+  test("clearing the floor isn't enough once the opponent has caught up: must double them too") {
+    val forests =
+      List.fill(Balance.NatureVictoryForestTarget)(Forest(1, col = 2, row = 2, elfSpawnInMs = 0.0))
+    val opponentForests =
+      List.fill(Balance.NatureVictoryForestTarget / 2 + 1)(
+        Forest(2, col = 3, row = 3, elfSpawnInMs = 0.0)
+      )
+    val battle = BattleState(
+      player = MazeState.initial.copy(forests = forests),
+      ai = MazeState.initial.copy(forests = opponentForests)
+    )
+    assertEquals(VictoryConditions.evaluate(battle), None)
+  }
+
+  test("doubling a caught-up opponent's count wins even above the floor") {
+    val opponentForests =
+      List.fill(Balance.NatureVictoryForestTarget)(Forest(2, col = 3, row = 3, elfSpawnInMs = 0.0))
+    val forests =
+      List.fill(Balance.NatureVictoryForestTarget * 2)(
+        Forest(1, col = 2, row = 2, elfSpawnInMs = 0.0)
+      )
+    val battle = BattleState(
+      player = MazeState.initial.copy(forests = forests),
+      ai = MazeState.initial.copy(forests = opponentForests)
+    )
+    assertEquals(
+      VictoryConditions.evaluate(battle).map(_.isInstanceOf[MatchResult.PlayerWins]),
+      Some(true)
+    )
+  }

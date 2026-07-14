@@ -45,8 +45,10 @@ private object Persistence:
       forests = js.Array(m.forests.map(encodeForest)*),
       caves = js.Array(m.caves.map(encodeCave)*),
       labyrinths = js.Array(m.labyrinths.map(encodeLabyrinthe)*),
+      eglises = js.Array(m.eglises.map(encodeEglise)*),
       wood = m.wood,
       fire = m.fire,
+      light = m.light,
       resourcesPlundered = m.resourcesPlundered,
       nextId = m.nextId.toDouble
     )
@@ -63,6 +65,7 @@ private object Persistence:
         case UnitKind.Elf      => "Elf"
         case UnitKind.Goblin   => "Goblin"
         case UnitKind.Minotaur => "Minotaur"
+        case UnitKind.Paladin  => "Paladin"
     )
 
   private def encodeForest(f: Forest): js.Dynamic =
@@ -82,6 +85,14 @@ private object Persistence:
       col = l.col,
       row = l.row,
       minotaurSpawnInMs = l.minotaurSpawnInMs
+    )
+
+  private def encodeEglise(e: Eglise): js.Dynamic =
+    js.Dynamic.literal(
+      id = e.id.toDouble,
+      col = e.col,
+      row = e.row,
+      paladinSpawnInMs = e.paladinSpawnInMs
     )
 
   private def encodeOutcome(m: MatchResult): js.Dynamic = m match
@@ -104,8 +115,10 @@ private object Persistence:
       forests = decodeArray(d.forests, decodeForest),
       caves = decodeArray(d.caves, decodeCave),
       labyrinths = decodeArray(d.labyrinths, decodeLabyrinthe),
+      eglises = decodeArray(d.eglises, decodeEglise),
       wood = asDouble(d.wood),
       fire = asDouble(d.fire),
+      light = asDouble(d.light),
       resourcesPlundered = asDouble(d.resourcesPlundered),
       nextId = asDouble(d.nextId).toLong
     )
@@ -123,6 +136,7 @@ private object Persistence:
       kind = d.kind.asInstanceOf[String] match
         case "Elf"      => UnitKind.Elf
         case "Minotaur" => UnitKind.Minotaur
+        case "Paladin"  => UnitKind.Paladin
         case _          => UnitKind.Goblin
     )
 
@@ -148,6 +162,14 @@ private object Persistence:
       col = asDouble(d.col).toInt,
       row = asDouble(d.row).toInt,
       minotaurSpawnInMs = asDouble(d.minotaurSpawnInMs)
+    )
+
+  private def decodeEglise(d: js.Dynamic): Eglise =
+    Eglise(
+      id = asDouble(d.id).toLong,
+      col = asDouble(d.col).toInt,
+      row = asDouble(d.row).toInt,
+      paladinSpawnInMs = asDouble(d.paladinSpawnInMs)
     )
 
   private def decodeOutcome(d: js.Dynamic): Option[MatchResult] =

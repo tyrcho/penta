@@ -35,6 +35,16 @@ object Placement:
       )
     yield placeLabyrinthe(state, col, row)
 
+  def tryPlaceEglise(state: MazeState, col: Int, row: Int): Either[PlacementError, MazeState] =
+    for
+      _ <- checkCell(state, col, row)
+      _ <- Either.cond(
+        state.wood >= Balance.EgliseCostWood && state.light >= Balance.EgliseCostLight,
+        (),
+        PlacementError.InsufficientResources
+      )
+    yield placeEglise(state, col, row)
+
   private def checkCell(state: MazeState, col: Int, row: Int): Either[PlacementError, Unit] =
     if !GridConfig.isInBounds(col, row) then Left(PlacementError.OutOfBounds)
     else if Set(GridConfig.spawnCell, GridConfig.goalCell).contains((col, row)) then
@@ -71,5 +81,14 @@ object Placement:
       labyrinths = labyrinthe :: state.labyrinths,
       wood = state.wood - Balance.LabyrintheCostWood,
       fire = state.fire - Balance.LabyrintheCostFire,
+      nextId = state.nextId + 1
+    )
+
+  private def placeEglise(state: MazeState, col: Int, row: Int): MazeState =
+    val eglise = Eglise(state.nextId, col, row, paladinSpawnInMs = Balance.PaladinSpawnIntervalMs)
+    state.copy(
+      eglises = eglise :: state.eglises,
+      wood = state.wood - Balance.EgliseCostWood,
+      light = state.light - Balance.EgliseCostLight,
       nextId = state.nextId + 1
     )

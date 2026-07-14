@@ -18,6 +18,7 @@
       --color-border:  #2a2a4a;
       --color-gold:    #eab308;
       --color-fire:     #fb923c;
+      --color-light:    #fde68a;
       --color-progress: #38bdf8;
       --color-ai:      #a78bfa;
     }
@@ -67,8 +68,12 @@
       cursor: pointer;
     }
     .build-btn img { width: 100%; height: 100%; object-fit: contain; pointer-events: none; }
+    .build-btn:hover { border-color: var(--color-brand); background: var(--color-surface); }
     .build-btn.selected { background: var(--color-brand); border-color: var(--color-brand); }
+    .build-btn.selected:hover { background: var(--color-brand); border-color: var(--color-brand); }
     .build-btn#build-cave img { filter: sepia(1) saturate(4) hue-rotate(-40deg) brightness(1.1); }
+    .build-btn.disabled { opacity: 0.35; cursor: not-allowed; }
+    .build-btn.disabled:hover { border-color: var(--color-border); background: var(--color-bg); }
     #speed-label { font-size: 0.85rem; font-weight: 700; min-width: 2.5rem; text-align: center; }
     #new-game-btn { display: none; }
     #new-game-btn.visible { display: inline-block; }
@@ -86,7 +91,25 @@
     .stat { font-size: 0.9rem; font-weight: 600; }
     .stat.wood { color: var(--color-gold); }
     .stat.fire { color: var(--color-fire); }
+    .stat.light { color: var(--color-light); }
     .stat.progress { color: var(--color-progress); }
+    .progress-bar {
+      display: inline-block;
+      width: 4rem;
+      height: 0.4rem;
+      margin-left: 0.4rem;
+      background: var(--color-border);
+      border-radius: 3px;
+      overflow: hidden;
+      vertical-align: middle;
+    }
+    .progress-bar-fill {
+      display: block;
+      height: 100%;
+      width: 0%;
+      background: var(--color-progress);
+      transition: width 0.2s ease-out;
+    }
     .player-label { font-size: 0.85rem; font-weight: 700; color: var(--color-text); }
     .player-label.ai { color: var(--color-ai); }
     #game-container {
@@ -114,7 +137,7 @@
     #game-over-reason { font-size: 1rem; color: var(--color-text); }
     #tooltip {
       display: none;
-      position: absolute;
+      position: fixed;
       top: 0;
       left: 0;
       max-width: 260px;
@@ -137,6 +160,7 @@
       <button class="build-btn selected" id="build-forest"><img src="./assets/forest.png" alt="Forêt"></button>
       <button class="build-btn" id="build-cave"><img src="./assets/cave.png" alt="Cave"></button>
       <button class="build-btn" id="build-labyrinthe"><img src="./assets/labyrinthe.png" alt="Labyrinthe"></button>
+      <button class="build-btn" id="build-eglise"><img src="./assets/eglise.png" alt="Eglise"></button>
     </div>
     <span class="spacer"></span>
     <div class="panel">
@@ -152,12 +176,14 @@
       <span class="player-label">You</span>
       <span class="stat wood">Wood: <span id="player-wood">0</span></span>
       <span class="stat fire">Fire: <span id="player-fire">0</span></span>
-      <span class="stat progress">Forests: <span id="player-forests">0/0</span></span>
-      <span class="stat progress">Plundered: <span id="player-plundered">0/0</span></span>
+      <span class="stat light">Light: <span id="player-light">0</span></span>
+      <span class="stat progress">Forests: <span id="player-forests">0/0</span><span class="progress-bar"><span class="progress-bar-fill" id="player-forests-bar"></span></span></span>
+      <span class="stat progress">Plundered: <span id="player-plundered">0/0</span><span class="progress-bar"><span class="progress-bar-fill" id="player-plundered-bar"></span></span></span>
     </div>
     <div class="maze-panel ai-side">
-      <span class="stat progress">Plundered: <span id="ai-plundered">0/0</span></span>
-      <span class="stat progress">Forests: <span id="ai-forests">0/0</span></span>
+      <span class="stat progress">Plundered: <span id="ai-plundered">0/0</span><span class="progress-bar"><span class="progress-bar-fill" id="ai-plundered-bar"></span></span></span>
+      <span class="stat progress">Forests: <span id="ai-forests">0/0</span><span class="progress-bar"><span class="progress-bar-fill" id="ai-forests-bar"></span></span></span>
+      <span class="stat light">Light: <span id="ai-light">0</span></span>
       <span class="stat fire">Fire: <span id="ai-fire">0</span></span>
       <span class="stat wood">Wood: <span id="ai-wood">0</span></span>
       <span class="player-label ai">AI</span>

@@ -1,0 +1,3 @@
+Paladin sprite (assets/paladin.png) is cropped from a user-provided image.
+Source/license is not verified — check before using this asset outside
+this local hobby project.

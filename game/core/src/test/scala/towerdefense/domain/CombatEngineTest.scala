@@ -142,3 +142,52 @@ class CombatEngineTest extends munit.FunSuite:
     assertEquals(result.state.wood, 0.0)
     assertEquals(result.state.fire, 100.0 - Balance.MinotaurPlunderPerUnit)
   }
+
+  test("an eglise emits exactly one paladin-spawn signal per interval") {
+    val eglise = Eglise(100, col = 5, row = 5, paladinSpawnInMs = Balance.PaladinSpawnIntervalMs)
+    val state = MazeState.initial.copy(eglises = List(eglise))
+    val before = CombatEngine.tick(state, deltaMs = Balance.PaladinSpawnIntervalMs - 1.0)
+    val at = CombatEngine.tick(state, deltaMs = Balance.PaladinSpawnIntervalMs)
+    assertEquals(before.spawnedPaladin, 0)
+    assertEquals(at.spawnedPaladin, 1)
+  }
+
+  test("eglises produce light over time") {
+    val eglise = Eglise(100, col = 5, row = 5, paladinSpawnInMs = Double.MaxValue)
+    val state = MazeState.initial.copy(eglises = List(eglise), light = 0.0)
+    val result = CombatEngine.tick(state, deltaMs = 2000.0)
+    assertEquals(result.state.light, Balance.LightPerSecPerEglise * 2.0)
+  }
+
+  test("a paladin reaching the goal plunders nothing") {
+    val goalPos = GridConfig.cellCenter(GridConfig.goalCell._1, GridConfig.goalCell._2)
+    val paladin =
+      Enemy(1, goalPos, Balance.PaladinMaxHp, Balance.PaladinMaxHp, speedPerMs = 0.0, UnitKind.Paladin)
+    val state = MazeState.initial.copy(enemies = List(paladin), wood = 5.0, fire = 5.0)
+    val result = CombatEngine.tick(state, deltaMs = 1.0)
+    assertEquals(result.stolenWood, 0.0)
+    assertEquals(result.stolenFire, 0.0)
+  }
+
+  test("a paladin shields an adjacent unit from forest aura damage") {
+    val forest = Forest(100, col = 5, row = 5, elfSpawnInMs = Balance.ElfSpawnIntervalMs)
+    val shieldedPos = GridConfig.cellCenter(6, 5)
+    val elf =
+      Enemy(1, shieldedPos, hp = 10.0, maxHp = 10.0, speedPerMs = 0.0, UnitKind.Elf)
+    val paladin =
+      Enemy(2, shieldedPos, Balance.PaladinMaxHp, Balance.PaladinMaxHp, speedPerMs = 0.0, UnitKind.Paladin)
+    val state = MazeState.initial.copy(enemies = List(elf, paladin), forests = List(forest))
+    val result = CombatEngine.tick(state, deltaMs = 1000.0)
+    // Balance.PaladinAuraDamageReductionPerSec fully cancels Balance.AuraDamagePerSec (both 2.0)
+    val byId = result.state.enemies.map(e => e.id -> e).toMap
+    assertEquals(byId(1).hp, elf.hp)
+  }
+
+  test("an unshielded unit still takes full forest aura damage") {
+    val forest = Forest(100, col = 5, row = 5, elfSpawnInMs = Balance.ElfSpawnIntervalMs)
+    val elf =
+      Enemy(1, GridConfig.cellCenter(6, 5), hp = 10.0, maxHp = 10.0, speedPerMs = 0.0, UnitKind.Elf)
+    val state = MazeState.initial.copy(enemies = List(elf), forests = List(forest))
+    val result = CombatEngine.tick(state, deltaMs = 1000.0)
+    assertEquals(result.state.enemies.head.hp, elf.hp - Balance.AuraDamagePerSec)
+  }

@@ -10,18 +10,36 @@ enum MatchResult(val reason: String) derives CanEqual:
 // double-win (same tick) favors the player, which only matters for tie-breaking.
 // No "lives"/overrun fallback: that was never a vault concept, only the two
 // per-faction conditions below count for now (a match can run indefinitely otherwise).
+//
+// Each target is relative to the opponent (see Balance.VictoryMultiplierOverOpponent):
+// you must reach the floor AND double whatever the opponent has, so a lead built up
+// early doesn't win the game outright once the opponent has caught back up.
 object VictoryConditions:
 
   def evaluate(battle: BattleState): Option[MatchResult] =
-    if hasWon(battle.player) then Some(MatchResult.PlayerWins(winReason(battle.player)))
-    else if hasWon(battle.ai) then Some(MatchResult.AiWins(winReason(battle.ai)))
+    if hasWon(battle.player, battle.ai) then
+      Some(MatchResult.PlayerWins(winReason(battle.player, battle.ai)))
+    else if hasWon(battle.ai, battle.player) then
+      Some(MatchResult.AiWins(winReason(battle.ai, battle.player)))
     else None
 
-  private def hasWon(state: MazeState): Boolean =
-    state.forests.size >= Balance.NatureVictoryForestTarget || state.resourcesPlundered >= Balance.ChaosVictoryPlunderTarget
+  private def hasWon(state: MazeState, opponent: MazeState): Boolean =
+    state.forests.size >= forestTarget(opponent) ||
+      state.resourcesPlundered >= plunderTarget(opponent)
 
-  private def winReason(state: MazeState): String =
-    if state.forests.size >= Balance.NatureVictoryForestTarget then
-      s"Nature's unstoppable expansion: ${Balance.NatureVictoryForestTarget} Forests built."
+  // Exposed (not just private) so the UI can display the live target, which moves
+  // with the opponent's own count — see the module doc above.
+  def forestTarget(opponent: MazeState): Double =
+    math.max(Balance.NatureVictoryForestTarget.toDouble, opponentTarget(opponent.forests.size))
+
+  def plunderTarget(opponent: MazeState): Double =
+    math.max(Balance.ChaosVictoryPlunderTarget, opponentTarget(opponent.resourcesPlundered))
+
+  private def opponentTarget(opponentCount: Double): Double =
+    Balance.VictoryMultiplierOverOpponent * opponentCount
+
+  private def winReason(state: MazeState, opponent: MazeState): String =
+    if state.forests.size >= forestTarget(opponent) then
+      s"Nature's unstoppable expansion: ${state.forests.size} Forests built (target ${forestTarget(opponent).toInt})."
     else
-      s"Chaos plunder: ${Balance.ChaosVictoryPlunderTarget.toInt} resources stolen from the opponent."
+      s"Chaos plunder: ${state.resourcesPlundered.toInt} resources stolen (target ${plunderTarget(opponent).toInt})."

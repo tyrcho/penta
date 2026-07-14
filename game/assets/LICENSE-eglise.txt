@@ -1,0 +1,7 @@
+Eglise building icon (assets/eglise.png) is a hand-drawn placeholder, not a
+real asset.
+
+The user-provided source image had a visible Dreamstime.com watermark
+(unlicensed stock preview) and could not be used. Replace this placeholder
+with a properly licensed church/cathedral icon before using it beyond this
+local hobby project.

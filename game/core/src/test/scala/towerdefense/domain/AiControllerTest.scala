@@ -29,6 +29,16 @@ class AiControllerTest extends munit.FunSuite:
     assertEquals(result.caves.size, 0)
   }
 
+  test("builds an eglise over any cheaper building once it can afford one") {
+    val state =
+      MazeState.initial.copy(wood = Balance.EgliseCostWood, light = Balance.EgliseCostLight)
+    val result = AiController.maybeBuild(state)
+    assertEquals(result.eglises.size, 1)
+    assertEquals(result.labyrinths.size, 0)
+    assertEquals(result.forests.size, 0)
+    assertEquals(result.caves.size, 0)
+  }
+
   test("skips the spawn and goal cells when picking a spot") {
     val state = MazeState.initial.copy(wood = Balance.ForestCostWood)
     val result = AiController.maybeBuild(state)

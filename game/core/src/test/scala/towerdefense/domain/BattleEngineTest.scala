@@ -2,7 +2,8 @@ package towerdefense.domain
 
 class BattleEngineTest extends munit.FunSuite:
 
-  private def buildingCount(m: MazeState): Int = m.forests.size + m.caves.size + m.labyrinths.size
+  private def buildingCount(m: MazeState): Int =
+    m.forests.size + m.caves.size + m.labyrinths.size + m.eglises.size
 
   test("a forest's Elf arrives in the opponent's maze, not its own") {
     val forest = Forest(100, col = 5, row = 5, elfSpawnInMs = Balance.ElfSpawnIntervalMs)

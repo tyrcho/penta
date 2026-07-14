@@ -3,7 +3,8 @@ package towerdefense.domain
 class PlacementTest extends munit.FunSuite:
 
   private val emptyCell = (5, 5)
-  private val richState = MazeState.initial.copy(wood = 1_000.0, fire = 1_000.0)
+  private val richState =
+    MazeState.initial.copy(wood = 1_000.0, fire = 1_000.0, light = 1_000.0)
 
   test("rejects placement on the spawn cell") {
     val (col, row) = GridConfig.spawnCell
@@ -86,6 +87,30 @@ class PlacementTest extends munit.FunSuite:
     assertEquals(result.labyrinths.size, 1)
     assertEquals(result.wood, richState.wood - Balance.LabyrintheCostWood)
     assertEquals(result.fire, richState.fire - Balance.LabyrintheCostFire)
+  }
+
+  test("rejects an eglise without enough wood or light") {
+    val (col, row) = emptyCell
+    assertEquals(
+      Placement
+        .tryPlaceEglise(MazeState.initial.copy(wood = 0.0, light = 1_000.0), col, row)
+        .isLeft,
+      true
+    )
+    assertEquals(
+      Placement
+        .tryPlaceEglise(MazeState.initial.copy(wood = 1_000.0, light = 0.0), col, row)
+        .isLeft,
+      true
+    )
+  }
+
+  test("places an eglise and deducts both wood and light") {
+    val (col, row) = emptyCell
+    val result = Placement.tryPlaceEglise(richState, col, row).toOption.get
+    assertEquals(result.eglises.size, 1)
+    assertEquals(result.wood, richState.wood - Balance.EgliseCostWood)
+    assertEquals(result.light, richState.light - Balance.EgliseCostLight)
   }
 
   test("rejects placement that would seal off the only route to the goal") {
