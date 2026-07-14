@@ -8,7 +8,8 @@ object Balance:
 
   // ── Nature (player) ─────────────────────────────────────────────────────
   val ForestCostWood: Double = 10.0 // Forest.md: "cout en wood: 10"
-  val WoodPerSecPerForest: Double = 0.2 // Forest.md says 1/sec; tuned down after playtesting the compounding economy
+  val WoodPerSecPerForest: Double =
+    0.2 // Forest.md says 1/sec; tuned down after playtesting the compounding economy
   val AuraDamagePerSec: Double = 2.0 // Forest.md: Ents deal 2 dmg/sec to adjacent units
   val ElfSpawnIntervalMs: Double = 10_000.0 // Forest.md: "toutes les 10 sec genere un Elf"
 
@@ -44,5 +45,6 @@ object Balance:
 
   // Victoire.md leaves both targets as an unfilled "XX" — POC defaults, tuned to be
   // reachable within a few minutes of play at the rates above.
-  val NatureVictoryForestTarget: Int = 10 // Victoire.md, "G: Expansion Inarretable — construire XX batiments"
+  val NatureVictoryForestTarget: Int =
+    10 // Victoire.md, "G: Expansion Inarretable — construire XX batiments"
   val ChaosVictoryPlunderTarget: Double = 20.0 // Victoire.md, "R: Plunder — piller XX ressources"

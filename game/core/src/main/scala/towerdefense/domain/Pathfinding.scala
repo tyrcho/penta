@@ -7,14 +7,22 @@ import scala.collection.mutable
 object Pathfinding:
   private val neighborOffsets = List((1, 0), (-1, 0), (0, 1), (0, -1))
 
-  def shortestPath(start: (Int, Int), goal: (Int, Int), blocked: Set[(Int, Int)]): Option[List[(Int, Int)]] =
+  def shortestPath(
+      start: (Int, Int),
+      goal: (Int, Int),
+      blocked: Set[(Int, Int)]
+  ): Option[List[(Int, Int)]] =
     if start == goal then Some(List(start))
     else bfs(start, goal, blocked)
 
   def isReachable(start: (Int, Int), goal: (Int, Int), blocked: Set[(Int, Int)]): Boolean =
     shortestPath(start, goal, blocked).isDefined
 
-  private def bfs(start: (Int, Int), goal: (Int, Int), blocked: Set[(Int, Int)]): Option[List[(Int, Int)]] =
+  private def bfs(
+      start: (Int, Int),
+      goal: (Int, Int),
+      blocked: Set[(Int, Int)]
+  ): Option[List[(Int, Int)]] =
     val visited = mutable.Set(start)
     val queue = mutable.Queue((start, List(start)))
     var found: Option[List[(Int, Int)]] = None

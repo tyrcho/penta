@@ -20,18 +20,23 @@ object DevServer {
 
   def start(root: Path, jsFile: Path, port: Int = 8080): Unit = {
     val server = HttpServer.create(new InetSocketAddress(port), 0)
-    server.createContext("/", exchange => {
-      val path = exchange.getRequestURI.getPath
-      path match {
-        case "/~~mtime"  => serveMtime(exchange, jsFile)
-        case "/main.js"  => serveBytes(exchange, Files.readAllBytes(jsFile), "application/javascript")
-        case "/main.js.map" =>
-          val mapFile = jsFile.resolveSibling("main.js.map")
-          if (Files.exists(mapFile)) serveBytes(exchange, Files.readAllBytes(mapFile), "application/json")
-          else notFound(exchange)
-        case _           => serveStatic(exchange, root, path)
+    server.createContext(
+      "/",
+      exchange => {
+        val path = exchange.getRequestURI.getPath
+        path match {
+          case "/~~mtime" => serveMtime(exchange, jsFile)
+          case "/main.js" =>
+            serveBytes(exchange, Files.readAllBytes(jsFile), "application/javascript")
+          case "/main.js.map" =>
+            val mapFile = jsFile.resolveSibling("main.js.map")
+            if (Files.exists(mapFile))
+              serveBytes(exchange, Files.readAllBytes(mapFile), "application/json")
+            else notFound(exchange)
+          case _ => serveStatic(exchange, root, path)
+        }
       }
-    })
+    )
     val t = new Thread(() => server.start(), "dev-server")
     t.setDaemon(true)
     t.start()
@@ -49,15 +54,18 @@ object DevServer {
       .map(_.getHostAddress)
 
   private def serveMtime(exchange: HttpExchange, jsFile: Path): Unit = {
-    val mtime = if (Files.exists(jsFile)) Files.getLastModifiedTime(jsFile).toMillis.toString else "0"
+    val mtime =
+      if (Files.exists(jsFile)) Files.getLastModifiedTime(jsFile).toMillis.toString else "0"
     respond(exchange, 200, "text/plain", mtime.getBytes("UTF-8"), noCache = true)
   }
 
   private def serveStatic(exchange: HttpExchange, root: Path, rawPath: String): Unit = {
-    val rel      = if (rawPath == "/" || rawPath.isEmpty) "index.html" else rawPath.stripPrefix("/")
-    val rootAbs  = root.toAbsolutePath.normalize()
-    val file     = rootAbs.resolve(rel).normalize()
-    if (!file.startsWith(rootAbs) || !Files.exists(file) || Files.isDirectory(file)) { notFound(exchange); return }
+    val rel = if (rawPath == "/" || rawPath.isEmpty) "index.html" else rawPath.stripPrefix("/")
+    val rootAbs = root.toAbsolutePath.normalize()
+    val file = rootAbs.resolve(rel).normalize()
+    if (!file.startsWith(rootAbs) || !Files.exists(file) || Files.isDirectory(file)) {
+      notFound(exchange); return
+    }
     val bytes = maybeInject(Files.readAllBytes(file), rel)
     respond(exchange, 200, contentType(rel), bytes)
   }
@@ -69,8 +77,11 @@ object DevServer {
     respond(exchange, 404, "text/plain", "Not found".getBytes)
 
   private def respond(
-    exchange: HttpExchange, status: Int, ct: String,
-    body: Array[Byte], noCache: Boolean = false
+      exchange: HttpExchange,
+      status: Int,
+      ct: String,
+      body: Array[Byte],
+      noCache: Boolean = false
   ): Unit = {
     exchange.getResponseHeaders.set("Content-Type", ct)
     if (noCache) exchange.getResponseHeaders.set("Cache-Control", "no-store")
@@ -93,6 +104,6 @@ object DevServer {
     case p if p.endsWith(".css")  => "text/css"
     case p if p.endsWith(".json") => "application/json"
     case p if p.endsWith(".map")  => "application/json"
-    case _                         => "application/octet-stream"
+    case _                        => "application/octet-stream"
   }
 }

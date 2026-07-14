@@ -7,10 +7,17 @@ package towerdefense.domain
 object AiController:
 
   def maybeBuild(state: MazeState): MazeState =
-    tryBuildOneOf(state, Placement.tryPlaceForest).orElse(tryBuildOneOf(state, Placement.tryPlaceCave)).getOrElse(state)
+    tryBuildOneOf(state, Placement.tryPlaceForest)
+      .orElse(tryBuildOneOf(state, Placement.tryPlaceCave))
+      .getOrElse(state)
 
-  private def tryBuildOneOf(state: MazeState, tryPlace: (MazeState, Int, Int) => Either[String, MazeState]): Option[MazeState] =
-    buildableCells.iterator.map(c => tryPlace(state, c._1, c._2)).collectFirst { case Right(s) => s }
+  private def tryBuildOneOf(
+      state: MazeState,
+      tryPlace: (MazeState, Int, Int) => Either[PlacementError, MazeState]
+  ): Option[MazeState] =
+    buildableCells.iterator.map(c => tryPlace(state, c._1, c._2)).collectFirst { case Right(s) =>
+      s
+    }
 
   private def buildableCells: Seq[(Int, Int)] =
     for

@@ -4,7 +4,8 @@ class CombatEngineTest extends munit.FunSuite:
 
   test("enemy reaching the goal cell is removed") {
     val goalPos = GridConfig.cellCenter(GridConfig.goalCell._1, GridConfig.goalCell._2)
-    val enemy = Enemy(1, goalPos, Balance.ElfMaxHp, Balance.ElfMaxHp, speedPerMs = 0.0, UnitKind.Elf)
+    val enemy =
+      Enemy(1, goalPos, Balance.ElfMaxHp, Balance.ElfMaxHp, speedPerMs = 0.0, UnitKind.Elf)
     val state = MazeState.initial.copy(enemies = List(enemy))
     val result = CombatEngine.tick(state, deltaMs = 1.0)
     assertEquals(result.state.enemies, Nil)
@@ -12,7 +13,8 @@ class CombatEngineTest extends munit.FunSuite:
 
   test("enemy re-routes around a forest blocking its straight-line step") {
     val startPos = GridConfig.cellCenter(0, 0)
-    val enemy = Enemy(1, startPos, Balance.ElfMaxHp, Balance.ElfMaxHp, speedPerMs = 1000.0, UnitKind.Elf)
+    val enemy =
+      Enemy(1, startPos, Balance.ElfMaxHp, Balance.ElfMaxHp, speedPerMs = 1000.0, UnitKind.Elf)
     val blockingForest = Forest(100, col = 1, row = 0, elfSpawnInMs = Balance.ElfSpawnIntervalMs)
     val state = MazeState.initial.copy(enemies = List(enemy), forests = List(blockingForest))
     val result = CombatEngine.tick(state, deltaMs = 1.0)
@@ -21,7 +23,14 @@ class CombatEngineTest extends munit.FunSuite:
 
   test("enemy also re-routes around a cave (both building types block)") {
     val startPos = GridConfig.cellCenter(0, 0)
-    val enemy = Enemy(1, startPos, Balance.GoblinMaxHp, Balance.GoblinMaxHp, speedPerMs = 1000.0, UnitKind.Goblin)
+    val enemy = Enemy(
+      1,
+      startPos,
+      Balance.GoblinMaxHp,
+      Balance.GoblinMaxHp,
+      speedPerMs = 1000.0,
+      UnitKind.Goblin
+    )
     val blockingCave = Cave(100, col = 1, row = 0, goblinSpawnInMs = Balance.GoblinSpawnIntervalMs)
     val state = MazeState.initial.copy(enemies = List(enemy), caves = List(blockingCave))
     val result = CombatEngine.tick(state, deltaMs = 1.0)
@@ -30,8 +39,10 @@ class CombatEngineTest extends munit.FunSuite:
 
   test("forest damages an adjacent enemy but not a distant one") {
     val forest = Forest(100, col = 5, row = 5, elfSpawnInMs = Balance.ElfSpawnIntervalMs)
-    val adjacent = Enemy(1, GridConfig.cellCenter(6, 5), hp = 10.0, maxHp = 10.0, speedPerMs = 0.0, UnitKind.Elf)
-    val distant = Enemy(2, GridConfig.cellCenter(0, 0), hp = 10.0, maxHp = 10.0, speedPerMs = 0.0, UnitKind.Elf)
+    val adjacent =
+      Enemy(1, GridConfig.cellCenter(6, 5), hp = 10.0, maxHp = 10.0, speedPerMs = 0.0, UnitKind.Elf)
+    val distant =
+      Enemy(2, GridConfig.cellCenter(0, 0), hp = 10.0, maxHp = 10.0, speedPerMs = 0.0, UnitKind.Elf)
     val state = MazeState.initial.copy(enemies = List(adjacent, distant), forests = List(forest))
 
     val result = CombatEngine.tick(state, deltaMs = 1000.0)
@@ -42,7 +53,14 @@ class CombatEngineTest extends munit.FunSuite:
 
   test("forest aura kills an enemy once its hp is depleted") {
     val forest = Forest(100, col = 5, row = 5, elfSpawnInMs = Balance.ElfSpawnIntervalMs)
-    val enemy = Enemy(1, GridConfig.cellCenter(6, 5), hp = Balance.AuraDamagePerSec, maxHp = Balance.AuraDamagePerSec, speedPerMs = 0.0, UnitKind.Elf)
+    val enemy = Enemy(
+      1,
+      GridConfig.cellCenter(6, 5),
+      hp = Balance.AuraDamagePerSec,
+      maxHp = Balance.AuraDamagePerSec,
+      speedPerMs = 0.0,
+      UnitKind.Elf
+    )
     val state = MazeState.initial.copy(enemies = List(enemy), forests = List(forest))
     val result = CombatEngine.tick(state, deltaMs = 1000.0)
     assertEquals(result.state.enemies, Nil)
@@ -51,7 +69,8 @@ class CombatEngineTest extends munit.FunSuite:
   test("forests produce wood, caves produce fire, over time") {
     val forest = Forest(100, col = 5, row = 5, elfSpawnInMs = Balance.ElfSpawnIntervalMs)
     val cave = Cave(101, col = 6, row = 6, goblinSpawnInMs = Balance.GoblinSpawnIntervalMs)
-    val state = MazeState.initial.copy(forests = List(forest), caves = List(cave), wood = 0.0, fire = 0.0)
+    val state =
+      MazeState.initial.copy(forests = List(forest), caves = List(cave), wood = 0.0, fire = 0.0)
     val result = CombatEngine.tick(state, deltaMs = 2000.0)
     assertEquals(result.state.wood, Balance.WoodPerSecPerForest * 2.0)
     assertEquals(result.state.fire, Balance.FirePerSecPerCave * 2.0)
@@ -77,7 +96,8 @@ class CombatEngineTest extends munit.FunSuite:
 
   test("a goblin reaching the goal plunders wood and fire, clamped to what's available") {
     val goalPos = GridConfig.cellCenter(GridConfig.goalCell._1, GridConfig.goalCell._2)
-    val goblin = Enemy(1, goalPos, Balance.GoblinMaxHp, Balance.GoblinMaxHp, speedPerMs = 0.0, UnitKind.Goblin)
+    val goblin =
+      Enemy(1, goalPos, Balance.GoblinMaxHp, Balance.GoblinMaxHp, speedPerMs = 0.0, UnitKind.Goblin)
     val state = MazeState.initial.copy(enemies = List(goblin), wood = 0.5, fire = 100.0)
     val result = CombatEngine.tick(state, deltaMs = 1.0)
     assertEquals(result.stolenWood, 0.5) // clamped: only 0.5 wood was available to steal

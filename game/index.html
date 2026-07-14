@@ -15,7 +15,6 @@
       --color-bg:      #1a1a2e;
       --color-surface: #16213e;
       --color-text:    #e8e8e8;
-      --color-muted:   #888;
       --color-border:  #2a2a4a;
       --color-gold:    #eab308;
       --color-fire:     #fb923c;
@@ -130,7 +129,7 @@
   </style>
 </head>
 <body>
-  <div id="controlbar">
+  <header id="controlbar">
     <h1>tower-defense-poc</h1>
     <div class="panel">
       <button class="build-btn selected" id="build-forest"><img src="./assets/forest.png" alt="Forêt"></button>
@@ -143,7 +142,7 @@
       <button class="speed-btn" id="fast-btn">+</button>
       <span id="speed-label">1x</span>
     </div>
-  </div>
+  </header>
   <div id="stats-row">
     <div class="maze-panel player-side">
       <span class="player-label">You</span>
@@ -160,13 +159,13 @@
       <span class="player-label ai">AI</span>
     </div>
   </div>
-  <div id="game-container">
+  <main id="game-container">
     <div id="game-over">
       <div id="game-over-title"></div>
       <div id="game-over-reason"></div>
     </div>
     <div id="tooltip"></div>
-  </div>
+  </main>
   <script type="module" src="./main.js"></script>
 </body>
 </html>

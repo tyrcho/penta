@@ -39,8 +39,14 @@ class PlacementTest extends munit.FunSuite:
 
   test("rejects a cave without enough wood or fire") {
     val (col, row) = emptyCell
-    assertEquals(Placement.tryPlaceCave(MazeState.initial.copy(wood = 0.0, fire = 1_000.0), col, row).isLeft, true)
-    assertEquals(Placement.tryPlaceCave(MazeState.initial.copy(wood = 1_000.0, fire = 0.0), col, row).isLeft, true)
+    assertEquals(
+      Placement.tryPlaceCave(MazeState.initial.copy(wood = 0.0, fire = 1_000.0), col, row).isLeft,
+      true
+    )
+    assertEquals(
+      Placement.tryPlaceCave(MazeState.initial.copy(wood = 1_000.0, fire = 0.0), col, row).isLeft,
+      true
+    )
   }
 
   test("places a forest and deducts wood") {

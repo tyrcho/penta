@@ -5,7 +5,12 @@ package towerdefense.domain
 // each Cave its Goblin, into the *opponent's* maze — that's the whole game.
 // aiBuildCooldownMs paces the AI's own building rate (see Balance.AiBuildCooldownMs).
 // outcome freezes the battle once a side has won.
-case class BattleState(player: MazeState, ai: MazeState, aiBuildCooldownMs: Double = 0.0, outcome: Option[MatchResult] = None)
+case class BattleState(
+    player: MazeState,
+    ai: MazeState,
+    aiBuildCooldownMs: Double = 0.0,
+    outcome: Option[MatchResult] = None
+)
 
 object BattleState:
   val initial: BattleState = BattleState(MazeState.initial, MazeState.initial)
@@ -17,10 +22,19 @@ object BattleEngine:
     else
       val playerResult = CombatEngine.tick(battle.player, deltaMs)
       val aiResult = CombatEngine.tick(battle.ai, deltaMs)
-      val (aiBuilt, nextCooldown) = maybeBuildThrottled(aiResult.state, battle.aiBuildCooldownMs - deltaMs)
+      val (aiBuilt, nextCooldown) =
+        maybeBuildThrottled(aiResult.state, battle.aiBuildCooldownMs - deltaMs)
 
-      val aiFinal = deliverUnits(creditPlunder(aiBuilt, playerResult.stolenWood, playerResult.stolenFire), playerResult.spawnedElf, playerResult.spawnedGoblin)
-      val playerFinal = deliverUnits(creditPlunder(playerResult.state, aiResult.stolenWood, aiResult.stolenFire), aiResult.spawnedElf, aiResult.spawnedGoblin)
+      val aiFinal = deliverUnits(
+        creditPlunder(aiBuilt, playerResult.stolenWood, playerResult.stolenFire),
+        playerResult.spawnedElf,
+        playerResult.spawnedGoblin
+      )
+      val playerFinal = deliverUnits(
+        creditPlunder(playerResult.state, aiResult.stolenWood, aiResult.stolenFire),
+        aiResult.spawnedElf,
+        aiResult.spawnedGoblin
+      )
 
       val next = BattleState(playerFinal, aiFinal, nextCooldown)
       next.copy(outcome = VictoryConditions.evaluate(next))
@@ -38,13 +52,26 @@ object BattleEngine:
   // Resources a Goblin plundered from the opponent land in the attacker's own economy
   // (Chaos.md: "arracher ses ressources"), and count toward the Chaos victory tally.
   private def creditPlunder(state: MazeState, wood: Double, fire: Double): MazeState =
-    state.copy(wood = state.wood + wood, fire = state.fire + fire, resourcesPlundered = state.resourcesPlundered + wood + fire)
+    state.copy(
+      wood = state.wood + wood,
+      fire = state.fire + fire,
+      resourcesPlundered = state.resourcesPlundered + wood + fire
+    )
 
   private def deliverUnits(state: MazeState, elfCount: Int, goblinCount: Int): MazeState =
-    val withElf = (0 until elfCount).foldLeft(state)((s, _) => spawnUnit(s, UnitKind.Elf, Balance.ElfMaxHp, Balance.ElfSpeedPerMs))
-    (0 until goblinCount).foldLeft(withElf)((s, _) => spawnUnit(s, UnitKind.Goblin, Balance.GoblinMaxHp, Balance.GoblinSpeedPerMs))
+    val withElf = (0 until elfCount).foldLeft(state)((s, _) =>
+      spawnUnit(s, UnitKind.Elf, Balance.ElfMaxHp, Balance.ElfSpeedPerMs)
+    )
+    (0 until goblinCount).foldLeft(withElf)((s, _) =>
+      spawnUnit(s, UnitKind.Goblin, Balance.GoblinMaxHp, Balance.GoblinSpeedPerMs)
+    )
 
-  private def spawnUnit(state: MazeState, kind: UnitKind, maxHp: Double, speedPerMs: Double): MazeState =
+  private def spawnUnit(
+      state: MazeState,
+      kind: UnitKind,
+      maxHp: Double,
+      speedPerMs: Double
+  ): MazeState =
     val spawnPos = GridConfig.cellCenter(GridConfig.spawnCell._1, GridConfig.spawnCell._2)
     val unit = Enemy(state.nextId, spawnPos, maxHp, maxHp, speedPerMs, kind)
     state.copy(enemies = unit :: state.enemies, nextId = state.nextId + 1)

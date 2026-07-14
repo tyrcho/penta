@@ -87,10 +87,10 @@ source art is a cool gray rock and Chaos reads better warm. Both mazes are scale
 together to fit the window every tick against a fixed logical design size. Only the
 left (player) maze reacts to taps.
 
-**Hover tooltips:** the two build buttons carry a native `title` (cost, shown on hover).
-Every building/unit sprite is wired for `pointerover`/`pointerout` (`wireHover`); while
-hovered, a custom tooltip div is repositioned on `pointermove` and its text is
-refreshed every tick from the live `BattleState` (`updateTooltip`), so HP and spawn
+**Hover tooltips:** one custom tooltip div serves both the build buttons (cost, on
+`mouseenter`/`mousemove`/`mouseleave`) and every building/unit sprite (`pointerover`/
+`pointerout` via `wireHover`); for sprites, its text is refreshed every tick from the
+live `BattleState` (`updateTooltip`), so HP and spawn
 countdowns shown in it stay current without needing to re-hover.
 
 **Animation:** enemies rotate to face their next path step (reusing the same
