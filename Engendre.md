@@ -7,11 +7,11 @@
 
 ### **🌿 Cycle Engendre : Synergies de Production**
 
-- Nature **engendre** [Chaos](Resources/Chaos.md) / Bois **engendre** Feu
+- Nature **engendre** [Chaos](Resources/Chaos/Chaos.md) / Bois **engendre** Feu
 - Chaos **engendre** [Mort](Resources/Mort.md) / Feu **engendre** Ombre
 - Mort **engendre** [Science](Resources/Science.md) / Ombre **engendre** Cristal
 - Science **engendre** [Loi](Resources/Loi.md) / Cristal **engendre** Lumière
-- Loi **engendre** [Nature](Resources/Nature.md) / Lumière **engendre** Bois
+- Loi **engendre** [Nature](Resources/Nature/Nature.md) / Lumière **engendre** Bois
 
 ---
 

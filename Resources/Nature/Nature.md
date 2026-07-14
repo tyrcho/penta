@@ -32,4 +32,4 @@ Voir [Loi engendre Nature](Relations/Engendre/Loi-Nature.md).
 
 Pour l’emporter avec la Nature, il faut incarner l’esprit des elfes et des ents : **croître sans relâche**, étendre son influence jusqu’à ce que la nature recouvre tout.
 
-**Condition** : voir [Conditions de Victoire](../Victoire.md)
+**Condition** : voir [Conditions de Victoire](../../Victoire.md)

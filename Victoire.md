@@ -10,9 +10,10 @@ _(Chaque condition est liée à une couleur/ressource, avec des mécaniques uniq
 
 ---
 
-### **🔥 R : Guerre Totale**
+### **🔥 R : Pillage**
 
-- **Objectif** : Tuer **XX unités ennemies**.
+- **Objectif** : Piller **XX ressources** à l’adversaire.
+- **Mécanique** : une ressource est pillée quand une unité parvient jusqu’au bastion adverse.
 
 ---
 

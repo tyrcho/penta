@@ -28,8 +28,8 @@ Voir [Loi contrôle Chaos](Relations/Contrôle/Loi-Chaos.md).
 
 ---
 
-#### **🏆 La Victoire par le Chaos : La Guerre Totale**
+#### **🏆 La Victoire par le Chaos : Le Pillage**
 
-Pour l’emporter avec le Chaos, il faut incarner l’esprit des orcs et des dragons : **détruire sans pitié** en utilisant la **Ressource Feu**, consumer tout sur son passage jusqu’à ce qu’il ne reste plus rien.
+Pour l’emporter avec le Chaos, il faut incarner l’esprit des orcs et des dragons : **piller sans relâche** en utilisant la **Ressource Feu**, envoyer des unités jusqu’au bastion adverse pour lui arracher ses ressources.
 
-**Condition** : voir [Conditions de Victoire](../Victoire.md)
+**Condition** : voir [Conditions de Victoire](../../Victoire.md)
