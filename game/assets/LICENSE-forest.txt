@@ -1,0 +1,9 @@
+Forest building icon (assets/forest.png) is cropped from CraftPix.net's
+Free Simple Summer Top-Down Vector Tileset
+(https://free-game-assets.itch.io/free-simple-summer-top-down-vector-tileset),
+"Prop - Tree Medium" piece.
+
+License: https://craftpix.net/file-licenses/ (Freebie License)
+No attribution required; modification and use in shipped commercial/hobby
+projects is permitted. Redistribution of the raw asset files themselves is
+not permitted.
