@@ -92,15 +92,26 @@ def onReady(app: Application, textures: js.Dictionary[Texture]): Unit =
   aiWorld.addChild(drawGrid())
 
   val flameFrames = js.Array(AssetPaths.Flames.map(textures(_))*)
-  var battle = BattleState.initial
+  var battle = Persistence.load().getOrElse(BattleState.initial)
   var selectedBuilding: BuildingChoice = BuildingChoice.Forest
   var hovered: Option[HoverTarget] = None
   var speed = new GameSpeed
+  var msSinceLastSave = 0.0
   val playerSprites = new MazeSprites
   val aiSprites = new MazeSprites
 
+  def resetGame(): Unit =
+    clearSprites(playerWorld, playerSprites)
+    clearSprites(aiWorld, aiSprites)
+    battle = BattleState.initial
+    speed.paused = false
+    updateSpeedLabel(speed)
+    hovered = None
+    Persistence.clear()
+
   wireBuildingButtons(choice => selectedBuilding = choice)
   wireSpeedControls(speed)
+  wireNewGameButton(() => resetGame())
 
   app.stage.eventMode = "static"
   app.stage.on(
@@ -134,6 +145,11 @@ def onReady(app: Application, textures: js.Dictionary[Texture]): Unit =
     applyViewTransform(app, battleWorld, aiWorld)
     updateOverlay(battle)
     hovered = updateTooltip(hovered, battle)
+    updateNewGameButtonVisibility(battle.outcome.isDefined || speed.paused)
+    msSinceLastSave += t.deltaMS
+    if msSinceLastSave >= 1000.0 then
+      Persistence.save(battle)
+      msSinceLastSave = 0.0
   }
 
 // ── Static grid ─────────────────────────────────────────────────────────
@@ -238,6 +254,25 @@ private def updateSpeedLabel(speed: GameSpeed): Unit =
 
 private def formatMultiplier(m: Double): String =
   if m == m.toInt then m.toInt.toString else m.toString
+
+// ── New game (visible while paused or once the match has ended) ────────
+
+private def wireNewGameButton(onNewGame: () => Unit): Unit =
+  document.getElementById("new-game-btn").addEventListener("click", (_: dom.Event) => onNewGame())
+
+private def updateNewGameButtonVisibility(visible: Boolean): Unit =
+  val btn = document.getElementById("new-game-btn")
+  if visible then btn.classList.add("visible") else btn.classList.remove("visible")
+
+private def clearSprites(world: Container, sprites: MazeSprites): Unit =
+  (sprites.enemies.values ++ sprites.forests.values ++ sprites.caves.values).foreach(
+    world.removeChild
+  )
+  sprites.enemies.clear()
+  sprites.forests.clear()
+  sprites.forestTimers.clear()
+  sprites.caves.clear()
+  sprites.caveTimers.clear()
 
 private def handleTap(
     app: Application,
