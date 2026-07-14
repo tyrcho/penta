@@ -3,11 +3,11 @@ package towerdefense.domain
 import towerdefense.domain.geometry.Vec2
 
 enum UnitKind derives CanEqual:
-  case Elf, Goblin
+  case Elf, Goblin, Minotaur
 
 // A unit currently walking this maze. From this maze owner's point of view it's
-// always hostile — it's either an Elf (Nature) or a Goblin (Chaos) sent by the
-// opponent's building. Only Goblin does anything special on arrival (plunder).
+// always hostile — it's an Elf (Nature) or a Goblin/Minotaur (Chaos) sent by the
+// opponent's building. Only Goblin/Minotaur does anything special on arrival (plunder).
 case class Enemy(
     id: Long,
     pos: Vec2,
@@ -31,11 +31,19 @@ case class Cave(
     goblinSpawnInMs: Double // countdown to the next Goblin sent to the opponent's maze
 )
 
+case class Labyrinth(
+    id: Long,
+    col: Int,
+    row: Int,
+    minotaurSpawnInMs: Double // countdown to the next Minotaur sent to the opponent's maze
+)
+
 // One player's maze: grid, economy and units currently walking it. A battle is two of these.
 case class MazeState(
     enemies: List[Enemy],
     forests: List[Forest],
     caves: List[Cave],
+    labyrinths: List[Labyrinth],
     wood: Double,
     fire: Double,
     resourcesPlundered: Double, // this maze's own progress toward the Chaos victory condition
@@ -44,13 +52,16 @@ case class MazeState(
   // Cells occupied by any building — the single source of truth for both pathfinding
   // obstacles (CombatEngine/Placement) and rendering (GameApp), so it's only ever defined once.
   def buildingCells: Set[(Int, Int)] =
-    forests.map(f => (f.col, f.row)).toSet ++ caves.map(c => (c.col, c.row))
+    forests.map(f => (f.col, f.row)).toSet ++ caves.map(c => (c.col, c.row)) ++ labyrinths.map(l =>
+      (l.col, l.row)
+    )
 
 object MazeState:
   val initial: MazeState = MazeState(
     enemies = Nil,
     forests = Nil,
     caves = Nil,
+    labyrinths = Nil,
     wood = Balance.StartingWood,
     fire = Balance.StartingFire,
     resourcesPlundered = 0.0,

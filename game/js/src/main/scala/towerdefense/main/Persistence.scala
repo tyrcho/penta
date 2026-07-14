@@ -44,6 +44,7 @@ private object Persistence:
       enemies = js.Array(m.enemies.map(encodeEnemy)*),
       forests = js.Array(m.forests.map(encodeForest)*),
       caves = js.Array(m.caves.map(encodeCave)*),
+      labyrinths = js.Array(m.labyrinths.map(encodeLabyrinthe)*),
       wood = m.wood,
       fire = m.fire,
       resourcesPlundered = m.resourcesPlundered,
@@ -58,7 +59,10 @@ private object Persistence:
       hp = e.hp,
       maxHp = e.maxHp,
       speedPerMs = e.speedPerMs,
-      kind = if e.kind == UnitKind.Elf then "Elf" else "Goblin"
+      kind = e.kind match
+        case UnitKind.Elf      => "Elf"
+        case UnitKind.Goblin   => "Goblin"
+        case UnitKind.Minotaur => "Minotaur"
     )
 
   private def encodeForest(f: Forest): js.Dynamic =
@@ -70,6 +74,14 @@ private object Persistence:
       col = c.col,
       row = c.row,
       goblinSpawnInMs = c.goblinSpawnInMs
+    )
+
+  private def encodeLabyrinthe(l: Labyrinth): js.Dynamic =
+    js.Dynamic.literal(
+      id = l.id.toDouble,
+      col = l.col,
+      row = l.row,
+      minotaurSpawnInMs = l.minotaurSpawnInMs
     )
 
   private def encodeOutcome(m: MatchResult): js.Dynamic = m match
@@ -91,6 +103,7 @@ private object Persistence:
       enemies = decodeArray(d.enemies, decodeEnemy),
       forests = decodeArray(d.forests, decodeForest),
       caves = decodeArray(d.caves, decodeCave),
+      labyrinths = decodeArray(d.labyrinths, decodeLabyrinthe),
       wood = asDouble(d.wood),
       fire = asDouble(d.fire),
       resourcesPlundered = asDouble(d.resourcesPlundered),
@@ -107,7 +120,10 @@ private object Persistence:
       hp = asDouble(d.hp),
       maxHp = asDouble(d.maxHp),
       speedPerMs = asDouble(d.speedPerMs),
-      kind = if d.kind.asInstanceOf[String] == "Elf" then UnitKind.Elf else UnitKind.Goblin
+      kind = d.kind.asInstanceOf[String] match
+        case "Elf"      => UnitKind.Elf
+        case "Minotaur" => UnitKind.Minotaur
+        case _          => UnitKind.Goblin
     )
 
   private def decodeForest(d: js.Dynamic): Forest =
@@ -124,6 +140,14 @@ private object Persistence:
       col = asDouble(d.col).toInt,
       row = asDouble(d.row).toInt,
       goblinSpawnInMs = asDouble(d.goblinSpawnInMs)
+    )
+
+  private def decodeLabyrinthe(d: js.Dynamic): Labyrinth =
+    Labyrinth(
+      id = asDouble(d.id).toLong,
+      col = asDouble(d.col).toInt,
+      row = asDouble(d.row).toInt,
+      minotaurSpawnInMs = asDouble(d.minotaurSpawnInMs)
     )
 
   private def decodeOutcome(d: js.Dynamic): Option[MatchResult] =

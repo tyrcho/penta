@@ -2,6 +2,8 @@ package towerdefense.domain
 
 class BattleEngineTest extends munit.FunSuite:
 
+  private def buildingCount(m: MazeState): Int = m.forests.size + m.caves.size + m.labyrinths.size
+
   test("a forest's Elf arrives in the opponent's maze, not its own") {
     val forest = Forest(100, col = 5, row = 5, elfSpawnInMs = Balance.ElfSpawnIntervalMs)
     val battle = BattleState(
@@ -18,7 +20,7 @@ class BattleEngineTest extends munit.FunSuite:
   test("the AI builds something once it can afford one, on either side (symmetric)") {
     val battle = BattleState.initial
     val result = BattleEngine.tick(battle, deltaMs = 1.0)
-    assertEquals(result.ai.forests.size + result.ai.caves.size, 1)
+    assertEquals(buildingCount(result.ai), 1)
   }
 
   test(
@@ -27,15 +29,14 @@ class BattleEngineTest extends munit.FunSuite:
     val battle =
       BattleState.initial.copy(ai = MazeState.initial.copy(wood = 10_000.0, fire = 10_000.0))
     val afterFirstBuild = BattleEngine.tick(battle, deltaMs = 1.0)
-    val countAfterFirst = afterFirstBuild.ai.forests.size + afterFirstBuild.ai.caves.size
-    assertEquals(countAfterFirst, 1)
+    assertEquals(buildingCount(afterFirstBuild.ai), 1)
 
     val stillCoolingDown =
       BattleEngine.tick(afterFirstBuild, deltaMs = Balance.AiBuildCooldownMs - 1.0)
-    assertEquals(stillCoolingDown.ai.forests.size + stillCoolingDown.ai.caves.size, 1)
+    assertEquals(buildingCount(stillCoolingDown.ai), 1)
 
     val cooldownElapsed = BattleEngine.tick(stillCoolingDown, deltaMs = 1.0)
-    assertEquals(cooldownElapsed.ai.forests.size + cooldownElapsed.ai.caves.size, 2)
+    assertEquals(buildingCount(cooldownElapsed.ai), 2)
   }
 
   test("a goblin pillaging the player credits the stolen resources and tally to the AI") {
@@ -53,6 +54,29 @@ class BattleEngineTest extends munit.FunSuite:
     assertEquals(result.ai.wood, Balance.PlunderPerUnit)
     assertEquals(result.ai.fire, Balance.PlunderPerUnit)
     assertEquals(result.ai.resourcesPlundered, 2 * Balance.PlunderPerUnit)
+  }
+
+  test("a minotaur pillaging the player credits the stolen resources and tally to the AI") {
+    val goalPos = GridConfig.cellCenter(GridConfig.goalCell._1, GridConfig.goalCell._2)
+    val incomingMinotaur = Enemy(
+      1,
+      goalPos,
+      Balance.MinotaurMaxHp,
+      Balance.MinotaurMaxHp,
+      speedPerMs = 0.0,
+      UnitKind.Minotaur
+    )
+    val battle = BattleState(
+      player = MazeState.initial.copy(enemies = List(incomingMinotaur), wood = 50.0, fire = 50.0),
+      ai = MazeState.initial
+        .copy(wood = 0.0, fire = 0.0) // isolates the plunder-credit effect from production
+    )
+    val result = BattleEngine.tick(battle, deltaMs = 1.0)
+    assertEquals(result.player.wood, 50.0 - Balance.MinotaurPlunderPerUnit)
+    assertEquals(result.player.fire, 50.0 - Balance.MinotaurPlunderPerUnit)
+    assertEquals(result.ai.wood, Balance.MinotaurPlunderPerUnit)
+    assertEquals(result.ai.fire, Balance.MinotaurPlunderPerUnit)
+    assertEquals(result.ai.resourcesPlundered, 2 * Balance.MinotaurPlunderPerUnit)
   }
 
   test("the battle freezes once the player reaches the Nature victory target") {

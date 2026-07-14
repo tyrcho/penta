@@ -64,6 +64,30 @@ class PlacementTest extends munit.FunSuite:
     assertEquals(result.fire, richState.fire - Balance.CaveCostFire)
   }
 
+  test("rejects a labyrinthe without enough wood or fire") {
+    val (col, row) = emptyCell
+    assertEquals(
+      Placement
+        .tryPlaceLabyrinthe(MazeState.initial.copy(wood = 0.0, fire = 1_000.0), col, row)
+        .isLeft,
+      true
+    )
+    assertEquals(
+      Placement
+        .tryPlaceLabyrinthe(MazeState.initial.copy(wood = 1_000.0, fire = 0.0), col, row)
+        .isLeft,
+      true
+    )
+  }
+
+  test("places a labyrinthe and deducts both wood and fire") {
+    val (col, row) = emptyCell
+    val result = Placement.tryPlaceLabyrinthe(richState, col, row).toOption.get
+    assertEquals(result.labyrinths.size, 1)
+    assertEquals(result.wood, richState.wood - Balance.LabyrintheCostWood)
+    assertEquals(result.fire, richState.fire - Balance.LabyrintheCostFire)
+  }
+
   test("rejects placement that would seal off the only route to the goal") {
     val corridor = for row <- 0 until GridConfig.rows yield (1, row)
     val withWall = corridor.init.foldLeft(richState) { (state, cell) =>

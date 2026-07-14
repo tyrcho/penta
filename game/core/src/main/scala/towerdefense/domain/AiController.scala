@@ -3,11 +3,15 @@ package towerdefense.domain
 // Dumbest possible opponent: as soon as it can afford a building, place one on the
 // first buildable cell in row-major order. Deterministic (easy to test), no
 // randomness — a reasonable POC default since the vault doesn't specify AI behavior.
-// Both sides can build either Forest or Cave — see CLAUDE.md, "the game is symmetric".
+// Both sides can build a Forest, a Cave, or a Labyrinthe — see CLAUDE.md, "the game is
+// symmetric". Tried priciest-first: the Labyrinthe's cost (wood+fire) dominates both
+// the Forest's and the Cave's, so trying it last would make it unreachable — by the
+// time its cost is affordable, the cheaper buildings always are too.
 object AiController:
 
   def maybeBuild(state: MazeState): MazeState =
-    tryBuildOneOf(state, Placement.tryPlaceForest)
+    tryBuildOneOf(state, Placement.tryPlaceLabyrinthe)
+      .orElse(tryBuildOneOf(state, Placement.tryPlaceForest))
       .orElse(tryBuildOneOf(state, Placement.tryPlaceCave))
       .getOrElse(state)
 

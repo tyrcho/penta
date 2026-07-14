@@ -12,10 +12,10 @@ import towerdefense.pixi.*
 private case class ViewTransform(scale: Double, offsetX: Double, offsetY: Double)
 
 private enum BuildingChoice derives CanEqual:
-  case Forest, Cave
+  case Forest, Cave, Labyrinthe
 
 private enum HoverKind derives CanEqual:
-  case EnemyH, ForestH, CaveH
+  case EnemyH, ForestH, CaveH, LabyrintheH
 
 private case class HoverTarget(isPlayer: Boolean, kind: HoverKind, id: Long)
 
@@ -43,11 +43,15 @@ private class MazeSprites:
   val forestTimers = mutable.Map.empty[Long, Double]
   val caves = mutable.Map.empty[Long, Sprite]
   val caveTimers = mutable.Map.empty[Long, Double]
+  val labyrinths = mutable.Map.empty[Long, Sprite]
+  val labyrintheTimers = mutable.Map.empty[Long, Double]
 
 private object AssetPaths:
   val Forest = "./assets/forest.png"
   val CaveRock = "./assets/cave.png"
+  val LabyrintheIcon = "./assets/labyrinthe.png"
   val Elf = "./assets/enemy.png"
+  val Minotaur = "./assets/minotaur.png"
   val Flames =
     List("./assets/flame1.png", "./assets/flame2.png", "./assets/flame3.png", "./assets/flame4.png")
   val GoblinFrameCount = 10
@@ -56,7 +60,8 @@ private object AssetPaths:
     GoblinDirections
       .map(d => d -> (0 until GoblinFrameCount).map(i => f"./assets/goblin/$d-walk-$i%02d.png").toList)
       .toMap
-  val All: List[String] = List(Forest, CaveRock, Elf) ++ GoblinFrames.values.flatten ++ Flames
+  val All: List[String] =
+    List(Forest, CaveRock, LabyrintheIcon, Elf, Minotaur) ++ GoblinFrames.values.flatten ++ Flames
 
 private val CaveTint = 0xff7a45 // warm/fiery recolor for an otherwise cool-gray rock tile
 
@@ -199,18 +204,30 @@ private val CaveTooltip =
   s"Cave — cost ${Balance.CaveCostWood.toInt} wood + ${Balance.CaveCostFire.toInt} fire. " +
     s"+${Balance.FirePerSecPerCave.toInt} fire/s, spawns a Goblin every ${(Balance.GoblinSpawnIntervalMs / 1000).toInt}s"
 
+private val LabyrintheTooltip =
+  s"Labyrinthe — cost ${Balance.LabyrintheCostWood.toInt} wood + ${Balance.LabyrintheCostFire.toInt} fire. " +
+    s"Spawns a Minotaur every ${(Balance.MinotaurSpawnIntervalMs / 1000).toInt}s, " +
+    s"which plunders ${Balance.MinotaurPlunderPerUnit.toInt} wood + ${Balance.MinotaurPlunderPerUnit.toInt} fire on arrival"
+
 private def wireBuildingButtons(onSelect: BuildingChoice => Unit): Unit =
   val forestBtn = document.getElementById("build-forest")
   val caveBtn = document.getElementById("build-cave")
+  val labyrintheBtn = document.getElementById("build-labyrinthe")
+  val buttons = List(forestBtn, caveBtn, labyrintheBtn)
   wireButtonTooltip(forestBtn, ForestTooltip)
   wireButtonTooltip(caveBtn, CaveTooltip)
+  wireButtonTooltip(labyrintheBtn, LabyrintheTooltip)
   forestBtn.addEventListener(
     "click",
-    (_: dom.Event) => selectBuilding(BuildingChoice.Forest, forestBtn, caveBtn, onSelect)
+    (_: dom.Event) => selectBuilding(BuildingChoice.Forest, forestBtn, buttons, onSelect)
   )
   caveBtn.addEventListener(
     "click",
-    (_: dom.Event) => selectBuilding(BuildingChoice.Cave, caveBtn, forestBtn, onSelect)
+    (_: dom.Event) => selectBuilding(BuildingChoice.Cave, caveBtn, buttons, onSelect)
+  )
+  labyrintheBtn.addEventListener(
+    "click",
+    (_: dom.Event) => selectBuilding(BuildingChoice.Labyrinthe, labyrintheBtn, buttons, onSelect)
   )
 
 // Buttons live outside #game-container (the tooltip's positioned ancestor), so unlike
@@ -239,12 +256,12 @@ private def positionButtonTooltip(e: dom.MouseEvent): Unit =
 private def selectBuilding(
     choice: BuildingChoice,
     active: dom.Element,
-    inactive: dom.Element,
+    all: List[dom.Element],
     onSelect: BuildingChoice => Unit
 ): Unit =
   onSelect(choice)
+  all.foreach(_.classList.remove("selected"))
   active.classList.add("selected")
-  inactive.classList.remove("selected")
 
 // ── Speed controls (pause / slow down / speed up) ───────────────────────
 
@@ -277,15 +294,16 @@ private def updateNewGameButtonVisibility(visible: Boolean): Unit =
   if visible then btn.classList.add("visible") else btn.classList.remove("visible")
 
 private def clearSprites(world: Container, sprites: MazeSprites): Unit =
-  (sprites.enemies.values ++ sprites.forests.values ++ sprites.caves.values).foreach(
-    world.removeChild
-  )
+  (sprites.enemies.values ++ sprites.forests.values ++ sprites.caves.values ++ sprites.labyrinths.values)
+    .foreach(world.removeChild)
   sprites.enemies.clear()
   sprites.goblinFacing.clear()
   sprites.forests.clear()
   sprites.forestTimers.clear()
   sprites.caves.clear()
   sprites.caveTimers.clear()
+  sprites.labyrinths.clear()
+  sprites.labyrintheTimers.clear()
 
 private def handleTap(
     app: Application,
@@ -304,8 +322,10 @@ private def handleTap(
     else
       val col = (localX / GridConfig.cellSize).toInt
       val row = (localY / GridConfig.cellSize).toInt
-      val tryPlace =
-        if choice == BuildingChoice.Forest then Placement.tryPlaceForest else Placement.tryPlaceCave
+      val tryPlace = choice match
+        case BuildingChoice.Forest     => Placement.tryPlaceForest
+        case BuildingChoice.Cave       => Placement.tryPlaceCave
+        case BuildingChoice.Labyrinthe => Placement.tryPlaceLabyrinthe
       battle.copy(player = tryPlace(battle.player, col, row).getOrElse(battle.player))
 
 // ── Responsive scale-to-fit ────────────────────────────────────────────
@@ -341,6 +361,7 @@ private def syncMaze(
   syncEnemies(world, maze, sprites, textures, goblinFrames, flames, blocked, isPlayer, setHovered)
   syncForests(world, maze, sprites, textures, flames, isPlayer, setHovered)
   syncCaves(world, maze, sprites, textures, flames, isPlayer, setHovered)
+  syncLabyrinths(world, maze, sprites, textures, flames, isPlayer, setHovered)
 
 private def syncEnemies(
     world: Container,
@@ -371,7 +392,7 @@ private def syncEnemies(
     setPos(g, e.pos)
     val angle = enemyFacingAngle(e, blocked)
     e.kind match
-      case UnitKind.Elf => angle.foreach(a => g.rotation = a)
+      case UnitKind.Elf | UnitKind.Minotaur => angle.foreach(a => g.rotation = a)
       case UnitKind.Goblin =>
         angle.map(facingDirection).foreach { dir =>
           if !sprites.goblinFacing.get(e.id).contains(dir) then
@@ -392,6 +413,15 @@ private def newEnemySprite(
 ): Container = kind match
   case UnitKind.Elf =>
     newHoverSprite(world, textures(AssetPaths.Elf), GridConfig.cellSize * 0.8, target, setHovered)
+  case UnitKind.Minotaur =>
+    // Heavier raider than the Goblin (Minotaure.md: 50 HP vs 5) — a bigger sprite reflects that.
+    newHoverSprite(
+      world,
+      textures(AssetPaths.Minotaur),
+      GridConfig.cellSize * 1.1,
+      target,
+      setHovered
+    )
   case UnitKind.Goblin =>
     val s = newAnimatedSprite(goblinFrames("front"), GridConfig.cellSize * 0.8)
     wireHover(s, target, setHovered)
@@ -451,6 +481,33 @@ private def syncCaves(
     val previousCountdown = sprites.caveTimers.getOrElse(c.id, c.goblinSpawnInMs)
     sprites.caveTimers(c.id) = c.goblinSpawnInMs
     if hasWrapped(previousCountdown, c.goblinSpawnInMs) then
+      spawnEffect(world, Vec2(g.x, g.y), flames, scale = 0.6)
+  }
+
+private def syncLabyrinths(
+    world: Container,
+    maze: MazeState,
+    sprites: MazeSprites,
+    textures: js.Dictionary[Texture],
+    flames: js.Array[Texture],
+    isPlayer: Boolean,
+    setHovered: Option[HoverTarget] => Unit
+): Unit =
+  maze.labyrinths.foreach { l =>
+    val g = sprites.labyrinths.getOrElseUpdate(
+      l.id,
+      newHoverSprite(
+        world,
+        textures(AssetPaths.LabyrintheIcon),
+        GridConfig.cellSize * 0.9,
+        HoverTarget(isPlayer, HoverKind.LabyrintheH, l.id),
+        setHovered
+      )
+    )
+    setPos(g, GridConfig.cellCenter(l.col, l.row))
+    val previousCountdown = sprites.labyrintheTimers.getOrElse(l.id, l.minotaurSpawnInMs)
+    sprites.labyrintheTimers(l.id) = l.minotaurSpawnInMs
+    if hasWrapped(previousCountdown, l.minotaurSpawnInMs) then
       spawnEffect(world, Vec2(g.x, g.y), flames, scale = 0.6)
   }
 
@@ -595,12 +652,14 @@ private def hoverText(target: HoverTarget, battle: BattleState): Option[String] 
   target.kind match
     case HoverKind.EnemyH =>
       maze.enemies.find(_.id == target.id).map { e =>
-        val (name, plunders) =
-          if e.kind == UnitKind.Elf then ("Elf", s"${Balance.PlunderPerUnit.toInt} wood")
-          else
+        val (name, plunders) = e.kind match
+          case UnitKind.Elf => ("Elf", s"${Balance.PlunderPerUnit.toInt} wood")
+          case UnitKind.Goblin =>
+            ("Goblin", s"${Balance.PlunderPerUnit.toInt} wood + ${Balance.PlunderPerUnit.toInt} fire")
+          case UnitKind.Minotaur =>
             (
-              "Goblin",
-              s"${Balance.PlunderPerUnit.toInt} wood + ${Balance.PlunderPerUnit.toInt} fire"
+              "Minotaur",
+              s"${Balance.MinotaurPlunderPerUnit.toInt} wood + ${Balance.MinotaurPlunderPerUnit.toInt} fire"
             )
         s"$name — HP ${e.hp.toInt}/${e.maxHp.toInt}, plunders $plunders on arrival"
       }
@@ -613,6 +672,11 @@ private def hoverText(target: HoverTarget, battle: BattleState): Option[String] 
       maze.caves.find(_.id == target.id).map { c =>
         val nextGoblinS = (c.goblinSpawnInMs / 1000).ceil.toInt
         s"Cave — +${Balance.FirePerSecPerCave.toInt} fire/s, next Goblin in ${nextGoblinS}s"
+      }
+    case HoverKind.LabyrintheH =>
+      maze.labyrinths.find(_.id == target.id).map { l =>
+        val nextMinotaurS = (l.minotaurSpawnInMs / 1000).ceil.toInt
+        s"Labyrinthe — next Minotaur in ${nextMinotaurS}s"
       }
 
 // ── HTML overlay ────────────────────────────────────────────────────────

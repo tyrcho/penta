@@ -30,6 +30,18 @@ object Balance:
   // CLAUDE.md), clamped to what's available.
   val PlunderPerUnit: Double = 1.0
 
+  val LabyrintheCostWood: Double = 20.0 // Labyrinthe.md: "cout en bois: 20"
+  val LabyrintheCostFire: Double = 40.0 // Labyrinthe.md: "cout en feu: 40"
+  val MinotaurSpawnIntervalMs: Double =
+    10_000.0 // Labyrinthe.md: "toutes les 10 secondes genere un Minotaure"
+
+  val MinotaurMaxHp: Double = 50.0 // Minotaure.md: "PV: 50"
+  val MinotaurSpeedPerMs: Double = 0.05 // POC default, matches Elf/Goblin
+
+  // Minotaure.md: "Pille 10 ressources de chaque type" — a heavier, slower-to-produce
+  // raider than the Goblin's PlunderPerUnit.
+  val MinotaurPlunderPerUnit: Double = 10.0
+
   // ── Shared / meta ────────────────────────────────────────────────────────
 
   // POC default, not required to match each other — both mazes still get the identical

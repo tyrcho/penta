@@ -114,3 +114,31 @@ class CombatEngineTest extends munit.FunSuite:
     assertEquals(result.stolenWood, Balance.PlunderPerUnit)
     assertEquals(result.stolenFire, 0.0)
   }
+
+  test("a labyrinthe emits exactly one minotaur-spawn signal per interval") {
+    val labyrinthe =
+      Labyrinth(100, col = 5, row = 5, minotaurSpawnInMs = Balance.MinotaurSpawnIntervalMs)
+    val state = MazeState.initial.copy(labyrinths = List(labyrinthe))
+    val before = CombatEngine.tick(state, deltaMs = Balance.MinotaurSpawnIntervalMs - 1.0)
+    val at = CombatEngine.tick(state, deltaMs = Balance.MinotaurSpawnIntervalMs)
+    assertEquals(before.spawnedMinotaur, 0)
+    assertEquals(at.spawnedMinotaur, 1)
+  }
+
+  test("a minotaur reaching the goal plunders 10 of each resource, clamped to what's available") {
+    val goalPos = GridConfig.cellCenter(GridConfig.goalCell._1, GridConfig.goalCell._2)
+    val minotaur = Enemy(
+      1,
+      goalPos,
+      Balance.MinotaurMaxHp,
+      Balance.MinotaurMaxHp,
+      speedPerMs = 0.0,
+      UnitKind.Minotaur
+    )
+    val state = MazeState.initial.copy(enemies = List(minotaur), wood = 5.0, fire = 100.0)
+    val result = CombatEngine.tick(state, deltaMs = 1.0)
+    assertEquals(result.stolenWood, 5.0) // clamped: only 5 wood was available to steal
+    assertEquals(result.stolenFire, Balance.MinotaurPlunderPerUnit)
+    assertEquals(result.state.wood, 0.0)
+    assertEquals(result.state.fire, 100.0 - Balance.MinotaurPlunderPerUnit)
+  }

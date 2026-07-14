@@ -1,0 +1,4 @@
+Minotaur sprite (assets/minotaur.png) is cropped from a user-provided sprite
+sheet ("Minotaur - Sprite Sheet.png"). Source/license of the original sheet
+is not verified — check before using this asset outside this local hobby
+project.

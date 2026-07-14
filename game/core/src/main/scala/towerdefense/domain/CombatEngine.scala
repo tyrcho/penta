@@ -2,14 +2,15 @@ package towerdefense.domain
 
 import towerdefense.domain.geometry.Vec2
 
-// spawnedElf/spawnedGoblin: units this maze's buildings just launched — the caller
-// (BattleEngine) delivers those into the *opponent's* maze.
-// stolenWood/stolenFire: resources this maze just lost to arriving Goblins — the
-// caller credits those (and the plunder tally) to the opponent that owns them.
+// spawnedElf/spawnedGoblin/spawnedMinotaur: units this maze's buildings just launched —
+// the caller (BattleEngine) delivers those into the *opponent's* maze.
+// stolenWood/stolenFire: resources this maze just lost to arriving Goblins/Minotaurs —
+// the caller credits those (and the plunder tally) to the opponent that owns them.
 case class TickResult(
     state: MazeState,
     spawnedElf: Int,
     spawnedGoblin: Int,
+    spawnedMinotaur: Int,
     stolenWood: Double,
     stolenFire: Double
 )
@@ -23,25 +24,33 @@ object CombatEngine:
     val s4 = produceFire(s3, deltaMs)
     val (s5, spawnedElf) = advanceForestTimers(s4, deltaMs)
     val (s6, spawnedGoblin) = advanceCaveTimers(s5, deltaMs)
-    TickResult(s6, spawnedElf, spawnedGoblin, stolenWood, stolenFire)
+    val (s7, spawnedMinotaur) = advanceLabyrintheTimers(s6, deltaMs)
+    TickResult(s7, spawnedElf, spawnedGoblin, spawnedMinotaur, stolenWood, stolenFire)
 
   // Re-pathfinds every enemy from its current cell to the goal each tick, avoiding
   // building cells — no cached path to invalidate when a new building changes the maze.
-  // Every arriving unit plunders wood; only Goblin also plunders fire (Goblin.md:
-  // "one resource of each type" — Elf.md gives Elf no such ability beyond wood).
+  // Every arriving unit plunders wood; only Goblin/Minotaur also plunder fire (Goblin.md/
+  // Minotaure.md: "one resource of each type" — Elf.md gives Elf no such ability beyond
+  // wood). Minotaur plunders a bigger amount per unit (Minotaure.md: "10 ressources de
+  // chaque type" vs Goblin's Balance.PlunderPerUnit).
   private def moveEnemies(state: MazeState, deltaMs: Double): (MazeState, Double, Double) =
     val blocked = state.buildingCells
     val (remaining, arrived) =
       state.enemies.map(stepEnemy(_, blocked, deltaMs)).partitionMap(identity)
-    val goblinsArrived = arrived.count(_.kind == UnitKind.Goblin)
-    val stolenWood = math.min(state.wood, arrived.size * Balance.PlunderPerUnit)
-    val stolenFire = math.min(state.fire, goblinsArrived * Balance.PlunderPerUnit)
+    val woodPlundered = arrived.map(e => plunderAmount(e.kind)).sum
+    val firePlundered = arrived.filter(_.kind != UnitKind.Elf).map(e => plunderAmount(e.kind)).sum
+    val stolenWood = math.min(state.wood, woodPlundered)
+    val stolenFire = math.min(state.fire, firePlundered)
     val next = state.copy(
       enemies = remaining,
       wood = state.wood - stolenWood,
       fire = state.fire - stolenFire
     )
     (next, stolenWood, stolenFire)
+
+  private def plunderAmount(kind: UnitKind): Double = kind match
+    case UnitKind.Minotaur => Balance.MinotaurPlunderPerUnit
+    case _                 => Balance.PlunderPerUnit
 
   private def stepEnemy(
       enemy: Enemy,
@@ -116,3 +125,17 @@ object CombatEngine:
       else (c.copy(goblinSpawnInMs = remaining) :: acc, count)
     }
     (state.copy(caves = caves), spawned)
+
+  // Labyrinthe.md: "toutes les 10 secondes genere un Minotaure".
+  private def advanceLabyrintheTimers(state: MazeState, deltaMs: Double): (MazeState, Int) =
+    val (labyrinths, spawned) =
+      state.labyrinths.foldLeft((List.empty[Labyrinth], 0)) { case ((acc, count), l) =>
+        val remaining = l.minotaurSpawnInMs - deltaMs
+        if remaining <= 0 then
+          (
+            l.copy(minotaurSpawnInMs = remaining + Balance.MinotaurSpawnIntervalMs) :: acc,
+            count + 1
+          )
+        else (l.copy(minotaurSpawnInMs = remaining) :: acc, count)
+      }
+    (state.copy(labyrinths = labyrinths), spawned)
