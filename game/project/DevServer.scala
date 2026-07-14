@@ -37,11 +37,13 @@ object DevServer {
     t.start()
   }
 
-  // Best-effort: first non-loopback IPv4 address, so the caller can print a LAN URL
-  // (e.g. for opening the dev server from a phone on the same WiFi).
+  // Best-effort: first non-loopback IPv4 address on a real broadcast interface (WiFi/Ethernet),
+  // so the caller can print a LAN URL (e.g. for opening the dev server from a phone on the same
+  // WiFi). Point-to-point interfaces (isPointToPoint) are VPN/tunnel addresses, not reachable
+  // from other devices on the LAN, so they're excluded even though they're "up" and non-virtual.
   def lanAddress(): Option[String] =
     NetworkInterface.getNetworkInterfaces.asScala
-      .filter(nif => nif.isUp && !nif.isLoopback && !nif.isVirtual)
+      .filter(nif => nif.isUp && !nif.isLoopback && !nif.isVirtual && !nif.isPointToPoint)
       .flatMap(_.getInetAddresses.asScala)
       .find(addr => addr.getAddress.length == 4 && !addr.isLoopbackAddress)
       .map(_.getHostAddress)

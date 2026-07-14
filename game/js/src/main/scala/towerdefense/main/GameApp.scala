@@ -51,8 +51,15 @@ private object AssetPaths:
 private val CaveTint = 0xff7a45 // warm/fiery recolor for an otherwise cool-gray rock tile
 
 private val MazeGapPx = GridConfig.cellSize
-private val BattleWidth = GridConfig.width * 2 + MazeGapPx
-private val BattleHeight = GridConfig.height
+
+// Side-by-side on wide screens, stacked (player maze above the AI's) on narrow/portrait
+// ones — e.g. a phone on WiFi (see game/CLAUDE.md: both mazes always keep equal billing,
+// so "stacked" here is purely a layout choice, not a capability difference).
+private case class Layout(portrait: Boolean, battleWidth: Double, battleHeight: Double)
+
+private def currentLayout(screenW: Double, screenH: Double): Layout =
+  if screenH > screenW then Layout(portrait = true, GridConfig.width, GridConfig.height * 2 + MazeGapPx)
+  else Layout(portrait = false, GridConfig.width * 2 + MazeGapPx, GridConfig.height)
 
 @main def main(): Unit =
   if document.readyState == "loading" then
@@ -74,7 +81,6 @@ def onReady(app: Application, textures: js.Dictionary[Texture]): Unit =
 
   val playerWorld = new Container()
   val aiWorld = new Container()
-  aiWorld.x = GridConfig.width + MazeGapPx
   battleWorld.addChild(playerWorld)
   battleWorld.addChild(aiWorld)
   playerWorld.addChild(drawGrid())
@@ -101,7 +107,7 @@ def onReady(app: Application, textures: js.Dictionary[Texture]): Unit =
     battle = BattleEngine.tick(battle, speed.effectiveDeltaMs(t.deltaMS))
     syncMaze(playerWorld, battle.player, playerSprites, textures, flameFrames, isPlayer = true, h => hovered = h)
     syncMaze(aiWorld, battle.ai, aiSprites, textures, flameFrames, isPlayer = false, h => hovered = h)
-    applyViewTransform(app, battleWorld)
+    applyViewTransform(app, battleWorld, aiWorld)
     updateOverlay(battle)
     hovered = updateTooltip(hovered, battle)
   }
@@ -184,7 +190,8 @@ private def formatMultiplier(m: Double): String =
 private def handleTap(app: Application, battle: BattleState, e: FederatedPointerEvent, choice: BuildingChoice): BattleState =
   if battle.outcome.isDefined then battle
   else
-    val vt = computeViewTransform(app.screen.width, app.screen.height)
+    val layout = currentLayout(app.screen.width, app.screen.height)
+    val vt = computeViewTransform(app.screen.width, app.screen.height, layout)
     val localX = (e.globalX - vt.offsetX) / vt.scale
     val localY = (e.globalY - vt.offsetY) / vt.scale
     if localX < 0 || localX >= GridConfig.width || localY < 0 || localY >= GridConfig.height then battle
@@ -196,14 +203,17 @@ private def handleTap(app: Application, battle: BattleState, e: FederatedPointer
 
 // ── Responsive scale-to-fit ────────────────────────────────────────────
 
-private def computeViewTransform(screenW: Double, screenH: Double): ViewTransform =
-  val scale = math.min(screenW / BattleWidth, screenH / BattleHeight)
-  val offsetX = (screenW - BattleWidth * scale) / 2
-  val offsetY = (screenH - BattleHeight * scale) / 2
+private def computeViewTransform(screenW: Double, screenH: Double, layout: Layout): ViewTransform =
+  val scale = math.min(screenW / layout.battleWidth, screenH / layout.battleHeight)
+  val offsetX = (screenW - layout.battleWidth * scale) / 2
+  val offsetY = (screenH - layout.battleHeight * scale) / 2
   ViewTransform(scale, offsetX, offsetY)
 
-private def applyViewTransform(app: Application, battleWorld: Container): Unit =
-  val vt = computeViewTransform(app.screen.width, app.screen.height)
+private def applyViewTransform(app: Application, battleWorld: Container, aiWorld: Container): Unit =
+  val layout = currentLayout(app.screen.width, app.screen.height)
+  aiWorld.x = if layout.portrait then 0 else GridConfig.width + MazeGapPx
+  aiWorld.y = if layout.portrait then GridConfig.height + MazeGapPx else 0
+  val vt = computeViewTransform(app.screen.width, app.screen.height, layout)
   battleWorld.scale.set(vt.scale)
   battleWorld.x = vt.offsetX
   battleWorld.y = vt.offsetY
