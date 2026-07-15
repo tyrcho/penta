@@ -101,5 +101,5 @@ case class CompositeStrategy(weights: Weights) extends AiStrategy:
     val ownFactionCount = kind match
       case BuildingKind.Forest                       => Some(natureCount)
       case BuildingKind.Cave | BuildingKind.Labyrinth => Some(chaosCount)
-      case BuildingKind.Eglise | BuildingKind.Watchtower => None
+      case BuildingKind.Church | BuildingKind.Watchtower => None
     if ownFactionCount.contains(leaderCount) then 1.0 else 0.0

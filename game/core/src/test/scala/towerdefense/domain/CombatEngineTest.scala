@@ -89,7 +89,7 @@ class CombatEngineTest extends munit.FunSuite:
         Building(1, 0, 1, BuildingKind.Forest, 0.0),
         Building(2, 0, 2, BuildingKind.Forest, 0.0),
         Building(3, 0, 3, BuildingKind.Cave, 0.0),
-        Building(4, 0, 4, BuildingKind.Eglise, 0.0)
+        Building(4, 0, 4, BuildingKind.Church, 0.0)
       )
     )
     assertEquals(CombatEngine.productionPerSec(state, Resource.Wood), 2 * Balance.WoodPerSecPerForest)
@@ -164,7 +164,7 @@ class CombatEngineTest extends munit.FunSuite:
   }
 
   test("an eglise emits exactly one paladin-spawn signal per interval") {
-    val eglise = Building(100, col = 5, row = 5, BuildingKind.Eglise, Balance.PaladinSpawnIntervalMs)
+    val eglise = Building(100, col = 5, row = 5, BuildingKind.Church, Balance.PaladinSpawnIntervalMs)
     val state = withResources().copy(buildings = List(eglise))
     val before = CombatEngine.tick(state, deltaMs = Balance.PaladinSpawnIntervalMs - 1.0)
     val at = CombatEngine.tick(state, deltaMs = Balance.PaladinSpawnIntervalMs)
@@ -173,7 +173,7 @@ class CombatEngineTest extends munit.FunSuite:
   }
 
   test("eglises produce light over time") {
-    val eglise = Building(100, col = 5, row = 5, BuildingKind.Eglise, Double.MaxValue)
+    val eglise = Building(100, col = 5, row = 5, BuildingKind.Church, Double.MaxValue)
     val state = withResources(light = 0.0).copy(buildings = List(eglise))
     val result = CombatEngine.tick(state, deltaMs = 2000.0)
     assertEquals(result.state.resources(Resource.Light), Balance.LightPerSecPerEglise * 2.0)

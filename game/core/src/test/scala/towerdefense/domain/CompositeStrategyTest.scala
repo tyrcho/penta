@@ -40,7 +40,7 @@ class CompositeStrategyTest extends munit.FunSuite:
       "expected a Chaos building"
     )
     assertEquals(count(result, BuildingKind.Forest), 0)
-    assertEquals(count(result, BuildingKind.Eglise), 0)
+    assertEquals(count(result, BuildingKind.Church), 0)
   }
 
   test("counter-only ignores Watchtower/Loi investment too, same as Eglise") {
@@ -85,16 +85,16 @@ class CompositeStrategyTest extends munit.FunSuite:
     val state = withResources(wood = 100.0, fire = 100.0, light = 100.0)
     val loiHeavyOpponent = MazeState.initial.copy(
       buildings = List(
-        building(1, 5, 5, BuildingKind.Eglise),
-        building(2, 6, 6, BuildingKind.Eglise),
-        building(3, 7, 7, BuildingKind.Eglise),
+        building(1, 5, 5, BuildingKind.Church),
+        building(2, 6, 6, BuildingKind.Church),
+        building(3, 7, 7, BuildingKind.Church),
         building(4, 2, 2, BuildingKind.Forest)
       )
     )
     val strategy = CompositeStrategy(Weights(resource = 0.0, counter = 1.0, maze = 0.0))
     val result = strategy.maybeBuild(state, loiHeavyOpponent)
     assertEquals(
-      count(result, BuildingKind.Eglise),
+      count(result, BuildingKind.Church),
       0,
       "must not mirror Eglise even though it's the opponent's largest count"
     )

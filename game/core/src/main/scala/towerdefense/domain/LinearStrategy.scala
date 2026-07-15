@@ -17,7 +17,7 @@ package towerdefense.domain
 object LinearStrategy extends AiStrategy:
 
   private val buildOrder: Seq[BuildingKind] = Seq(
-    BuildingKind.Eglise,
+    BuildingKind.Church,
     BuildingKind.Labyrinth,
     BuildingKind.Watchtower,
     BuildingKind.Forest,

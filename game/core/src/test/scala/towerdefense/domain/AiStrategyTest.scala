@@ -44,7 +44,7 @@ class AiStrategyTest extends munit.FunSuite:
   test("builds an eglise over any cheaper building once it can afford one") {
     val state = withResources(wood = Balance.EgliseCostWood, light = Balance.EgliseCostLight)
     val result = LinearStrategy.maybeBuild(state, noOpponent)
-    assertEquals(count(result, BuildingKind.Eglise), 1)
+    assertEquals(count(result, BuildingKind.Church), 1)
     assertEquals(count(result, BuildingKind.Labyrinth), 0)
     assertEquals(count(result, BuildingKind.Forest), 0)
     assertEquals(count(result, BuildingKind.Cave), 0)

@@ -109,13 +109,13 @@ class PlacementTest extends munit.FunSuite:
     val (col, row) = emptyCell
     assertEquals(
       Placement
-        .tryPlaceBuilding(withResources(wood = 0.0, light = 1_000.0), BuildingKind.Eglise, col, row)
+        .tryPlaceBuilding(withResources(wood = 0.0, light = 1_000.0), BuildingKind.Church, col, row)
         .isLeft,
       true
     )
     assertEquals(
       Placement
-        .tryPlaceBuilding(withResources(wood = 1_000.0, light = 0.0), BuildingKind.Eglise, col, row)
+        .tryPlaceBuilding(withResources(wood = 1_000.0, light = 0.0), BuildingKind.Church, col, row)
         .isLeft,
       true
     )
@@ -123,8 +123,8 @@ class PlacementTest extends munit.FunSuite:
 
   test("places an eglise and deducts both wood and light") {
     val (col, row) = emptyCell
-    val result = Placement.tryPlaceBuilding(richState, BuildingKind.Eglise, col, row).toOption.get
-    assertEquals(result.buildings.count(_.kind == BuildingKind.Eglise), 1)
+    val result = Placement.tryPlaceBuilding(richState, BuildingKind.Church, col, row).toOption.get
+    assertEquals(result.buildings.count(_.kind == BuildingKind.Church), 1)
     assertEquals(result.resources(Resource.Wood), richState.resources(Resource.Wood) - Balance.EgliseCostWood)
     assertEquals(
       result.resources(Resource.Light),

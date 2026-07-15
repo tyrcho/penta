@@ -12,7 +12,7 @@ enum UnitKind derives CanEqual:
   case Elf, Goblin, Minotaur, Paladin
 
 enum BuildingKind derives CanEqual:
-  case Forest, Cave, Labyrinth, Eglise, Watchtower
+  case Forest, Cave, Labyrinth, Church, Watchtower
 
 // A unit currently walking this maze. From this maze owner's point of view it's
 // always hostile — sent by one of the opponent's buildings. See CreatureSpecs for

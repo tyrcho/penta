@@ -169,7 +169,7 @@ private object Persistence:
     tagged(d.forests, BuildingKind.Forest, Some("elfSpawnInMs")) ++
       tagged(d.caves, BuildingKind.Cave, Some("goblinSpawnInMs")) ++
       tagged(d.labyrinths, BuildingKind.Labyrinth, Some("minotaurSpawnInMs")) ++
-      tagged(d.eglises, BuildingKind.Eglise, Some("paladinSpawnInMs")) ++
+      tagged(d.eglises, BuildingKind.Church, Some("paladinSpawnInMs")) ++
       tagged(d.watchtowers, BuildingKind.Watchtower, None)
 
   private def decodeArray[A](arr: js.Dynamic, decode: js.Dynamic => A): List[A] =
@@ -198,7 +198,7 @@ private object Persistence:
         case "Forest"     => BuildingKind.Forest
         case "Cave"       => BuildingKind.Cave
         case "Labyrinth"  => BuildingKind.Labyrinth
-        case "Eglise"     => BuildingKind.Eglise
+        case "Eglise"     => BuildingKind.Church
         case _            => BuildingKind.Watchtower,
       spawnCountdownMs = if js.isUndefined(d.spawnCountdownMs) then 0.0 else asDouble(d.spawnCountdownMs)
     )

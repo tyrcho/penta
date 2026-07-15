@@ -76,7 +76,7 @@ private object BuildingVisuals:
     BuildingKind.Forest -> BuildingVisual(AssetPaths.Forest, GridConfig.cellSize * 0.9, None),
     BuildingKind.Cave -> BuildingVisual(AssetPaths.CaveRock, GridConfig.cellSize * 0.9, Some(CaveTint)),
     BuildingKind.Labyrinth -> BuildingVisual(AssetPaths.LabyrintheIcon, GridConfig.cellSize * 0.9, None),
-    BuildingKind.Eglise -> BuildingVisual(AssetPaths.EgliseIcon, GridConfig.cellSize * 0.9, None),
+    BuildingKind.Church -> BuildingVisual(AssetPaths.EgliseIcon, GridConfig.cellSize * 0.9, None),
     BuildingKind.Watchtower -> BuildingVisual(AssetPaths.WatchtowerIcon, GridConfig.cellSize * 0.9, None)
   )
 
@@ -87,7 +87,7 @@ private def domSlug(kind: BuildingKind): String = kind match
   case BuildingKind.Forest     => "forest"
   case BuildingKind.Cave       => "cave"
   case BuildingKind.Labyrinth  => "labyrinthe"
-  case BuildingKind.Eglise     => "eglise"
+  case BuildingKind.Church     => "eglise"
   case BuildingKind.Watchtower => "watchtower"
 
 private def resourceName(res: Resource): String = res match
@@ -116,8 +116,16 @@ private def currentLayout(screenW: Double, screenH: Double): Layout =
 
 def setup(): Unit =
   val app = new Application()
-  val options =
-    js.Dynamic.literal(resizeTo = dom.window, backgroundColor = 0x0f172a, antialias = true)
+  // resizeTo the *container*, not the window: the header (now several rows of concept
+  // info) eats real vertical space, so app.screen.width/height must reflect what's
+  // actually left for the canvas — computeViewTransform's scale-to-fit math is only as
+  // accurate as these dimensions, and sizing to the full window overstated the available
+  // height, letting the maze render partly outside the visible area.
+  val options = js.Dynamic.literal(
+    resizeTo = document.getElementById("game-container"),
+    backgroundColor = 0x0f172a,
+    antialias = true
+  )
   app
     .init(options.asInstanceOf[js.Object])
     .toFuture
@@ -173,6 +181,7 @@ def onReady(app: Application, textures: js.Dictionary[Texture]): Unit =
   )
   wireSpeedControls(speed)
   wireNewGameButton(() => resetGame())
+  wireFullscreenButton()
   wireAiLevelSelect(aiLevelIndex, index => aiLevelIndex = index)
   wireDestroyButton((col, row) => battle = destroyPlayerBuilding(battle, col, row))
 
@@ -307,7 +316,7 @@ private val BuildingTooltips: Map[BuildingKind, String] = Map(
   BuildingKind.Forest -> ForestTooltip,
   BuildingKind.Cave -> CaveTooltip,
   BuildingKind.Labyrinth -> LabyrintheTooltip,
-  BuildingKind.Eglise -> EgliseTooltip,
+  BuildingKind.Church -> EgliseTooltip,
   BuildingKind.Watchtower -> WatchtowerTooltip
 )
 
@@ -458,6 +467,29 @@ private def wireNewGameButton(onNewGame: () => Unit): Unit =
 private def updateNewGameButtonVisibility(visible: Boolean): Unit =
   val btn = document.getElementById("new-game-btn")
   if visible then btn.classList.add("visible") else btn.classList.remove("visible")
+
+// ── Fullscreen (hides browser chrome — address bar, tab strip — leaving more room for
+// the maze; the resizeTo target in setup() reacts automatically once the browser fires
+// the resize this triggers, so no extra layout code is needed here) ────────────────────
+
+private def wireFullscreenButton(): Unit =
+  val btn = document.getElementById("fullscreen-btn")
+  btn.addEventListener("click", (_: dom.Event) => toggleFullscreen())
+  document.addEventListener("fullscreenchange", (_: dom.Event) => updateFullscreenLabel())
+  updateFullscreenLabel()
+
+private def toggleFullscreen(): Unit =
+  if fullscreenElement().isEmpty then
+    document.documentElement.asInstanceOf[js.Dynamic].requestFullscreen()
+  else document.asInstanceOf[js.Dynamic].exitFullscreen()
+
+private def updateFullscreenLabel(): Unit =
+  document.getElementById("fullscreen-btn").textContent =
+    if fullscreenElement().isDefined then "Exit Fullscreen" else "Fullscreen"
+
+private def fullscreenElement(): Option[dom.Element] =
+  val el = document.asInstanceOf[js.Dynamic].fullscreenElement
+  if js.isUndefined(el) || el == null then None else Some(el.asInstanceOf[dom.Element])
 
 private def clearSprites(world: Container, sprites: MazeSprites): Unit =
   (sprites.creatures.values ++ sprites.buildings.values).foreach(world.removeChild)
@@ -857,7 +889,7 @@ private def buildingHoverText(kind: BuildingKind, b: Building): String = kind ma
   case BuildingKind.Labyrinth =>
     val nextMinotaurS = (b.spawnCountdownMs / 1000).ceil.toInt
     s"Labyrinthe — next Minotaur in ${nextMinotaurS}s"
-  case BuildingKind.Eglise =>
+  case BuildingKind.Church =>
     val nextPaladinS = (b.spawnCountdownMs / 1000).ceil.toInt
     s"Eglise — +${formatDecimal(Balance.LightPerSecPerEglise)} light/s, next Paladin in ${nextPaladinS}s"
   case BuildingKind.Watchtower =>

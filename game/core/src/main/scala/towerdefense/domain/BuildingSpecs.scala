@@ -30,7 +30,7 @@ object BuildingSpecs:
       produces = Map.empty,
       spawns = Some(UnitKind.Minotaur -> Balance.MinotaurSpawnIntervalMs)
     ),
-    BuildingKind.Eglise -> BuildingSpec(
+    BuildingKind.Church -> BuildingSpec(
       cost = Map(Resource.Wood -> Balance.EgliseCostWood, Resource.Light -> Balance.EgliseCostLight),
       produces = Map(Resource.Light -> Balance.LightPerSecPerEglise),
       spawns = Some(UnitKind.Paladin -> Balance.PaladinSpawnIntervalMs)
