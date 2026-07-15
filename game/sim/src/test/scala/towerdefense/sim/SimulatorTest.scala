@@ -1,0 +1,23 @@
+package towerdefense.sim
+
+// Smoke tests for the headless simulator: prove it runs to completion on the JVM and
+// produces well-formed results. Win-rate numbers are exploratory, not a correctness
+// contract, so nothing here asserts a specific outcome — just shape and termination.
+class SimulatorTest extends munit.FunSuite:
+
+  test("linear vs linear runs to completion and returns well-formed tallies") {
+    val tallies = Simulator.runMatches("linear", "linear", matches = 5, maxTicks = 300, deltaMs = 100.0)
+    assertEquals(tallies.size, 2)
+    tallies.foreach { t =>
+      assert(t.wins + t.draws <= 5, s"wins+draws should never exceed matches played: $t")
+      assert(t.avgTicks >= 0.0, s"avgTicks should never be negative: $t")
+    }
+  }
+
+  test("searchWeights over a tiny grid runs to completion and returns a ranked, non-empty list") {
+    val results =
+      Simulator.searchWeights("linear", matchesPerPoint = 1, step = 1.0, maxTicks = 300, deltaMs = 100.0)
+    assert(results.nonEmpty, "a weight grid must produce at least one candidate")
+    assertEquals(results, results.sortBy(-_.winRate), "results must be ranked by win rate descending")
+    results.foreach(r => assert(r.winRate >= 0.0 && r.winRate <= 1.0, s"winRate out of range: $r"))
+  }

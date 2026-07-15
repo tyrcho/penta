@@ -2,15 +2,17 @@ package towerdefense.domain
 
 class VictoryConditionsTest extends munit.FunSuite:
 
+  private def forestBuilding(col: Int, row: Int): Building =
+    Building(1, col, row, BuildingKind.Forest, spawnCountdownMs = 0.0)
+
   test("no result while nobody has met any condition") {
     assertEquals(VictoryConditions.evaluate(BattleState.initial), None)
   }
 
   test("player wins once they've built enough forests") {
-    val forests =
-      List.fill(Balance.NatureVictoryForestTarget)(Forest(1, col = 2, row = 2, elfSpawnInMs = 0.0))
+    val forests = List.fill(Balance.NatureVictoryForestTarget)(forestBuilding(2, 2))
     val battle =
-      BattleState(player = MazeState.initial.copy(forests = forests), ai = MazeState.initial)
+      BattleState(player = MazeState.initial.copy(buildings = forests), ai = MazeState.initial)
     assertEquals(
       VictoryConditions.evaluate(battle).map(_.isInstanceOf[MatchResult.PlayerWins]),
       Some(true)
@@ -31,10 +33,9 @@ class VictoryConditionsTest extends munit.FunSuite:
   test(
     "player wins by building enough forests even though the player is 'player 1' by convention (symmetric)"
   ) {
-    val forests =
-      List.fill(Balance.NatureVictoryForestTarget)(Forest(1, col = 2, row = 2, elfSpawnInMs = 0.0))
+    val forests = List.fill(Balance.NatureVictoryForestTarget)(forestBuilding(2, 2))
     val battle =
-      BattleState(player = MazeState.initial, ai = MazeState.initial.copy(forests = forests))
+      BattleState(player = MazeState.initial, ai = MazeState.initial.copy(buildings = forests))
     assertEquals(
       VictoryConditions.evaluate(battle).map(_.isInstanceOf[MatchResult.AiWins]),
       Some(true)
@@ -53,29 +54,22 @@ class VictoryConditionsTest extends munit.FunSuite:
   }
 
   test("clearing the floor isn't enough once the opponent has caught up: must double them too") {
-    val forests =
-      List.fill(Balance.NatureVictoryForestTarget)(Forest(1, col = 2, row = 2, elfSpawnInMs = 0.0))
+    val forests = List.fill(Balance.NatureVictoryForestTarget)(forestBuilding(2, 2))
     val opponentForests =
-      List.fill(Balance.NatureVictoryForestTarget / 2 + 1)(
-        Forest(2, col = 3, row = 3, elfSpawnInMs = 0.0)
-      )
+      List.fill(Balance.NatureVictoryForestTarget / 2 + 1)(forestBuilding(3, 3))
     val battle = BattleState(
-      player = MazeState.initial.copy(forests = forests),
-      ai = MazeState.initial.copy(forests = opponentForests)
+      player = MazeState.initial.copy(buildings = forests),
+      ai = MazeState.initial.copy(buildings = opponentForests)
     )
     assertEquals(VictoryConditions.evaluate(battle), None)
   }
 
   test("doubling a caught-up opponent's count wins even above the floor") {
-    val opponentForests =
-      List.fill(Balance.NatureVictoryForestTarget)(Forest(2, col = 3, row = 3, elfSpawnInMs = 0.0))
-    val forests =
-      List.fill(Balance.NatureVictoryForestTarget * 2)(
-        Forest(1, col = 2, row = 2, elfSpawnInMs = 0.0)
-      )
+    val opponentForests = List.fill(Balance.NatureVictoryForestTarget)(forestBuilding(3, 3))
+    val forests = List.fill(Balance.NatureVictoryForestTarget * 2)(forestBuilding(2, 2))
     val battle = BattleState(
-      player = MazeState.initial.copy(forests = forests),
-      ai = MazeState.initial.copy(forests = opponentForests)
+      player = MazeState.initial.copy(buildings = forests),
+      ai = MazeState.initial.copy(buildings = opponentForests)
     )
     assertEquals(
       VictoryConditions.evaluate(battle).map(_.isInstanceOf[MatchResult.PlayerWins]),

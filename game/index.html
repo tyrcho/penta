@@ -77,22 +77,55 @@
     #speed-label { font-size: 0.85rem; font-weight: 700; min-width: 2.5rem; text-align: center; }
     #new-game-btn { display: none; }
     #new-game-btn.visible { display: inline-block; }
-    #stats-row {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      padding: 0.4rem 1rem;
+    /* Concept rows: one per faction (Nature/Chaos/Loi + 2 placeholders for factions not
+       yet designed), each showing that faction's resource+rate, victory progress, and
+       building slots (real ones filled, the rest left as explicit placeholders) —
+       replaces the old build-button bar + stats row, which grouped by kind of info
+       (all resources together, all buttons together) rather than by faction. */
+    #concept-rows {
+      display: flex;
+      flex-direction: column;
       background: var(--color-surface);
       border-bottom: 1px solid var(--color-border);
       flex-shrink: 0;
       z-index: 1;
     }
-    .maze-panel { display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; }
-    .maze-panel.ai-side { justify-content: flex-end; }
+    .concept-row {
+      display: grid;
+      grid-template-columns: 5rem 1fr auto 1fr;
+      align-items: center;
+      gap: 0.6rem;
+      padding: 0.35rem 1rem;
+      border-top: 1px solid var(--color-border);
+    }
+    .concept-row:first-child { border-top: none; }
+    .concept-row.placeholder-row { opacity: 0.55; }
+    .concept-name { font-size: 0.85rem; font-weight: 700; }
+    .concept-name.nature { color: #4ade80; }
+    .concept-name.chaos { color: #f87171; }
+    .concept-name.loi { color: #93c5fd; }
+    .concept-name.unknown { color: var(--color-border); font-style: italic; }
+    .concept-side { display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; }
+    .concept-side.ai-side { justify-content: flex-end; }
+    .concept-buildings { display: flex; align-items: center; gap: 0.4rem; }
+    .build-slot-placeholder {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 2.4rem;
+      height: 2.4rem;
+      border: 1px dashed var(--color-border);
+      border-radius: 6px;
+      color: var(--color-border);
+      font-size: 0.9rem;
+    }
     .stat { font-size: 0.9rem; font-weight: 600; }
     .stat.wood { color: var(--color-gold); }
     .stat.fire { color: var(--color-fire); }
     .stat.light { color: var(--color-light); }
     .stat.progress { color: var(--color-progress); }
+    .stat.unknown { color: var(--color-border); font-style: italic; font-weight: 500; }
+    .stat .rate { font-size: 0.75rem; font-weight: 500; opacity: 0.75; margin-left: 0.15rem; }
     .progress-bar {
       display: inline-block;
       width: 4rem;
@@ -110,8 +143,6 @@
       background: var(--color-progress);
       transition: width 0.2s ease-out;
     }
-    .player-label { font-size: 0.85rem; font-weight: 700; color: var(--color-text); }
-    .player-label.ai { color: var(--color-ai); }
     #game-container {
       flex: 1;
       overflow: hidden;
@@ -151,18 +182,31 @@
       z-index: 3;
     }
     #tooltip.visible { display: block; }
+    #tooltip-destroy {
+      display: none;
+      margin-top: 0.4rem;
+      padding: 0.2rem 0.5rem;
+      font-size: 0.75rem;
+      font-weight: 600;
+      border: 1px solid var(--color-border);
+      border-radius: 4px;
+      background: var(--color-bg);
+      color: var(--color-text);
+      cursor: pointer;
+      pointer-events: auto;
+    }
+    #tooltip-destroy.visible { display: inline-block; }
+    #tooltip-destroy:hover { border-color: var(--color-brand); background: var(--color-surface); }
   </style>
 </head>
 <body>
   <header id="controlbar">
     <h1>tower-defense-poc</h1>
-    <div class="panel">
-      <button class="build-btn selected" id="build-forest"><img src="./assets/forest.png" alt="Forêt"></button>
-      <button class="build-btn" id="build-cave"><img src="./assets/cave.png" alt="Cave"></button>
-      <button class="build-btn" id="build-labyrinthe"><img src="./assets/labyrinthe.png" alt="Labyrinthe"></button>
-      <button class="build-btn" id="build-eglise"><img src="./assets/eglise.png" alt="Eglise"></button>
-    </div>
     <span class="spacer"></span>
+    <div class="panel">
+      <label for="ai-level-select" style="font-size: 0.85rem; font-weight: 600;">AI:</label>
+      <select class="speed-btn" id="ai-level-select"></select>
+    </div>
     <div class="panel">
       <button class="speed-btn" id="slow-btn">−</button>
       <button class="speed-btn" id="pause-btn">Pause</button>
@@ -171,22 +215,85 @@
       <button class="speed-btn" id="new-game-btn">New Game</button>
     </div>
   </header>
-  <div id="stats-row">
-    <div class="maze-panel player-side">
-      <span class="player-label">You</span>
-      <span class="stat wood">Wood: <span id="player-wood">0</span></span>
-      <span class="stat fire">Fire: <span id="player-fire">0</span></span>
-      <span class="stat light">Light: <span id="player-light">0</span></span>
-      <span class="stat progress">Forests: <span id="player-forests">0/0</span><span class="progress-bar"><span class="progress-bar-fill" id="player-forests-bar"></span></span></span>
-      <span class="stat progress">Plundered: <span id="player-plundered">0/0</span><span class="progress-bar"><span class="progress-bar-fill" id="player-plundered-bar"></span></span></span>
+  <div id="concept-rows">
+    <div class="concept-row">
+      <span class="concept-name nature">Nature</span>
+      <div class="concept-side player-side">
+        <span class="stat wood">Wood: <span id="player-wood">0</span><span class="rate" id="player-wood-rate"></span></span>
+        <span class="stat progress">Forests: <span id="player-forests">0/0</span><span class="progress-bar"><span class="progress-bar-fill" id="player-forests-bar"></span></span></span>
+      </div>
+      <div class="concept-buildings">
+        <button class="build-btn selected" id="build-forest"><img src="./assets/forest.png" alt="Forêt"></button>
+        <span class="build-slot-placeholder">?</span>
+        <span class="build-slot-placeholder">?</span>
+        <span class="build-slot-placeholder">?</span>
+        <span class="build-slot-placeholder">?</span>
+      </div>
+      <div class="concept-side ai-side">
+        <span class="stat progress">Forests: <span id="ai-forests">0/0</span><span class="progress-bar"><span class="progress-bar-fill" id="ai-forests-bar"></span></span></span>
+        <span class="stat wood">Wood: <span id="ai-wood">0</span><span class="rate" id="ai-wood-rate"></span></span>
+      </div>
     </div>
-    <div class="maze-panel ai-side">
-      <span class="stat progress">Plundered: <span id="ai-plundered">0/0</span><span class="progress-bar"><span class="progress-bar-fill" id="ai-plundered-bar"></span></span></span>
-      <span class="stat progress">Forests: <span id="ai-forests">0/0</span><span class="progress-bar"><span class="progress-bar-fill" id="ai-forests-bar"></span></span></span>
-      <span class="stat light">Light: <span id="ai-light">0</span></span>
-      <span class="stat fire">Fire: <span id="ai-fire">0</span></span>
-      <span class="stat wood">Wood: <span id="ai-wood">0</span></span>
-      <span class="player-label ai">AI</span>
+    <div class="concept-row">
+      <span class="concept-name chaos">Chaos</span>
+      <div class="concept-side player-side">
+        <span class="stat fire">Fire: <span id="player-fire">0</span><span class="rate" id="player-fire-rate"></span></span>
+        <span class="stat progress">Plundered: <span id="player-plundered">0/0</span><span class="progress-bar"><span class="progress-bar-fill" id="player-plundered-bar"></span></span></span>
+      </div>
+      <div class="concept-buildings">
+        <button class="build-btn" id="build-cave"><img src="./assets/cave.png" alt="Cave"></button>
+        <button class="build-btn" id="build-labyrinthe"><img src="./assets/labyrinthe.png" alt="Labyrinthe"></button>
+        <span class="build-slot-placeholder">?</span>
+        <span class="build-slot-placeholder">?</span>
+        <span class="build-slot-placeholder">?</span>
+      </div>
+      <div class="concept-side ai-side">
+        <span class="stat progress">Plundered: <span id="ai-plundered">0/0</span><span class="progress-bar"><span class="progress-bar-fill" id="ai-plundered-bar"></span></span></span>
+        <span class="stat fire">Fire: <span id="ai-fire">0</span><span class="rate" id="ai-fire-rate"></span></span>
+      </div>
+    </div>
+    <div class="concept-row">
+      <span class="concept-name loi">Loi</span>
+      <div class="concept-side player-side">
+        <span class="stat light">Light: <span id="player-light">0</span><span class="rate" id="player-light-rate"></span></span>
+        <!-- Eglise/Watchtower feed no VictoryConditions target today — placeholder until one exists. -->
+        <span class="stat unknown">Victory: —</span>
+      </div>
+      <div class="concept-buildings">
+        <button class="build-btn" id="build-eglise"><img src="./assets/eglise.png" alt="Eglise"></button>
+        <button class="build-btn" id="build-watchtower"><img src="./assets/watchtower.png" alt="Tour de guet"></button>
+        <span class="build-slot-placeholder">?</span>
+        <span class="build-slot-placeholder">?</span>
+        <span class="build-slot-placeholder">?</span>
+      </div>
+      <div class="concept-side ai-side">
+        <span class="stat unknown">Victory: —</span>
+        <span class="stat light">Light: <span id="ai-light">0</span><span class="rate" id="ai-light-rate"></span></span>
+      </div>
+    </div>
+    <div class="concept-row placeholder-row">
+      <span class="concept-name unknown">???</span>
+      <div class="concept-side player-side"><span class="stat unknown">No resource yet</span></div>
+      <div class="concept-buildings">
+        <span class="build-slot-placeholder">?</span>
+        <span class="build-slot-placeholder">?</span>
+        <span class="build-slot-placeholder">?</span>
+        <span class="build-slot-placeholder">?</span>
+        <span class="build-slot-placeholder">?</span>
+      </div>
+      <div class="concept-side ai-side"><span class="stat unknown">No resource yet</span></div>
+    </div>
+    <div class="concept-row placeholder-row">
+      <span class="concept-name unknown">???</span>
+      <div class="concept-side player-side"><span class="stat unknown">No resource yet</span></div>
+      <div class="concept-buildings">
+        <span class="build-slot-placeholder">?</span>
+        <span class="build-slot-placeholder">?</span>
+        <span class="build-slot-placeholder">?</span>
+        <span class="build-slot-placeholder">?</span>
+        <span class="build-slot-placeholder">?</span>
+      </div>
+      <div class="concept-side ai-side"><span class="stat unknown">No resource yet</span></div>
     </div>
   </div>
   <main id="game-container">
@@ -194,7 +301,10 @@
       <div id="game-over-title"></div>
       <div id="game-over-reason"></div>
     </div>
-    <div id="tooltip"></div>
+    <div id="tooltip">
+      <span id="tooltip-text"></span>
+      <button id="tooltip-destroy"></button>
+    </div>
   </main>
   <script type="module" src="./main.js"></script>
 </body>

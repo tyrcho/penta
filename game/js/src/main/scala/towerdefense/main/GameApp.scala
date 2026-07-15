@@ -11,11 +11,9 @@ import towerdefense.pixi.*
 
 private case class ViewTransform(scale: Double, offsetX: Double, offsetY: Double)
 
-private enum BuildingChoice derives CanEqual:
-  case Forest, Cave, Labyrinthe, Eglise
-
 private enum HoverKind derives CanEqual:
-  case EnemyH, ForestH, CaveH, LabyrintheH, EgliseH
+  case EnemyH
+  case BuildingH(kind: BuildingKind)
 
 private case class HoverTarget(isPlayer: Boolean, kind: HoverKind, id: Long)
 
@@ -33,26 +31,25 @@ private class GameSpeed:
   def faster(): Unit = multiplier = (multiplier * 2).min(Max)
   def togglePause(): Unit = paused = !paused
 
-// Per-maze sprite state. One instance for the player's maze, one for the AI's.
+// Per-maze sprite state. One instance for the player's maze, one for the AI's. One map
+// per entity category (not per BuildingKind) — see BuildingVisuals/syncBuildings for how
+// a single generic sync function replaces what used to be 5 near-identical ones.
 private class MazeSprites:
-  val enemies = mutable.Map.empty[Long, Container]
+  val creatures = mutable.Map.empty[Long, Container]
   // Which of the goblin's 4 direction frame sets is currently applied — avoids
   // resetting the walk-cycle animation every tick, only when the facing changes.
   val goblinFacing = mutable.Map.empty[Long, String]
-  val forests = mutable.Map.empty[Long, Sprite]
-  val forestTimers = mutable.Map.empty[Long, Double]
-  val caves = mutable.Map.empty[Long, Sprite]
-  val caveTimers = mutable.Map.empty[Long, Double]
-  val labyrinths = mutable.Map.empty[Long, Sprite]
-  val labyrintheTimers = mutable.Map.empty[Long, Double]
-  val eglises = mutable.Map.empty[Long, Sprite]
-  val egliseTimers = mutable.Map.empty[Long, Double]
+  val buildings = mutable.Map.empty[Long, Sprite]
+  // Only populated for kinds with a spawn timer (BuildingSpecs.all(_).spawns.isDefined) —
+  // Watchtower is naturally absent, no special-casing needed.
+  val buildingTimers = mutable.Map.empty[Long, Double]
 
 private object AssetPaths:
   val Forest = "./assets/forest.png"
   val CaveRock = "./assets/cave.png"
   val LabyrintheIcon = "./assets/labyrinthe.png"
   val EgliseIcon = "./assets/eglise.png"
+  val WatchtowerIcon = "./assets/watchtower.png"
   val Elf = "./assets/enemy.png"
   val Minotaur = "./assets/minotaur.png"
   val Paladin = "./assets/paladin.png"
@@ -65,10 +62,40 @@ private object AssetPaths:
       .map(d => d -> (0 until GoblinFrameCount).map(i => f"./assets/goblin/$d-walk-$i%02d.png").toList)
       .toMap
   val All: List[String] =
-    List(Forest, CaveRock, LabyrintheIcon, EgliseIcon, Elf, Minotaur, Paladin) ++
+    List(Forest, CaveRock, LabyrintheIcon, EgliseIcon, WatchtowerIcon, Elf, Minotaur, Paladin) ++
       GoblinFrames.values.flatten ++ Flames
 
 private val CaveTint = 0xff7a45 // warm/fiery recolor for an otherwise cool-gray rock tile
+
+// Per-BuildingKind rendering data — the JS-side mirror of BuildingSpecs, driving the one
+// generic syncBuildings instead of what used to be 5 near-identical sync functions.
+private case class BuildingVisual(texturePath: String, renderSize: Double, tint: Option[Int])
+
+private object BuildingVisuals:
+  val all: Map[BuildingKind, BuildingVisual] = Map(
+    BuildingKind.Forest -> BuildingVisual(AssetPaths.Forest, GridConfig.cellSize * 0.9, None),
+    BuildingKind.Cave -> BuildingVisual(AssetPaths.CaveRock, GridConfig.cellSize * 0.9, Some(CaveTint)),
+    BuildingKind.Labyrinth -> BuildingVisual(AssetPaths.LabyrintheIcon, GridConfig.cellSize * 0.9, None),
+    BuildingKind.Eglise -> BuildingVisual(AssetPaths.EgliseIcon, GridConfig.cellSize * 0.9, None),
+    BuildingKind.Watchtower -> BuildingVisual(AssetPaths.WatchtowerIcon, GridConfig.cellSize * 0.9, None)
+  )
+
+// DOM id suffix per kind (index.html's #build-<slug> buttons and #<prefix>-<slug>
+// stats) — separate from BuildingKind.toString since Labyrinth's French asset/DOM naming
+// ("labyrinthe") diverges from the enum case spelling.
+private def domSlug(kind: BuildingKind): String = kind match
+  case BuildingKind.Forest     => "forest"
+  case BuildingKind.Cave       => "cave"
+  case BuildingKind.Labyrinth  => "labyrinthe"
+  case BuildingKind.Eglise     => "eglise"
+  case BuildingKind.Watchtower => "watchtower"
+
+private def resourceName(res: Resource): String = res match
+  case Resource.Wood    => "wood"
+  case Resource.Fire    => "fire"
+  case Resource.Light   => "light"
+  case Resource.Shadow  => "shadow"
+  case Resource.Crystal => "crystal"
 
 private val MazeGapPx = GridConfig.cellSize
 
@@ -112,9 +139,17 @@ def onReady(app: Application, textures: js.Dictionary[Texture]): Unit =
   val flameFrames = js.Array(AssetPaths.Flames.map(textures(_))*)
   val goblinFrames: Map[String, js.Array[Texture]] =
     AssetPaths.GoblinFrames.map { case (dir, paths) => dir -> js.Array(paths.map(textures(_))*) }
-  var battle = Persistence.load().getOrElse(BattleState.initial)
-  var selectedBuilding: BuildingChoice = BuildingChoice.Forest
+  val (initialBattle, initialAiLevelIndex) = Persistence.load().getOrElse((BattleState.initial, 0))
+  var battle = initialBattle
+  var aiLevelIndex = initialAiLevelIndex
+  var selectedBuilding: BuildingKind = BuildingKind.Forest
   var hovered: Option[HoverTarget] = None
+  // Set by clicking a building (not just hovering it) — takes priority over `hovered`
+  // for the tooltip/destroy button, and its position is set once at click time and never
+  // updated again, so the button holds still long enough to actually reach and click
+  // (a hover-follows-cursor tooltip means the button keeps re-anchoring itself just out
+  // of reach as the cursor approaches it).
+  var selectedTarget: Option[HoverTarget] = None
   var hoveringButton = false
   var speed = new GameSpeed
   var msSinceLastSave = 0.0
@@ -128,6 +163,7 @@ def onReady(app: Application, textures: js.Dictionary[Texture]): Unit =
     speed.paused = false
     updateSpeedLabel(speed)
     hovered = None
+    selectedTarget = None
     Persistence.clear()
 
   wireBuildingButtons(
@@ -137,24 +173,50 @@ def onReady(app: Application, textures: js.Dictionary[Texture]): Unit =
   )
   wireSpeedControls(speed)
   wireNewGameButton(() => resetGame())
+  wireAiLevelSelect(aiLevelIndex, index => aiLevelIndex = index)
+  wireDestroyButton((col, row) => battle = destroyPlayerBuilding(battle, col, row))
 
   app.stage.eventMode = "static"
   app.stage.on(
     "pointerdown",
     (e: FederatedPointerEvent) => {
-      battle = handleTap(app, battle, e, selectedBuilding)
+      val clickedBuilding =
+        cellAt(app, e).flatMap { case (col, row) => buildingAt(battle.player, isPlayer = true, col, row) }
+      clickedBuilding match
+        case Some(target) =>
+          selectedTarget = Some(target)
+          val canvasRect = app.canvas.getBoundingClientRect()
+          positionTooltip(canvasRect.left + e.globalX, canvasRect.top + e.globalY)
+        case None =>
+          selectedTarget = None
+          battle = handleTap(app, battle, e, selectedBuilding)
     }
   )
   app.stage.on(
     "pointermove",
     (e: FederatedPointerEvent) => {
-      val canvasRect = app.canvas.getBoundingClientRect()
-      positionTooltip(canvasRect.left + e.globalX, canvasRect.top + e.globalY)
+      // Only track the cursor while nothing is hovered or selected — once a target locks
+      // in, the tooltip (and its Destroy button, when shown) must hold still, or the
+      // button keeps re-anchoring itself just out of reach as the cursor moves toward it.
+      if hovered.isEmpty && selectedTarget.isEmpty then
+        val canvasRect = app.canvas.getBoundingClientRect()
+        positionTooltip(canvasRect.left + e.globalX, canvasRect.top + e.globalY)
     }
   )
 
   app.ticker.add { t =>
-    battle = BattleEngine.tick(battle, speed.effectiveDeltaMs(t.deltaMS))
+    val wasUnresolved = battle.outcome.isEmpty
+    battle = BattleEngine.tick(
+      battle,
+      speed.effectiveDeltaMs(t.deltaMS),
+      aiStrategy = AiStrategy.ladder(aiLevelIndex)._2
+    )
+    if wasUnresolved then
+      battle.outcome match
+        case Some(MatchResult.PlayerWins(_)) if aiLevelIndex < AiStrategy.ladder.length - 1 =>
+          aiLevelIndex += 1
+          updateAiLevelSelect(aiLevelIndex)
+        case _ => ()
     syncMaze(
       playerWorld,
       battle.player,
@@ -178,11 +240,16 @@ def onReady(app: Application, textures: js.Dictionary[Texture]): Unit =
     applyViewTransform(app, battleWorld, aiWorld)
     updateOverlay(battle)
     updateBuildButtonsAffordability(battle.player)
-    hovered = updateTooltip(hovered, battle, hoveringButton)
+    // Self-heal each independently (e.g. a selected building just got destroyed, or a
+    // hovered enemy died) rather than picking one "effective" target and healing that —
+    // otherwise losing the prioritized one would incorrectly wipe the other too.
+    if selectedTarget.exists(t => hoverText(t, battle).isEmpty) then selectedTarget = None
+    if hovered.exists(t => hoverText(t, battle).isEmpty) then hovered = None
+    updateTooltip(selectedTarget.orElse(hovered), battle, hoveringButton)
     updateNewGameButtonVisibility(battle.outcome.isDefined || speed.paused)
     msSinceLastSave += t.deltaMS
     if msSinceLastSave >= 1000.0 then
-      Persistence.save(battle)
+      Persistence.save(battle, aiLevelIndex)
       msSinceLastSave = 0.0
   }
 
@@ -214,12 +281,12 @@ private def cellColor(col: Int, row: Int): Int =
 
 private val ForestTooltip =
   s"Forêt — cost ${Balance.ForestCostWood.toInt} wood. " +
-    s"+${Balance.WoodPerSecPerForest} wood/s, ${Balance.AuraDamagePerSec.toInt} dmg/s to adjacent enemies, " +
+    s"+${formatDecimal(Balance.WoodPerSecPerForest)} wood/s, ${Balance.AuraDamagePerSec.toInt} dmg/s to adjacent enemies, " +
     s"spawns an Elf every ${(Balance.ElfSpawnIntervalMs / 1000).toInt}s"
 
 private val CaveTooltip =
   s"Cave — cost ${Balance.CaveCostWood.toInt} wood + ${Balance.CaveCostFire.toInt} fire. " +
-    s"+${Balance.FirePerSecPerCave.toInt} fire/s, spawns a Goblin every ${(Balance.GoblinSpawnIntervalMs / 1000).toInt}s"
+    s"+${formatDecimal(Balance.FirePerSecPerCave)} fire/s, spawns a Goblin every ${(Balance.GoblinSpawnIntervalMs / 1000).toInt}s"
 
 private val LabyrintheTooltip =
   s"Labyrinthe — cost ${Balance.LabyrintheCostWood.toInt} wood + ${Balance.LabyrintheCostFire.toInt} fire. " +
@@ -228,60 +295,56 @@ private val LabyrintheTooltip =
 
 private val EgliseTooltip =
   s"Eglise — cost ${Balance.EgliseCostWood.toInt} wood + ${Balance.EgliseCostLight.toInt} light. " +
-    s"+${Balance.LightPerSecPerEglise.toInt} light/s, spawns a Paladin every ${(Balance.PaladinSpawnIntervalMs / 1000).toInt}s, " +
+    s"+${formatDecimal(Balance.LightPerSecPerEglise)} light/s, spawns a Paladin every ${(Balance.PaladinSpawnIntervalMs / 1000).toInt}s, " +
     s"which shields adjacent allies from ${Balance.PaladinAuraDamageReductionPerSec.toInt} dmg/s (doesn't plunder itself)"
+
+private val WatchtowerTooltip =
+  s"Tour de guet — cost ${Balance.WatchtowerCostWood.toInt} wood + ${Balance.WatchtowerCostLight.toInt} light. " +
+    s"+${formatDecimal(Balance.LightPerSecPerWatchtower)} light/s, spawns no unit — instead inflicts " +
+    s"${Balance.WatchtowerDamagePerSec.toInt} dmg/s to the nearest enemy within ${Balance.WatchtowerRangeCells} cells"
+
+private val BuildingTooltips: Map[BuildingKind, String] = Map(
+  BuildingKind.Forest -> ForestTooltip,
+  BuildingKind.Cave -> CaveTooltip,
+  BuildingKind.Labyrinth -> LabyrintheTooltip,
+  BuildingKind.Eglise -> EgliseTooltip,
+  BuildingKind.Watchtower -> WatchtowerTooltip
+)
 
 // canAfford is read at click time (not baked into the closure) since the player's
 // wood/fire change every tick — see updateBuildButtonsAffordability for the matching
-// visual (disabled) state, kept in sync from the same Balance costs.
+// visual (disabled) state, kept in sync from the same BuildingSpecs costs.
 private def wireBuildingButtons(
-    onSelect: BuildingChoice => Unit,
-    canAfford: BuildingChoice => Boolean,
+    onSelect: BuildingKind => Unit,
+    canAfford: BuildingKind => Boolean,
     setHoveringButton: Boolean => Unit
 ): Unit =
-  val forestBtn = document.getElementById("build-forest")
-  val caveBtn = document.getElementById("build-cave")
-  val labyrintheBtn = document.getElementById("build-labyrinthe")
-  val egliseBtn = document.getElementById("build-eglise")
-  val buttons = List(forestBtn, caveBtn, labyrintheBtn, egliseBtn)
-  wireButtonTooltip(forestBtn, ForestTooltip, setHoveringButton)
-  wireButtonTooltip(caveBtn, CaveTooltip, setHoveringButton)
-  wireButtonTooltip(labyrintheBtn, LabyrintheTooltip, setHoveringButton)
-  wireButtonTooltip(egliseBtn, EgliseTooltip, setHoveringButton)
-  wireBuildClick(forestBtn, BuildingChoice.Forest, buttons, canAfford, onSelect)
-  wireBuildClick(caveBtn, BuildingChoice.Cave, buttons, canAfford, onSelect)
-  wireBuildClick(labyrintheBtn, BuildingChoice.Labyrinthe, buttons, canAfford, onSelect)
-  wireBuildClick(egliseBtn, BuildingChoice.Eglise, buttons, canAfford, onSelect)
+  val buttons = BuildingKind.values.map(kind => kind -> document.getElementById(s"build-${domSlug(kind)}")).toMap
+  val allButtons = buttons.values.toList
+  BuildingKind.values.foreach { kind =>
+    wireButtonTooltip(buttons(kind), BuildingTooltips(kind), setHoveringButton)
+    wireBuildClick(buttons(kind), kind, allButtons, canAfford, onSelect)
+  }
 
 private def wireBuildClick(
     btn: dom.Element,
-    choice: BuildingChoice,
+    kind: BuildingKind,
     allButtons: List[dom.Element],
-    canAfford: BuildingChoice => Boolean,
-    onSelect: BuildingChoice => Unit
+    canAfford: BuildingKind => Boolean,
+    onSelect: BuildingKind => Unit
 ): Unit =
   btn.addEventListener(
     "click",
-    (_: dom.Event) => if canAfford(choice) then selectBuilding(choice, btn, allButtons, onSelect)
+    (_: dom.Event) => if canAfford(kind) then selectBuilding(kind, btn, allButtons, onSelect)
   )
 
-// Eglise spends a different second currency (light, not fire) than Cave/Labyrinthe,
-// so this is a direct match rather than a generic (wood, fire) tuple.
-private def canAfford(maze: MazeState, choice: BuildingChoice): Boolean = choice match
-  case BuildingChoice.Forest => maze.wood >= Balance.ForestCostWood
-  case BuildingChoice.Cave   => maze.wood >= Balance.CaveCostWood && maze.fire >= Balance.CaveCostFire
-  case BuildingChoice.Labyrinthe =>
-    maze.wood >= Balance.LabyrintheCostWood && maze.fire >= Balance.LabyrintheCostFire
-  case BuildingChoice.Eglise =>
-    maze.wood >= Balance.EgliseCostWood && maze.light >= Balance.EgliseCostLight
+private def canAfford(maze: MazeState, kind: BuildingKind): Boolean =
+  Placement.canAfford(maze.resources, BuildingSpecs.all(kind).cost)
 
 // Reflects afford-ability in real time, since the player's resources move every tick
 // even without any click — see wireBuildClick for the matching input gate.
 private def updateBuildButtonsAffordability(maze: MazeState): Unit =
-  updateButtonDisabled("build-forest", canAfford(maze, BuildingChoice.Forest))
-  updateButtonDisabled("build-cave", canAfford(maze, BuildingChoice.Cave))
-  updateButtonDisabled("build-labyrinthe", canAfford(maze, BuildingChoice.Labyrinthe))
-  updateButtonDisabled("build-eglise", canAfford(maze, BuildingChoice.Eglise))
+  BuildingKind.values.foreach(kind => updateButtonDisabled(s"build-${domSlug(kind)}", canAfford(maze, kind)))
 
 private def updateButtonDisabled(id: String, affordable: Boolean): Unit =
   val btn = document.getElementById(id)
@@ -320,17 +383,17 @@ private def wireButtonTooltip(
   )
 
 private def showButtonTooltip(text: String): Unit =
-  val tooltip = document.getElementById("tooltip")
-  tooltip.textContent = text
-  tooltip.classList.add("visible")
+  document.getElementById("tooltip-text").textContent = text
+  document.getElementById("tooltip").classList.add("visible")
+  document.getElementById("tooltip-destroy").classList.remove("visible")
 
 private def selectBuilding(
-    choice: BuildingChoice,
+    kind: BuildingKind,
     active: dom.Element,
     all: List[dom.Element],
-    onSelect: BuildingChoice => Unit
+    onSelect: BuildingKind => Unit
 ): Unit =
-  onSelect(choice)
+  onSelect(kind)
   all.foreach(_.classList.remove("selected"))
   active.classList.add("selected")
 
@@ -349,11 +412,43 @@ private def wireSpeedControls(speed: GameSpeed): Unit =
 
 private def updateSpeedLabel(speed: GameSpeed): Unit =
   document.getElementById("speed-label").textContent =
-    if speed.paused then "Paused" else s"${formatMultiplier(speed.multiplier)}x"
+    if speed.paused then "Paused" else s"${formatDecimal(speed.multiplier)}x"
   document.getElementById("pause-btn").textContent = if speed.paused then "Play" else "Pause"
 
-private def formatMultiplier(m: Double): String =
-  if m == m.toInt then m.toInt.toString else m.toString
+// Whole numbers print bare ("2"), fractional ones keep their decimal ("0.2") — used for
+// the speed multiplier and every per-second rate shown in tooltips/stats, so a sub-1
+// rate (e.g. Balance.FirePerSecPerCave) never gets silently truncated to "0" by `.toInt`.
+// Rounded to 2 significant digits first so summed rates (count * perUnitRate) never show
+// raw floating-point noise (e.g. 0.6000000000000001 from three 0.2 forests).
+private def formatDecimal(d: Double): String =
+  val rounded = roundToSignificantDigits(d, digits = 2)
+  if rounded == rounded.toInt then rounded.toInt.toString else rounded.toString
+
+private def roundToSignificantDigits(value: Double, digits: Int): Double =
+  if value == 0.0 then 0.0
+  else
+    val magnitude = math.pow(10, digits - 1 - math.floor(math.log10(math.abs(value))).toInt)
+    math.round(value * magnitude) / magnitude
+
+// ── AI difficulty ladder (see AiStrategy.ladder — same ranking the simulator uses) ──
+
+private def wireAiLevelSelect(initialIndex: Int, onSelect: Int => Unit): Unit =
+  val select = document.getElementById("ai-level-select").asInstanceOf[dom.html.Select]
+  select.replaceChildren()
+  AiStrategy.ladder.zipWithIndex.foreach { case ((name, _), i) =>
+    val option = document.createElement("option").asInstanceOf[dom.html.Option]
+    option.value = i.toString
+    option.text = s"${i + 1}. $name"
+    select.appendChild(option)
+  }
+  select.selectedIndex = initialIndex
+  select.addEventListener(
+    "change",
+    (_: dom.Event) => onSelect(select.selectedIndex)
+  )
+
+private def updateAiLevelSelect(index: Int): Unit =
+  document.getElementById("ai-level-select").asInstanceOf[dom.html.Select].selectedIndex = index
 
 // ── New game (visible while paused or once the match has ended) ────────
 
@@ -365,42 +460,44 @@ private def updateNewGameButtonVisibility(visible: Boolean): Unit =
   if visible then btn.classList.add("visible") else btn.classList.remove("visible")
 
 private def clearSprites(world: Container, sprites: MazeSprites): Unit =
-  (sprites.enemies.values ++ sprites.forests.values ++ sprites.caves.values ++
-    sprites.labyrinths.values ++ sprites.eglises.values).foreach(world.removeChild)
-  sprites.enemies.clear()
+  (sprites.creatures.values ++ sprites.buildings.values).foreach(world.removeChild)
+  sprites.creatures.clear()
   sprites.goblinFacing.clear()
-  sprites.forests.clear()
-  sprites.forestTimers.clear()
-  sprites.caves.clear()
-  sprites.caveTimers.clear()
-  sprites.labyrinths.clear()
-  sprites.labyrintheTimers.clear()
-  sprites.eglises.clear()
-  sprites.egliseTimers.clear()
+  sprites.buildings.clear()
+  sprites.buildingTimers.clear()
+
+// The player's maze occupies local x/y in [0, GridConfig.width)/[0, GridConfig.height) —
+// see currentLayout/computeViewTransform. None outside that (including clicks on the
+// AI's maze, which the player never directly interacts with).
+private def cellAt(app: Application, e: FederatedPointerEvent): Option[(Int, Int)] =
+  val layout = currentLayout(app.screen.width, app.screen.height)
+  val vt = computeViewTransform(app.screen.width, app.screen.height, layout)
+  val localX = (e.globalX - vt.offsetX) / vt.scale
+  val localY = (e.globalY - vt.offsetY) / vt.scale
+  if localX < 0 || localX >= GridConfig.width || localY < 0 || localY >= GridConfig.height then None
+  else Some(((localX / GridConfig.cellSize).toInt, (localY / GridConfig.cellSize).toInt))
 
 private def handleTap(
     app: Application,
     battle: BattleState,
     e: FederatedPointerEvent,
-    choice: BuildingChoice
+    choice: BuildingKind
 ): BattleState =
   if battle.outcome.isDefined then battle
   else
-    val layout = currentLayout(app.screen.width, app.screen.height)
-    val vt = computeViewTransform(app.screen.width, app.screen.height, layout)
-    val localX = (e.globalX - vt.offsetX) / vt.scale
-    val localY = (e.globalY - vt.offsetY) / vt.scale
-    if localX < 0 || localX >= GridConfig.width || localY < 0 || localY >= GridConfig.height then
-      battle
-    else
-      val col = (localX / GridConfig.cellSize).toInt
-      val row = (localY / GridConfig.cellSize).toInt
-      val tryPlace = choice match
-        case BuildingChoice.Forest     => Placement.tryPlaceForest
-        case BuildingChoice.Cave       => Placement.tryPlaceCave
-        case BuildingChoice.Labyrinthe => Placement.tryPlaceLabyrinthe
-        case BuildingChoice.Eglise     => Placement.tryPlaceEglise
-      battle.copy(player = tryPlace(battle.player, col, row).getOrElse(battle.player))
+    cellAt(app, e) match
+      case None => battle
+      case Some((col, row)) =>
+        battle.copy(
+          player = Placement.tryPlaceBuilding(battle.player, choice, col, row).getOrElse(battle.player)
+        )
+
+// The inverse of Demolition.tryDestroy's lookup: which building (if any) occupies a
+// cell, as a HoverTarget the tooltip/destroy-button machinery already knows how to show.
+private def buildingAt(maze: MazeState, isPlayer: Boolean, col: Int, row: Int): Option[HoverTarget] =
+  maze.buildings
+    .find(b => b.col == col && b.row == row)
+    .map(b => HoverTarget(isPlayer, HoverKind.BuildingH(b.kind), b.id))
 
 // ── Responsive scale-to-fit ────────────────────────────────────────────
 
@@ -432,13 +529,10 @@ private def syncMaze(
     setHovered: Option[HoverTarget] => Unit
 ): Unit =
   val blocked = maze.buildingCells
-  syncEnemies(world, maze, sprites, textures, goblinFrames, flames, blocked, isPlayer, setHovered)
-  syncForests(world, maze, sprites, textures, flames, isPlayer, setHovered)
-  syncCaves(world, maze, sprites, textures, flames, isPlayer, setHovered)
-  syncLabyrinths(world, maze, sprites, textures, flames, isPlayer, setHovered)
-  syncEglises(world, maze, sprites, textures, flames, isPlayer, setHovered)
+  syncCreatures(world, maze, sprites, textures, goblinFrames, flames, blocked, isPlayer, setHovered)
+  syncBuildings(world, maze, sprites, textures, flames, isPlayer, setHovered)
 
-private def syncEnemies(
+private def syncCreatures(
     world: Container,
     maze: MazeState,
     sprites: MazeSprites,
@@ -449,36 +543,36 @@ private def syncEnemies(
     isPlayer: Boolean,
     setHovered: Option[HoverTarget] => Unit
 ): Unit =
-  val liveIds = maze.enemies.map(_.id).toSet
-  removeStaleWithEffect(world, sprites.enemies, liveIds, flames)
+  val liveIds = maze.creatures.map(_.id).toSet
+  removeStaleWithEffect(world, sprites.creatures, liveIds, flames)
   sprites.goblinFacing.filterInPlace((id, _) => liveIds.contains(id))
-  maze.enemies.foreach { e =>
-    val g = sprites.enemies.getOrElseUpdate(
-      e.id,
-      newEnemySprite(
+  maze.creatures.foreach { c =>
+    val g = sprites.creatures.getOrElseUpdate(
+      c.id,
+      newCreatureSprite(
         world,
-        e.kind,
+        c.kind,
         textures,
         goblinFrames,
-        HoverTarget(isPlayer, HoverKind.EnemyH, e.id),
+        HoverTarget(isPlayer, HoverKind.EnemyH, c.id),
         setHovered
       )
     )
-    setPos(g, e.pos)
-    val angle = enemyFacingAngle(e, blocked)
-    e.kind match
+    setPos(g, c.pos)
+    val angle = creatureFacingAngle(c, blocked)
+    c.kind match
       case UnitKind.Elf | UnitKind.Minotaur | UnitKind.Paladin => angle.foreach(a => g.rotation = a)
       case UnitKind.Goblin =>
         angle.map(facingDirection).foreach { dir =>
-          if !sprites.goblinFacing.get(e.id).contains(dir) then
-            sprites.goblinFacing(e.id) = dir
+          if !sprites.goblinFacing.get(c.id).contains(dir) then
+            sprites.goblinFacing(c.id) = dir
             val anim = g.asInstanceOf[AnimatedSprite]
             anim.textures = goblinFrames(dir)
             anim.play()
         }
   }
 
-private def newEnemySprite(
+private def newCreatureSprite(
     world: Container,
     kind: UnitKind,
     textures: js.Dictionary[Texture],
@@ -513,7 +607,7 @@ private def facingDirection(angle: Double): String =
   else if deg < 225 then "left"
   else "back"
 
-private def syncForests(
+private def syncBuildings(
     world: Container,
     maze: MazeState,
     sprites: MazeSprites,
@@ -522,97 +616,30 @@ private def syncForests(
     isPlayer: Boolean,
     setHovered: Option[HoverTarget] => Unit
 ): Unit =
-  maze.forests.foreach { f =>
-    val g = sprites.forests.getOrElseUpdate(
-      f.id,
-      newHoverSprite(
-        world,
-        textures(AssetPaths.Forest),
-        GridConfig.cellSize * 0.9,
-        HoverTarget(isPlayer, HoverKind.ForestH, f.id),
-        setHovered
-      )
+  val liveIds = maze.buildings.map(_.id).toSet
+  removeStaleWithEffect(world, sprites.buildings, liveIds, flames)
+  sprites.buildingTimers.filterInPlace((id, _) => liveIds.contains(id))
+  maze.buildings.foreach { b =>
+    val visual = BuildingVisuals.all(b.kind)
+    val g = sprites.buildings.getOrElseUpdate(
+      b.id, {
+        val s = newHoverSprite(
+          world,
+          textures(visual.texturePath),
+          visual.renderSize,
+          HoverTarget(isPlayer, HoverKind.BuildingH(b.kind), b.id),
+          setHovered
+        )
+        visual.tint.foreach(t => s.tint = t)
+        s
+      }
     )
-    setPos(g, GridConfig.cellCenter(f.col, f.row))
-    val previousCountdown = sprites.forestTimers.getOrElse(f.id, f.elfSpawnInMs)
-    sprites.forestTimers(f.id) = f.elfSpawnInMs
-    if hasWrapped(previousCountdown, f.elfSpawnInMs) then
-      spawnEffect(world, Vec2(g.x, g.y), flames, scale = 0.6)
-  }
-
-private def syncCaves(
-    world: Container,
-    maze: MazeState,
-    sprites: MazeSprites,
-    textures: js.Dictionary[Texture],
-    flames: js.Array[Texture],
-    isPlayer: Boolean,
-    setHovered: Option[HoverTarget] => Unit
-): Unit =
-  maze.caves.foreach { c =>
-    val g = sprites.caves.getOrElseUpdate(
-      c.id,
-      newHoverCaveSprite(world, textures, HoverTarget(isPlayer, HoverKind.CaveH, c.id), setHovered)
-    )
-    setPos(g, GridConfig.cellCenter(c.col, c.row))
-    val previousCountdown = sprites.caveTimers.getOrElse(c.id, c.goblinSpawnInMs)
-    sprites.caveTimers(c.id) = c.goblinSpawnInMs
-    if hasWrapped(previousCountdown, c.goblinSpawnInMs) then
-      spawnEffect(world, Vec2(g.x, g.y), flames, scale = 0.6)
-  }
-
-private def syncLabyrinths(
-    world: Container,
-    maze: MazeState,
-    sprites: MazeSprites,
-    textures: js.Dictionary[Texture],
-    flames: js.Array[Texture],
-    isPlayer: Boolean,
-    setHovered: Option[HoverTarget] => Unit
-): Unit =
-  maze.labyrinths.foreach { l =>
-    val g = sprites.labyrinths.getOrElseUpdate(
-      l.id,
-      newHoverSprite(
-        world,
-        textures(AssetPaths.LabyrintheIcon),
-        GridConfig.cellSize * 0.9,
-        HoverTarget(isPlayer, HoverKind.LabyrintheH, l.id),
-        setHovered
-      )
-    )
-    setPos(g, GridConfig.cellCenter(l.col, l.row))
-    val previousCountdown = sprites.labyrintheTimers.getOrElse(l.id, l.minotaurSpawnInMs)
-    sprites.labyrintheTimers(l.id) = l.minotaurSpawnInMs
-    if hasWrapped(previousCountdown, l.minotaurSpawnInMs) then
-      spawnEffect(world, Vec2(g.x, g.y), flames, scale = 0.6)
-  }
-
-private def syncEglises(
-    world: Container,
-    maze: MazeState,
-    sprites: MazeSprites,
-    textures: js.Dictionary[Texture],
-    flames: js.Array[Texture],
-    isPlayer: Boolean,
-    setHovered: Option[HoverTarget] => Unit
-): Unit =
-  maze.eglises.foreach { e =>
-    val g = sprites.eglises.getOrElseUpdate(
-      e.id,
-      newHoverSprite(
-        world,
-        textures(AssetPaths.EgliseIcon),
-        GridConfig.cellSize * 0.9,
-        HoverTarget(isPlayer, HoverKind.EgliseH, e.id),
-        setHovered
-      )
-    )
-    setPos(g, GridConfig.cellCenter(e.col, e.row))
-    val previousCountdown = sprites.egliseTimers.getOrElse(e.id, e.paladinSpawnInMs)
-    sprites.egliseTimers(e.id) = e.paladinSpawnInMs
-    if hasWrapped(previousCountdown, e.paladinSpawnInMs) then
-      spawnEffect(world, Vec2(g.x, g.y), flames, scale = 0.6)
+    setPos(g, GridConfig.cellCenter(b.col, b.row))
+    if BuildingSpecs.all(b.kind).spawns.isDefined then
+      val previousCountdown = sprites.buildingTimers.getOrElse(b.id, b.spawnCountdownMs)
+      sprites.buildingTimers(b.id) = b.spawnCountdownMs
+      if hasWrapped(previousCountdown, b.spawnCountdownMs) then
+        spawnEffect(world, Vec2(g.x, g.y), flames, scale = 0.6)
   }
 
 private def newHoverSprite(
@@ -625,22 +652,6 @@ private def newHoverSprite(
   val s = newSprite(texture, size)
   wireHover(s, target, setHovered)
   addTo(world, s)
-
-private def newHoverCaveSprite(
-    world: Container,
-    textures: js.Dictionary[Texture],
-    target: HoverTarget,
-    setHovered: Option[HoverTarget] => Unit
-): Sprite =
-  val s = newHoverSprite(
-    world,
-    textures(AssetPaths.CaveRock),
-    GridConfig.cellSize * 0.9,
-    target,
-    setHovered
-  )
-  s.tint = CaveTint
-  s
 
 // Hovering a sprite shows a tooltip with that entity's live stats (see updateTooltip);
 // the sprite itself just reports "I'm hovered" / "I'm not" — the ticker reads current
@@ -658,9 +669,9 @@ private def wireHover(
 // Pure query (CQS) — the caller is responsible for recording the new value (see call sites).
 private def hasWrapped(previous: Double, current: Double): Boolean = current > previous
 
-private def removeStaleWithEffect(
+private def removeStaleWithEffect[T <: Container](
     world: Container,
-    sprites: mutable.Map[Long, Container],
+    sprites: mutable.Map[Long, T],
     liveIds: Set[Long],
     flames: js.Array[Texture]
 ): Unit =
@@ -676,13 +687,13 @@ private def removeStaleWithEffect(
 private def angleTo(from: Vec2, to: Vec2): Double =
   math.atan2(to.y - from.y, to.x - from.x)
 
-private def enemyFacingAngle(e: Enemy, blocked: Set[(Int, Int)]): Option[Double] =
-  val currentCell = GridConfig.cellOf(e.pos)
+private def creatureFacingAngle(c: Creature, blocked: Set[(Int, Int)]): Option[Double] =
+  val currentCell = GridConfig.cellOf(c.pos)
   if currentCell == GridConfig.goalCell then None
   else
     Pathfinding.shortestPath(currentCell, GridConfig.goalCell, blocked).collect {
       case path if path.size > 1 =>
-        angleTo(e.pos, GridConfig.cellCenter(path(1)._1, path(1)._2))
+        angleTo(c.pos, GridConfig.cellCenter(path(1)._1, path(1)._2))
     }
 
 // ── Sprite/effect helpers ───────────────────────────────────────────────
@@ -738,37 +749,84 @@ private def positionTooltip(x: Double, y: Double): Unit =
   el.style.top = s"${y + 12}px"
 
 // Re-reads live stats from the current BattleState every frame, so HP/timers shown in
-// the tooltip stay accurate while the pointer holds still. Self-heals (hides, clears
-// the target) if the hovered entity died or was removed since the last frame.
-// buttonTooltipActive: a button-hover tooltip is currently showing (see
-// wireButtonTooltip) — this function must not clear it, since both hover sources
-// share the same #tooltip element and this runs unconditionally every tick.
+// the tooltip stay accurate. `target` is whatever the caller decided takes priority
+// (selectedTarget over hovered) and has already been self-healed — this function only
+// renders, it doesn't decide what's showing or clear any state.
+// buttonTooltipActive: a build-button hover tooltip is currently showing (see
+// wireButtonTooltip) — this function must not clear it, since both hover sources share
+// the same #tooltip element and this runs unconditionally every tick.
 private def updateTooltip(
-    hovered: Option[HoverTarget],
+    target: Option[HoverTarget],
     battle: BattleState,
     buttonTooltipActive: Boolean
-): Option[HoverTarget] =
+): Unit =
   val tooltip = document.getElementById("tooltip")
-  hovered.flatMap(t => hoverText(t, battle).map(text => (t, text))) match
+  val destroyBtn = document.getElementById("tooltip-destroy").asInstanceOf[dom.html.Button]
+  target.flatMap(t => hoverText(t, battle).map(text => (t, text))) match
     case Some((target, text)) =>
-      tooltip.textContent = text
+      document.getElementById("tooltip-text").textContent = text
       tooltip.classList.add("visible")
-      Some(target)
+      val maze = if target.isPlayer then battle.player else battle.ai
+      destroyInfo(target, maze) match
+        case Some((col, row, label)) =>
+          destroyBtn.textContent = label
+          destroyBtn.setAttribute("data-col", col.toString)
+          destroyBtn.setAttribute("data-row", row.toString)
+          destroyBtn.classList.add("visible")
+        case None => destroyBtn.classList.remove("visible")
     case None =>
-      if !buttonTooltipActive then tooltip.classList.remove("visible")
-      None
+      if !buttonTooltipActive then
+        tooltip.classList.remove("visible")
+        destroyBtn.classList.remove("visible")
+
+// Only the player's own buildings are destroyable from the UI (the AI destroying its own
+// is driven by AiStrategy.maybeDestroy instead, not this hover affordance) — see
+// Demolition for the refund amounts shown in the button label. Fully generic over
+// BuildingSpecs' cost map, unlike hoverText's building branch below (which keeps
+// hand-written per-kind ability text, per the refactor's confirmed scope).
+private def destroyInfo(target: HoverTarget, maze: MazeState): Option[(Int, Int, String)] =
+  if !target.isPlayer then None
+  else
+    target.kind match
+      case HoverKind.EnemyH => None
+      case HoverKind.BuildingH(kind) =>
+        maze.buildings.find(_.id == target.id).map { b =>
+          val cost = BuildingSpecs.all(kind).cost
+          val refundText = cost.toList
+            .sortBy(_._1.ordinal)
+            .map { case (res, amount) =>
+              s"+${formatDecimal(amount * Balance.DemolishRefundFraction)} ${resourceName(res)}"
+            }
+            .mkString(", ")
+          (b.col, b.row, s"Destroy ($refundText)")
+        }
+
+private def wireDestroyButton(onDestroy: (Int, Int) => Unit): Unit =
+  val btn = document.getElementById("tooltip-destroy").asInstanceOf[dom.html.Button]
+  btn.addEventListener(
+    "click",
+    (_: dom.Event) => {
+      val col = btn.getAttribute("data-col")
+      val row = btn.getAttribute("data-row")
+      if col != null && row != null then onDestroy(col.toInt, row.toInt)
+    }
+  )
+
+private def destroyPlayerBuilding(battle: BattleState, col: Int, row: Int): BattleState =
+  if battle.outcome.isDefined then battle
+  else Demolition.tryDestroy(battle.player, col, row).map(p => battle.copy(player = p)).getOrElse(battle)
 
 private def hoverText(target: HoverTarget, battle: BattleState): Option[String] =
   val maze = if target.isPlayer then battle.player else battle.ai
   target.kind match
     case HoverKind.EnemyH =>
-      maze.enemies.find(_.id == target.id).map { e =>
-        e.kind match
+      maze.creatures.find(_.id == target.id).map { c =>
+        c.kind match
           case UnitKind.Paladin =>
-            s"Paladin — HP ${e.hp.toInt}/${e.maxHp.toInt}, doesn't plunder; shields adjacent allies " +
+            s"Paladin — HP ${c.hp.toInt}/${c.maxHp.toInt}, doesn't plunder; shields adjacent allies " +
               s"from ${Balance.PaladinAuraDamageReductionPerSec.toInt} dmg/s"
           case _ =>
-            val (name, plunders) = e.kind match
+            val (name, plunders) = c.kind match
               case UnitKind.Elf => ("Elf", s"${Balance.PlunderPerUnit.toInt} wood")
               case UnitKind.Goblin =>
                 (
@@ -780,28 +838,31 @@ private def hoverText(target: HoverTarget, battle: BattleState): Option[String] 
                   "Minotaur",
                   s"${Balance.MinotaurPlunderPerUnit.toInt} wood + ${Balance.MinotaurPlunderPerUnit.toInt} fire"
                 )
-            s"$name — HP ${e.hp.toInt}/${e.maxHp.toInt}, plunders $plunders on arrival"
+            s"$name — HP ${c.hp.toInt}/${c.maxHp.toInt}, plunders $plunders on arrival"
       }
-    case HoverKind.ForestH =>
-      maze.forests.find(_.id == target.id).map { f =>
-        val nextElfS = (f.elfSpawnInMs / 1000).ceil.toInt
-        s"Forest — ${Balance.AuraDamagePerSec.toInt} dmg/s to adjacent enemies, +${Balance.WoodPerSecPerForest} wood/s, next Elf in ${nextElfS}s"
-      }
-    case HoverKind.CaveH =>
-      maze.caves.find(_.id == target.id).map { c =>
-        val nextGoblinS = (c.goblinSpawnInMs / 1000).ceil.toInt
-        s"Cave — +${Balance.FirePerSecPerCave.toInt} fire/s, next Goblin in ${nextGoblinS}s"
-      }
-    case HoverKind.LabyrintheH =>
-      maze.labyrinths.find(_.id == target.id).map { l =>
-        val nextMinotaurS = (l.minotaurSpawnInMs / 1000).ceil.toInt
-        s"Labyrinthe — next Minotaur in ${nextMinotaurS}s"
-      }
-    case HoverKind.EgliseH =>
-      maze.eglises.find(_.id == target.id).map { e =>
-        val nextPaladinS = (e.paladinSpawnInMs / 1000).ceil.toInt
-        s"Eglise — +${Balance.LightPerSecPerEglise.toInt} light/s, next Paladin in ${nextPaladinS}s"
-      }
+    case HoverKind.BuildingH(kind) =>
+      maze.buildings.find(_.id == target.id).map(b => buildingHoverText(kind, b))
+
+// Kept as hand-written per-kind text (not derived from BuildingSpecs), same as the
+// tooltip constants above — the ability sentences (Forest's aura, Watchtower's ranged
+// damage) describe combat behavior that lives outside BuildingSpec by design (see the
+// refactor's confirmed scope), so there's nothing generic left to derive them from.
+private def buildingHoverText(kind: BuildingKind, b: Building): String = kind match
+  case BuildingKind.Forest =>
+    val nextElfS = (b.spawnCountdownMs / 1000).ceil.toInt
+    s"Forest — ${Balance.AuraDamagePerSec.toInt} dmg/s to adjacent enemies, +${formatDecimal(Balance.WoodPerSecPerForest)} wood/s, next Elf in ${nextElfS}s"
+  case BuildingKind.Cave =>
+    val nextGoblinS = (b.spawnCountdownMs / 1000).ceil.toInt
+    s"Cave — +${formatDecimal(Balance.FirePerSecPerCave)} fire/s, next Goblin in ${nextGoblinS}s"
+  case BuildingKind.Labyrinth =>
+    val nextMinotaurS = (b.spawnCountdownMs / 1000).ceil.toInt
+    s"Labyrinthe — next Minotaur in ${nextMinotaurS}s"
+  case BuildingKind.Eglise =>
+    val nextPaladinS = (b.spawnCountdownMs / 1000).ceil.toInt
+    s"Eglise — +${formatDecimal(Balance.LightPerSecPerEglise)} light/s, next Paladin in ${nextPaladinS}s"
+  case BuildingKind.Watchtower =>
+    s"Tour de guet — +${formatDecimal(Balance.LightPerSecPerWatchtower)} light/s, " +
+      s"${Balance.WatchtowerDamagePerSec.toInt} dmg/s to the nearest enemy within ${Balance.WatchtowerRangeCells} cells"
 
 // ── HTML overlay ────────────────────────────────────────────────────────
 
@@ -814,16 +875,25 @@ private def updateOverlay(battle: BattleState): Unit =
 // resource or be chasing either victory condition (see CLAUDE.md). Targets are shown
 // live since they track the opponent's own count (see VictoryConditions).
 private def updateMazePanel(prefix: String, maze: MazeState, opponent: MazeState): Unit =
-  document.getElementById(s"$prefix-wood").textContent = maze.wood.toInt.toString
-  document.getElementById(s"$prefix-fire").textContent = maze.fire.toInt.toString
-  document.getElementById(s"$prefix-light").textContent = maze.light.toInt.toString
+  document.getElementById(s"$prefix-wood").textContent = maze.resources.getOrElse(Resource.Wood, 0.0).toInt.toString
+  document.getElementById(s"$prefix-fire").textContent = maze.resources.getOrElse(Resource.Fire, 0.0).toInt.toString
+  document.getElementById(s"$prefix-light").textContent =
+    maze.resources.getOrElse(Resource.Light, 0.0).toInt.toString
+  // Same CombatEngine function that actually applies production each tick — see its
+  // doc for why (a hand-rolled `count * rate` here could silently drift out of sync).
+  document.getElementById(s"$prefix-wood-rate").textContent =
+    s"(+${formatDecimal(CombatEngine.productionPerSec(maze, Resource.Wood))}/s)"
+  document.getElementById(s"$prefix-fire-rate").textContent =
+    s"(+${formatDecimal(CombatEngine.productionPerSec(maze, Resource.Fire))}/s)"
+  document.getElementById(s"$prefix-light-rate").textContent =
+    s"(+${formatDecimal(CombatEngine.productionPerSec(maze, Resource.Light))}/s)"
+  val forestCount = maze.buildings.count(_.kind == BuildingKind.Forest)
   val forestTarget = VictoryConditions.forestTarget(opponent)
   val plunderTarget = VictoryConditions.plunderTarget(opponent)
-  document.getElementById(s"$prefix-forests").textContent =
-    s"${maze.forests.size}/${forestTarget.toInt}"
+  document.getElementById(s"$prefix-forests").textContent = s"$forestCount/${forestTarget.toInt}"
   document.getElementById(s"$prefix-plundered").textContent =
     s"${maze.resourcesPlundered.toInt}/${plunderTarget.toInt}"
-  updateProgressBar(s"$prefix-forests-bar", maze.forests.size, forestTarget)
+  updateProgressBar(s"$prefix-forests-bar", forestCount, forestTarget)
   updateProgressBar(s"$prefix-plundered-bar", maze.resourcesPlundered, plunderTarget)
 
 // Visual companion to the "current/target" text above — lets you compare at a glance

@@ -57,6 +57,16 @@ object Balance:
   // Elf/Goblin/Minotaur) — see CombatEngine.plunderAmounts.
   val PaladinAuraDamageReductionPerSec: Double = 2.0
 
+  // Tour de guet.md: Loi's second building — no unit spawn, produces Light like Eglise
+  // and deals direct single-target damage instead of a passive adjacency aura.
+  val WatchtowerCostWood: Double = 10.0 // "cout en bois: 10"
+  val WatchtowerCostLight: Double = 5.0 // "cout en lumiere: 5"
+  val LightPerSecPerWatchtower: Double = 1.0 // "Produit 1 Lumiere par seconde"
+  val WatchtowerDamagePerSec: Double = 10.0 // "Inflige 10 degats chaque seconde a une cible"
+  // "jusqu'a 2 cases de distance" — Chebyshev (king-move) distance in cells, the usual
+  // reading of tower range on a grid: any cell within a 5x5 block centered on the tower.
+  val WatchtowerRangeCells: Int = 2
+
   // ── Shared / meta ────────────────────────────────────────────────────────
 
   // POC default, not required to match each other — both mazes still get the identical
@@ -70,6 +80,9 @@ object Balance:
   // just enough for exactly one, same relationship as StartingFire to CaveCostFire.
   val StartingLight: Double = 20.0
 
+  val StartingResources: Map[Resource, Double] =
+    Map(Resource.Wood -> StartingWood, Resource.Fire -> StartingFire, Resource.Light -> StartingLight)
+
   // POC default: wood/fire production compounds with building count, so without a pace
   // limit the AI can tile its maze within seconds. This caps it to roughly a human's
   // tapping speed. Found by actually running the game, not decided upfront.
@@ -81,9 +94,12 @@ object Balance:
   // VictoryMultiplierOverOpponent times the opponent's own count, so leading by a
   // fixed margin early in the match doesn't win the game outright once the opponent
   // has caught up.
-  val NatureVictoryForestTarget: Int =
-    10 // Victoire.md, "G: Expansion Inarretable — construire XX batiments"
+  val NatureVictoryForestTarget: Int = 40
   val ChaosVictoryPlunderTarget: Double = 50.0 // Victoire.md, "R: Plunder — piller XX ressources"
 
   // Must double the opponent's own count (not just clear a fixed floor) to win.
   val VictoryMultiplierOverOpponent: Double = 2.0
+
+  // POC default: tearing a building down returns half of what it cost, so reshaping a
+  // maze isn't free (discourages build/destroy spam) but also isn't punitive.
+  val DemolishRefundFraction: Double = 0.5

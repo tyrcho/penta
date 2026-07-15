@@ -5,45 +5,20 @@ enum PlacementError derives CanEqual:
 
 object Placement:
 
-  def tryPlaceForest(state: MazeState, col: Int, row: Int): Either[PlacementError, MazeState] =
+  def tryPlaceBuilding(
+      state: MazeState,
+      kind: BuildingKind,
+      col: Int,
+      row: Int
+  ): Either[PlacementError, MazeState] =
+    val spec = BuildingSpecs.all(kind)
     for
       _ <- checkCell(state, col, row)
-      _ <- Either.cond(
-        state.wood >= Balance.ForestCostWood,
-        (),
-        PlacementError.InsufficientResources
-      )
-    yield placeForest(state, col, row)
+      _ <- Either.cond(canAfford(state.resources, spec.cost), (), PlacementError.InsufficientResources)
+    yield placeBuilding(state, kind, spec, col, row)
 
-  def tryPlaceCave(state: MazeState, col: Int, row: Int): Either[PlacementError, MazeState] =
-    for
-      _ <- checkCell(state, col, row)
-      _ <- Either.cond(
-        state.wood >= Balance.CaveCostWood && state.fire >= Balance.CaveCostFire,
-        (),
-        PlacementError.InsufficientResources
-      )
-    yield placeCave(state, col, row)
-
-  def tryPlaceLabyrinthe(state: MazeState, col: Int, row: Int): Either[PlacementError, MazeState] =
-    for
-      _ <- checkCell(state, col, row)
-      _ <- Either.cond(
-        state.wood >= Balance.LabyrintheCostWood && state.fire >= Balance.LabyrintheCostFire,
-        (),
-        PlacementError.InsufficientResources
-      )
-    yield placeLabyrinthe(state, col, row)
-
-  def tryPlaceEglise(state: MazeState, col: Int, row: Int): Either[PlacementError, MazeState] =
-    for
-      _ <- checkCell(state, col, row)
-      _ <- Either.cond(
-        state.wood >= Balance.EgliseCostWood && state.light >= Balance.EgliseCostLight,
-        (),
-        PlacementError.InsufficientResources
-      )
-    yield placeEglise(state, col, row)
+  def canAfford(resources: Map[Resource, Double], cost: Map[Resource, Double]): Boolean =
+    cost.forall { case (res, amount) => resources.getOrElse(res, 0.0) >= amount }
 
   private def checkCell(state: MazeState, col: Int, row: Int): Either[PlacementError, Unit] =
     if !GridConfig.isInBounds(col, row) then Left(PlacementError.OutOfBounds)
@@ -57,38 +32,27 @@ object Placement:
     val blocked = state.buildingCells + ((col, row))
     !Pathfinding.isReachable(GridConfig.spawnCell, GridConfig.goalCell, blocked)
 
-  private def placeForest(state: MazeState, col: Int, row: Int): MazeState =
-    val forest = Forest(state.nextId, col, row, elfSpawnInMs = Balance.ElfSpawnIntervalMs)
+  private def placeBuilding(
+      state: MazeState,
+      kind: BuildingKind,
+      spec: BuildingSpec,
+      col: Int,
+      row: Int
+  ): MazeState =
+    val building = Building(
+      state.nextId,
+      col,
+      row,
+      kind,
+      spawnCountdownMs = spec.spawns.map(_._2).getOrElse(0.0)
+    )
     state.copy(
-      forests = forest :: state.forests,
-      wood = state.wood - Balance.ForestCostWood,
+      buildings = building :: state.buildings,
+      resources = debit(state.resources, spec.cost),
       nextId = state.nextId + 1
     )
 
-  private def placeCave(state: MazeState, col: Int, row: Int): MazeState =
-    val cave = Cave(state.nextId, col, row, goblinSpawnInMs = Balance.GoblinSpawnIntervalMs)
-    state.copy(
-      caves = cave :: state.caves,
-      wood = state.wood - Balance.CaveCostWood,
-      fire = state.fire - Balance.CaveCostFire,
-      nextId = state.nextId + 1
-    )
-
-  private def placeLabyrinthe(state: MazeState, col: Int, row: Int): MazeState =
-    val labyrinthe =
-      Labyrinth(state.nextId, col, row, minotaurSpawnInMs = Balance.MinotaurSpawnIntervalMs)
-    state.copy(
-      labyrinths = labyrinthe :: state.labyrinths,
-      wood = state.wood - Balance.LabyrintheCostWood,
-      fire = state.fire - Balance.LabyrintheCostFire,
-      nextId = state.nextId + 1
-    )
-
-  private def placeEglise(state: MazeState, col: Int, row: Int): MazeState =
-    val eglise = Eglise(state.nextId, col, row, paladinSpawnInMs = Balance.PaladinSpawnIntervalMs)
-    state.copy(
-      eglises = eglise :: state.eglises,
-      wood = state.wood - Balance.EgliseCostWood,
-      light = state.light - Balance.EgliseCostLight,
-      nextId = state.nextId + 1
-    )
+  private def debit(resources: Map[Resource, Double], cost: Map[Resource, Double]): Map[Resource, Double] =
+    cost.foldLeft(resources) { case (acc, (res, amount)) =>
+      acc.updated(res, acc.getOrElse(res, 0.0) - amount)
+    }

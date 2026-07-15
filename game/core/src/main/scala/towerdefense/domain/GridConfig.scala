@@ -22,3 +22,11 @@ object GridConfig:
 
   def isInBounds(col: Int, row: Int): Boolean =
     col >= 0 && col < cols && row >= 0 && row < rows
+
+  // Every cell in row-major order — shared by any AiStrategy that scans the whole grid
+  // for a buildable spot (LinearStrategy, CompositeStrategy).
+  def allCells: Seq[(Int, Int)] =
+    for
+      row <- 0 until rows
+      col <- 0 until cols
+    yield (col, row)

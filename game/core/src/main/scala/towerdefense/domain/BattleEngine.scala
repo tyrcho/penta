@@ -1,15 +1,17 @@
 package towerdefense.domain
 
-// Two mazes, same rules, one human-controlled and one AI-controlled — symmetric: either
-// side can build a Forest, a Cave, a Labyrinthe, or an Eglise (see CLAUDE.md). Each
-// Forest sends its Elf, each Cave its Goblin, each Labyrinthe its Minotaur, and each
-// Eglise its Paladin, into the *opponent's* maze — that's the whole game.
-// aiBuildCooldownMs paces the AI's own building rate (see Balance.AiBuildCooldownMs).
+// Two mazes, same rules — symmetric: either side can build any BuildingKind (see
+// CLAUDE.md). Each building spawns its unit (per BuildingSpecs) into the *opponent's*
+// maze — that's the whole game.
+// aiBuildCooldownMs/playerBuildCooldownMs pace each side's own building rate (see
+// Balance.AiBuildCooldownMs) — mirrored fields, not an AI-only concept, so a headless
+// AI-vs-AI battle can throttle both sides identically to how the UI throttles `ai` today.
 // outcome freezes the battle once a side has won.
 case class BattleState(
     player: MazeState,
     ai: MazeState,
     aiBuildCooldownMs: Double = 0.0,
+    playerBuildCooldownMs: Double = 0.0,
     outcome: Option[MatchResult] = None
 )
 
@@ -18,80 +20,78 @@ object BattleState:
 
 object BattleEngine:
 
-  def tick(battle: BattleState, deltaMs: Double): BattleState =
+  // `aiStrategy` defaults to today's behavior (the UI never passes one). `playerStrategy`
+  // defaults to None so the human-controlled player slot keeps not auto-building — pass
+  // Some(strategy) to drive it too, e.g. for a headless AI-vs-AI simulation.
+  def tick(
+      battle: BattleState,
+      deltaMs: Double,
+      aiStrategy: AiStrategy = LinearStrategy,
+      playerStrategy: Option[AiStrategy] = None
+  ): BattleState =
     if battle.outcome.isDefined then battle
     else
       val playerResult = CombatEngine.tick(battle.player, deltaMs)
       val aiResult = CombatEngine.tick(battle.ai, deltaMs)
-      val (aiBuilt, nextCooldown) =
-        maybeBuildThrottled(aiResult.state, battle.aiBuildCooldownMs - deltaMs)
 
-      val aiFinal = deliverUnits(
-        creditPlunder(aiBuilt, playerResult.stolenWood, playerResult.stolenFire),
-        playerResult.spawnedElf,
-        playerResult.spawnedGoblin,
-        playerResult.spawnedMinotaur,
-        playerResult.spawnedPaladin
+      val aiAfterDestroy = aiStrategy.maybeDestroy(aiResult.state, playerResult.state)
+      val (aiBuilt, aiNextCooldown) = maybeBuildThrottled(
+        aiAfterDestroy,
+        playerResult.state,
+        aiStrategy,
+        battle.aiBuildCooldownMs - deltaMs
       )
-      val playerFinal = deliverUnits(
-        creditPlunder(playerResult.state, aiResult.stolenWood, aiResult.stolenFire),
-        aiResult.spawnedElf,
-        aiResult.spawnedGoblin,
-        aiResult.spawnedMinotaur,
-        aiResult.spawnedPaladin
-      )
+      val (playerBuilt, playerNextCooldown) = playerStrategy match
+        case Some(strategy) =>
+          val playerAfterDestroy = strategy.maybeDestroy(playerResult.state, aiResult.state)
+          maybeBuildThrottled(
+            playerAfterDestroy,
+            aiResult.state,
+            strategy,
+            battle.playerBuildCooldownMs - deltaMs
+          )
+        case None => (playerResult.state, 0.0)
 
-      val next = BattleState(playerFinal, aiFinal, nextCooldown)
+      val aiFinal = deliverUnits(creditPlunder(aiBuilt, playerResult.stolen), playerResult.spawned)
+      val playerFinal = deliverUnits(creditPlunder(playerBuilt, aiResult.stolen), aiResult.spawned)
+
+      val next = BattleState(playerFinal, aiFinal, aiNextCooldown, playerNextCooldown)
       next.copy(outcome = VictoryConditions.evaluate(next))
 
-  // Wood/fire production compounds with building count, so without a pace limit the AI
-  // can tile its whole maze within seconds — capping it to at most one build per
-  // Balance.AiBuildCooldownMs keeps it roughly as fast as a human tapping.
-  private def maybeBuildThrottled(state: MazeState, cooldownMs: Double): (MazeState, Double) =
+  // Wood/fire production compounds with building count, so without a pace limit a side
+  // can tile its whole maze within seconds — capping it to at most one *attempt* per
+  // Balance.AiBuildCooldownMs keeps it roughly as fast as a human tapping. The cooldown
+  // resets whether or not the attempt actually placed something: a strategy's scan is a
+  // Placement.tryPlace* call (with its own pathfinding check) per candidate cell, and
+  // retrying that scan every tick while broke — rather than once per cooldown window —
+  // is wasted work with no gameplay benefit, since resources barely move tick to tick.
+  private def maybeBuildThrottled(
+      state: MazeState,
+      opponent: MazeState,
+      strategy: AiStrategy,
+      cooldownMs: Double
+  ): (MazeState, Double) =
     if cooldownMs > 0 then (state, cooldownMs)
-    else
-      val built = AiController.maybeBuild(state)
-      val didBuild = built.forests.size > state.forests.size ||
-        built.caves.size > state.caves.size ||
-        built.labyrinths.size > state.labyrinths.size ||
-        built.eglises.size > state.eglises.size
-      if didBuild then (built, Balance.AiBuildCooldownMs) else (built, 0.0)
+    else (strategy.maybeBuild(state, opponent), Balance.AiBuildCooldownMs)
 
   // Resources a Goblin plundered from the opponent land in the attacker's own economy
   // (Chaos.md: "arracher ses ressources"), and count toward the Chaos victory tally.
-  private def creditPlunder(state: MazeState, wood: Double, fire: Double): MazeState =
+  private def creditPlunder(state: MazeState, stolen: Map[Resource, Double]): MazeState =
+    val credited = stolen.foldLeft(state.resources) { case (acc, (res, amount)) =>
+      acc.updated(res, acc.getOrElse(res, 0.0) + amount)
+    }
     state.copy(
-      wood = state.wood + wood,
-      fire = state.fire + fire,
-      resourcesPlundered = state.resourcesPlundered + wood + fire
+      resources = credited,
+      resourcesPlundered = state.resourcesPlundered + stolen.values.sum
     )
 
-  private def deliverUnits(
-      state: MazeState,
-      elfCount: Int,
-      goblinCount: Int,
-      minotaurCount: Int,
-      paladinCount: Int
-  ): MazeState =
-    val withElf = (0 until elfCount).foldLeft(state)((s, _) =>
-      spawnUnit(s, UnitKind.Elf, Balance.ElfMaxHp, Balance.ElfSpeedPerMs)
-    )
-    val withGoblin = (0 until goblinCount).foldLeft(withElf)((s, _) =>
-      spawnUnit(s, UnitKind.Goblin, Balance.GoblinMaxHp, Balance.GoblinSpeedPerMs)
-    )
-    val withMinotaur = (0 until minotaurCount).foldLeft(withGoblin)((s, _) =>
-      spawnUnit(s, UnitKind.Minotaur, Balance.MinotaurMaxHp, Balance.MinotaurSpeedPerMs)
-    )
-    (0 until paladinCount).foldLeft(withMinotaur)((s, _) =>
-      spawnUnit(s, UnitKind.Paladin, Balance.PaladinMaxHp, Balance.PaladinSpeedPerMs)
-    )
+  private def deliverUnits(state: MazeState, spawned: Map[UnitKind, Int]): MazeState =
+    spawned.foldLeft(state) { case (s, (kind, count)) =>
+      (0 until count).foldLeft(s)((s2, _) => spawnCreature(s2, kind))
+    }
 
-  private def spawnUnit(
-      state: MazeState,
-      kind: UnitKind,
-      maxHp: Double,
-      speedPerMs: Double
-  ): MazeState =
+  private def spawnCreature(state: MazeState, kind: UnitKind): MazeState =
+    val spec = CreatureSpecs.all(kind)
     val spawnPos = GridConfig.cellCenter(GridConfig.spawnCell._1, GridConfig.spawnCell._2)
-    val unit = Enemy(state.nextId, spawnPos, maxHp, maxHp, speedPerMs, kind)
-    state.copy(enemies = unit :: state.enemies, nextId = state.nextId + 1)
+    val creature = Creature(state.nextId, spawnPos, spec.maxHp, spec.maxHp, spec.speedPerMs, kind)
+    state.copy(creatures = creature :: state.creatures, nextId = state.nextId + 1)

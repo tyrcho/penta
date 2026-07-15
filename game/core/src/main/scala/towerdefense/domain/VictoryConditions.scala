@@ -24,13 +24,15 @@ object VictoryConditions:
     else None
 
   private def hasWon(state: MazeState, opponent: MazeState): Boolean =
-    state.forests.size >= forestTarget(opponent) ||
+    forestCount(state) >= forestTarget(opponent) ||
       state.resourcesPlundered >= plunderTarget(opponent)
+
+  private def forestCount(state: MazeState): Int = state.buildings.count(_.kind == BuildingKind.Forest)
 
   // Exposed (not just private) so the UI can display the live target, which moves
   // with the opponent's own count — see the module doc above.
   def forestTarget(opponent: MazeState): Double =
-    math.max(Balance.NatureVictoryForestTarget.toDouble, opponentTarget(opponent.forests.size))
+    math.max(Balance.NatureVictoryForestTarget.toDouble, opponentTarget(forestCount(opponent)))
 
   def plunderTarget(opponent: MazeState): Double =
     math.max(Balance.ChaosVictoryPlunderTarget, opponentTarget(opponent.resourcesPlundered))
@@ -39,7 +41,7 @@ object VictoryConditions:
     Balance.VictoryMultiplierOverOpponent * opponentCount
 
   private def winReason(state: MazeState, opponent: MazeState): String =
-    if state.forests.size >= forestTarget(opponent) then
-      s"Nature's unstoppable expansion: ${state.forests.size} Forests built (target ${forestTarget(opponent).toInt})."
+    if forestCount(state) >= forestTarget(opponent) then
+      s"Nature's unstoppable expansion: ${forestCount(state)} Forests built (target ${forestTarget(opponent).toInt})."
     else
       s"Chaos plunder: ${state.resourcesPlundered.toInt} resources stolen (target ${plunderTarget(opponent).toInt})."

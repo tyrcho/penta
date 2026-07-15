@@ -2,28 +2,33 @@ package towerdefense.domain
 
 class CombatEngineTest extends munit.FunSuite:
 
+  private def withResources(wood: Double = 0.0, fire: Double = 0.0, light: Double = 0.0): MazeState =
+    MazeState.initial.copy(
+      resources = Map(Resource.Wood -> wood, Resource.Fire -> fire, Resource.Light -> light)
+    )
+
   test("enemy reaching the goal cell is removed") {
     val goalPos = GridConfig.cellCenter(GridConfig.goalCell._1, GridConfig.goalCell._2)
-    val enemy =
-      Enemy(1, goalPos, Balance.ElfMaxHp, Balance.ElfMaxHp, speedPerMs = 0.0, UnitKind.Elf)
-    val state = MazeState.initial.copy(enemies = List(enemy))
+    val creature =
+      Creature(1, goalPos, Balance.ElfMaxHp, Balance.ElfMaxHp, speedPerMs = 0.0, UnitKind.Elf)
+    val state = withResources().copy(creatures = List(creature))
     val result = CombatEngine.tick(state, deltaMs = 1.0)
-    assertEquals(result.state.enemies, Nil)
+    assertEquals(result.state.creatures, Nil)
   }
 
   test("enemy re-routes around a forest blocking its straight-line step") {
     val startPos = GridConfig.cellCenter(0, 0)
-    val enemy =
-      Enemy(1, startPos, Balance.ElfMaxHp, Balance.ElfMaxHp, speedPerMs = 1000.0, UnitKind.Elf)
-    val blockingForest = Forest(100, col = 1, row = 0, elfSpawnInMs = Balance.ElfSpawnIntervalMs)
-    val state = MazeState.initial.copy(enemies = List(enemy), forests = List(blockingForest))
+    val creature =
+      Creature(1, startPos, Balance.ElfMaxHp, Balance.ElfMaxHp, speedPerMs = 1000.0, UnitKind.Elf)
+    val blockingForest = Building(100, col = 1, row = 0, BuildingKind.Forest, Balance.ElfSpawnIntervalMs)
+    val state = withResources().copy(creatures = List(creature), buildings = List(blockingForest))
     val result = CombatEngine.tick(state, deltaMs = 1.0)
-    assertEquals(GridConfig.cellOf(result.state.enemies.head.pos), (0, 1))
+    assertEquals(GridConfig.cellOf(result.state.creatures.head.pos), (0, 1))
   }
 
   test("enemy also re-routes around a cave (both building types block)") {
     val startPos = GridConfig.cellCenter(0, 0)
-    val enemy = Enemy(
+    val creature = Creature(
       1,
       startPos,
       Balance.GoblinMaxHp,
@@ -31,29 +36,29 @@ class CombatEngineTest extends munit.FunSuite:
       speedPerMs = 1000.0,
       UnitKind.Goblin
     )
-    val blockingCave = Cave(100, col = 1, row = 0, goblinSpawnInMs = Balance.GoblinSpawnIntervalMs)
-    val state = MazeState.initial.copy(enemies = List(enemy), caves = List(blockingCave))
+    val blockingCave = Building(100, col = 1, row = 0, BuildingKind.Cave, Balance.GoblinSpawnIntervalMs)
+    val state = withResources().copy(creatures = List(creature), buildings = List(blockingCave))
     val result = CombatEngine.tick(state, deltaMs = 1.0)
-    assertEquals(GridConfig.cellOf(result.state.enemies.head.pos), (0, 1))
+    assertEquals(GridConfig.cellOf(result.state.creatures.head.pos), (0, 1))
   }
 
   test("forest damages an adjacent enemy but not a distant one") {
-    val forest = Forest(100, col = 5, row = 5, elfSpawnInMs = Balance.ElfSpawnIntervalMs)
+    val forest = Building(100, col = 5, row = 5, BuildingKind.Forest, Balance.ElfSpawnIntervalMs)
     val adjacent =
-      Enemy(1, GridConfig.cellCenter(6, 5), hp = 10.0, maxHp = 10.0, speedPerMs = 0.0, UnitKind.Elf)
+      Creature(1, GridConfig.cellCenter(6, 5), hp = 10.0, maxHp = 10.0, speedPerMs = 0.0, UnitKind.Elf)
     val distant =
-      Enemy(2, GridConfig.cellCenter(0, 0), hp = 10.0, maxHp = 10.0, speedPerMs = 0.0, UnitKind.Elf)
-    val state = MazeState.initial.copy(enemies = List(adjacent, distant), forests = List(forest))
+      Creature(2, GridConfig.cellCenter(0, 0), hp = 10.0, maxHp = 10.0, speedPerMs = 0.0, UnitKind.Elf)
+    val state = withResources().copy(creatures = List(adjacent, distant), buildings = List(forest))
 
     val result = CombatEngine.tick(state, deltaMs = 1000.0)
-    val byId = result.state.enemies.map(e => e.id -> e).toMap
+    val byId = result.state.creatures.map(c => c.id -> c).toMap
     assertEquals(byId(1).hp, adjacent.hp - Balance.AuraDamagePerSec)
     assertEquals(byId(2).hp, distant.hp)
   }
 
   test("forest aura kills an enemy once its hp is depleted") {
-    val forest = Forest(100, col = 5, row = 5, elfSpawnInMs = Balance.ElfSpawnIntervalMs)
-    val enemy = Enemy(
+    val forest = Building(100, col = 5, row = 5, BuildingKind.Forest, Balance.ElfSpawnIntervalMs)
+    val creature = Creature(
       1,
       GridConfig.cellCenter(6, 5),
       hp = Balance.AuraDamagePerSec,
@@ -61,73 +66,88 @@ class CombatEngineTest extends munit.FunSuite:
       speedPerMs = 0.0,
       UnitKind.Elf
     )
-    val state = MazeState.initial.copy(enemies = List(enemy), forests = List(forest))
+    val state = withResources().copy(creatures = List(creature), buildings = List(forest))
     val result = CombatEngine.tick(state, deltaMs = 1000.0)
-    assertEquals(result.state.enemies, Nil)
+    assertEquals(result.state.creatures, Nil)
   }
 
   test("forests produce wood, caves produce fire, over time") {
-    val forest = Forest(100, col = 5, row = 5, elfSpawnInMs = Balance.ElfSpawnIntervalMs)
-    val cave = Cave(101, col = 6, row = 6, goblinSpawnInMs = Balance.GoblinSpawnIntervalMs)
-    val state =
-      MazeState.initial.copy(forests = List(forest), caves = List(cave), wood = 0.0, fire = 0.0)
+    val forest = Building(100, col = 5, row = 5, BuildingKind.Forest, Balance.ElfSpawnIntervalMs)
+    val cave = Building(101, col = 6, row = 6, BuildingKind.Cave, Balance.GoblinSpawnIntervalMs)
+    val state = withResources(wood = 0.0, fire = 0.0).copy(buildings = List(forest, cave))
     val result = CombatEngine.tick(state, deltaMs = 2000.0)
-    assertEquals(result.state.wood, Balance.WoodPerSecPerForest * 2.0)
-    assertEquals(result.state.fire, Balance.FirePerSecPerCave * 2.0)
+    assertEquals(result.state.resources(Resource.Wood), Balance.WoodPerSecPerForest * 2.0)
+    assertEquals(result.state.resources(Resource.Fire), Balance.FirePerSecPerCave * 2.0)
+  }
+
+  test(
+    "productionPerSec is the exact rate CombatEngine.tick applies — the UI reads this " +
+      "instead of re-deriving its own"
+  ) {
+    val state = withResources().copy(
+      buildings = List(
+        Building(1, 0, 1, BuildingKind.Forest, 0.0),
+        Building(2, 0, 2, BuildingKind.Forest, 0.0),
+        Building(3, 0, 3, BuildingKind.Cave, 0.0),
+        Building(4, 0, 4, BuildingKind.Eglise, 0.0)
+      )
+    )
+    assertEquals(CombatEngine.productionPerSec(state, Resource.Wood), 2 * Balance.WoodPerSecPerForest)
+    assertEquals(CombatEngine.productionPerSec(state, Resource.Fire), 1 * Balance.FirePerSecPerCave)
+    assertEquals(CombatEngine.productionPerSec(state, Resource.Light), 1 * Balance.LightPerSecPerEglise)
   }
 
   test("a forest emits exactly one elf-spawn signal per interval") {
-    val forest = Forest(100, col = 5, row = 5, elfSpawnInMs = Balance.ElfSpawnIntervalMs)
-    val state = MazeState.initial.copy(forests = List(forest))
+    val forest = Building(100, col = 5, row = 5, BuildingKind.Forest, Balance.ElfSpawnIntervalMs)
+    val state = withResources().copy(buildings = List(forest))
     val before = CombatEngine.tick(state, deltaMs = Balance.ElfSpawnIntervalMs - 1.0)
     val at = CombatEngine.tick(state, deltaMs = Balance.ElfSpawnIntervalMs)
-    assertEquals(before.spawnedElf, 0)
-    assertEquals(at.spawnedElf, 1)
+    assertEquals(before.spawned.getOrElse(UnitKind.Elf, 0), 0)
+    assertEquals(at.spawned.getOrElse(UnitKind.Elf, 0), 1)
   }
 
   test("a cave emits exactly one goblin-spawn signal per interval") {
-    val cave = Cave(100, col = 5, row = 5, goblinSpawnInMs = Balance.GoblinSpawnIntervalMs)
-    val state = MazeState.initial.copy(caves = List(cave))
+    val cave = Building(100, col = 5, row = 5, BuildingKind.Cave, Balance.GoblinSpawnIntervalMs)
+    val state = withResources().copy(buildings = List(cave))
     val before = CombatEngine.tick(state, deltaMs = Balance.GoblinSpawnIntervalMs - 1.0)
     val at = CombatEngine.tick(state, deltaMs = Balance.GoblinSpawnIntervalMs)
-    assertEquals(before.spawnedGoblin, 0)
-    assertEquals(at.spawnedGoblin, 1)
+    assertEquals(before.spawned.getOrElse(UnitKind.Goblin, 0), 0)
+    assertEquals(at.spawned.getOrElse(UnitKind.Goblin, 0), 1)
   }
 
   test("a goblin reaching the goal plunders wood and fire, clamped to what's available") {
     val goalPos = GridConfig.cellCenter(GridConfig.goalCell._1, GridConfig.goalCell._2)
     val goblin =
-      Enemy(1, goalPos, Balance.GoblinMaxHp, Balance.GoblinMaxHp, speedPerMs = 0.0, UnitKind.Goblin)
-    val state = MazeState.initial.copy(enemies = List(goblin), wood = 0.5, fire = 100.0)
+      Creature(1, goalPos, Balance.GoblinMaxHp, Balance.GoblinMaxHp, speedPerMs = 0.0, UnitKind.Goblin)
+    val state = withResources(wood = 0.5, fire = 100.0).copy(creatures = List(goblin))
     val result = CombatEngine.tick(state, deltaMs = 1.0)
-    assertEquals(result.stolenWood, 0.5) // clamped: only 0.5 wood was available to steal
-    assertEquals(result.stolenFire, Balance.PlunderPerUnit)
-    assertEquals(result.state.wood, 0.0)
-    assertEquals(result.state.fire, 100.0 - Balance.PlunderPerUnit)
+    assertEquals(result.stolen.getOrElse(Resource.Wood, 0.0), 0.5) // clamped: only 0.5 wood available
+    assertEquals(result.stolen.getOrElse(Resource.Fire, 0.0), Balance.PlunderPerUnit)
+    assertEquals(result.state.resources(Resource.Wood), 0.0)
+    assertEquals(result.state.resources(Resource.Fire), 100.0 - Balance.PlunderPerUnit)
   }
 
   test("an elf reaching the goal only plunders wood, not fire") {
     val goalPos = GridConfig.cellCenter(GridConfig.goalCell._1, GridConfig.goalCell._2)
-    val elf = Enemy(1, goalPos, Balance.ElfMaxHp, Balance.ElfMaxHp, speedPerMs = 0.0, UnitKind.Elf)
-    val state = MazeState.initial.copy(enemies = List(elf), wood = 5.0, fire = 5.0)
+    val elf = Creature(1, goalPos, Balance.ElfMaxHp, Balance.ElfMaxHp, speedPerMs = 0.0, UnitKind.Elf)
+    val state = withResources(wood = 5.0, fire = 5.0).copy(creatures = List(elf))
     val result = CombatEngine.tick(state, deltaMs = 1.0)
-    assertEquals(result.stolenWood, Balance.PlunderPerUnit)
-    assertEquals(result.stolenFire, 0.0)
+    assertEquals(result.stolen.getOrElse(Resource.Wood, 0.0), Balance.PlunderPerUnit)
+    assertEquals(result.stolen.getOrElse(Resource.Fire, 0.0), 0.0)
   }
 
   test("a labyrinthe emits exactly one minotaur-spawn signal per interval") {
-    val labyrinthe =
-      Labyrinth(100, col = 5, row = 5, minotaurSpawnInMs = Balance.MinotaurSpawnIntervalMs)
-    val state = MazeState.initial.copy(labyrinths = List(labyrinthe))
+    val labyrinthe = Building(100, col = 5, row = 5, BuildingKind.Labyrinth, Balance.MinotaurSpawnIntervalMs)
+    val state = withResources().copy(buildings = List(labyrinthe))
     val before = CombatEngine.tick(state, deltaMs = Balance.MinotaurSpawnIntervalMs - 1.0)
     val at = CombatEngine.tick(state, deltaMs = Balance.MinotaurSpawnIntervalMs)
-    assertEquals(before.spawnedMinotaur, 0)
-    assertEquals(at.spawnedMinotaur, 1)
+    assertEquals(before.spawned.getOrElse(UnitKind.Minotaur, 0), 0)
+    assertEquals(at.spawned.getOrElse(UnitKind.Minotaur, 0), 1)
   }
 
   test("a minotaur reaching the goal plunders 10 of each resource, clamped to what's available") {
     val goalPos = GridConfig.cellCenter(GridConfig.goalCell._1, GridConfig.goalCell._2)
-    val minotaur = Enemy(
+    val minotaur = Creature(
       1,
       goalPos,
       Balance.MinotaurMaxHp,
@@ -135,59 +155,135 @@ class CombatEngineTest extends munit.FunSuite:
       speedPerMs = 0.0,
       UnitKind.Minotaur
     )
-    val state = MazeState.initial.copy(enemies = List(minotaur), wood = 5.0, fire = 100.0)
+    val state = withResources(wood = 5.0, fire = 100.0).copy(creatures = List(minotaur))
     val result = CombatEngine.tick(state, deltaMs = 1.0)
-    assertEquals(result.stolenWood, 5.0) // clamped: only 5 wood was available to steal
-    assertEquals(result.stolenFire, Balance.MinotaurPlunderPerUnit)
-    assertEquals(result.state.wood, 0.0)
-    assertEquals(result.state.fire, 100.0 - Balance.MinotaurPlunderPerUnit)
+    assertEquals(result.stolen.getOrElse(Resource.Wood, 0.0), 5.0) // clamped: only 5 wood available
+    assertEquals(result.stolen.getOrElse(Resource.Fire, 0.0), Balance.MinotaurPlunderPerUnit)
+    assertEquals(result.state.resources(Resource.Wood), 0.0)
+    assertEquals(result.state.resources(Resource.Fire), 100.0 - Balance.MinotaurPlunderPerUnit)
   }
 
   test("an eglise emits exactly one paladin-spawn signal per interval") {
-    val eglise = Eglise(100, col = 5, row = 5, paladinSpawnInMs = Balance.PaladinSpawnIntervalMs)
-    val state = MazeState.initial.copy(eglises = List(eglise))
+    val eglise = Building(100, col = 5, row = 5, BuildingKind.Eglise, Balance.PaladinSpawnIntervalMs)
+    val state = withResources().copy(buildings = List(eglise))
     val before = CombatEngine.tick(state, deltaMs = Balance.PaladinSpawnIntervalMs - 1.0)
     val at = CombatEngine.tick(state, deltaMs = Balance.PaladinSpawnIntervalMs)
-    assertEquals(before.spawnedPaladin, 0)
-    assertEquals(at.spawnedPaladin, 1)
+    assertEquals(before.spawned.getOrElse(UnitKind.Paladin, 0), 0)
+    assertEquals(at.spawned.getOrElse(UnitKind.Paladin, 0), 1)
   }
 
   test("eglises produce light over time") {
-    val eglise = Eglise(100, col = 5, row = 5, paladinSpawnInMs = Double.MaxValue)
-    val state = MazeState.initial.copy(eglises = List(eglise), light = 0.0)
+    val eglise = Building(100, col = 5, row = 5, BuildingKind.Eglise, Double.MaxValue)
+    val state = withResources(light = 0.0).copy(buildings = List(eglise))
     val result = CombatEngine.tick(state, deltaMs = 2000.0)
-    assertEquals(result.state.light, Balance.LightPerSecPerEglise * 2.0)
+    assertEquals(result.state.resources(Resource.Light), Balance.LightPerSecPerEglise * 2.0)
+  }
+
+  test("watchtowers also produce light, alongside eglises") {
+    val watchtower = Building(100, col = 5, row = 5, BuildingKind.Watchtower, 0.0)
+    val state = withResources(light = 0.0).copy(buildings = List(watchtower))
+    val result = CombatEngine.tick(state, deltaMs = 2000.0)
+    assertEquals(result.state.resources(Resource.Light), Balance.LightPerSecPerWatchtower * 2.0)
+  }
+
+  test("a watchtower damages the nearest enemy within its range every tick") {
+    val watchtower = Building(100, col = 5, row = 5, BuildingKind.Watchtower, 0.0)
+    val nearby =
+      Creature(1, GridConfig.cellCenter(6, 6), hp = 100.0, maxHp = 100.0, speedPerMs = 0.0, UnitKind.Elf)
+    val state = withResources().copy(creatures = List(nearby), buildings = List(watchtower))
+    val result = CombatEngine.tick(state, deltaMs = 1000.0)
+    assertEquals(result.state.creatures.head.hp, nearby.hp - Balance.WatchtowerDamagePerSec)
+  }
+
+  test("a watchtower does not damage an enemy beyond its range") {
+    val watchtower = Building(100, col = 5, row = 5, BuildingKind.Watchtower, 0.0)
+    val farAway = Creature(
+      1,
+      GridConfig.cellCenter(5 + Balance.WatchtowerRangeCells + 1, 5),
+      10.0,
+      10.0,
+      0.0,
+      UnitKind.Elf
+    )
+    val state = withResources().copy(creatures = List(farAway), buildings = List(watchtower))
+    val result = CombatEngine.tick(state, deltaMs = 1000.0)
+    assertEquals(result.state.creatures.head.hp, farAway.hp)
+  }
+
+  test("a watchtower only damages one target even when several are in range") {
+    val watchtower = Building(100, col = 5, row = 5, BuildingKind.Watchtower, 0.0)
+    val closer = Creature(1, GridConfig.cellCenter(6, 5), 100.0, 100.0, 0.0, UnitKind.Elf)
+    val farther = Creature(2, GridConfig.cellCenter(7, 5), 100.0, 100.0, 0.0, UnitKind.Elf)
+    val state = withResources().copy(creatures = List(closer, farther), buildings = List(watchtower))
+    val result = CombatEngine.tick(state, deltaMs = 1000.0)
+    val byId = result.state.creatures.map(c => c.id -> c).toMap
+    assertEquals(byId(1).hp, closer.hp - Balance.WatchtowerDamagePerSec)
+    assertEquals(byId(2).hp, farther.hp)
+  }
+
+  test("a paladin shields its target from watchtower damage too, not just forest aura") {
+    val watchtower = Building(100, col = 5, row = 5, BuildingKind.Watchtower, 0.0)
+    val shieldedPos = GridConfig.cellCenter(6, 5)
+    val elf = Creature(1, shieldedPos, hp = 10.0, maxHp = 10.0, speedPerMs = 0.0, UnitKind.Elf)
+    val paladin = Creature(
+      2,
+      shieldedPos,
+      Balance.PaladinMaxHp,
+      Balance.PaladinMaxHp,
+      speedPerMs = 0.0,
+      UnitKind.Paladin
+    )
+    val state = withResources().copy(creatures = List(elf, paladin), buildings = List(watchtower))
+    val result = CombatEngine.tick(state, deltaMs = 1000.0)
+    val byId = result.state.creatures.map(c => c.id -> c).toMap
+    // Balance.PaladinAuraDamageReductionPerSec (2.0) reduces but doesn't fully cancel
+    // WatchtowerDamagePerSec (10.0), unlike Forest's weaker aura.
+    assertEquals(
+      byId(1).hp,
+      elf.hp - (Balance.WatchtowerDamagePerSec - Balance.PaladinAuraDamageReductionPerSec)
+    )
   }
 
   test("a paladin reaching the goal plunders nothing") {
     val goalPos = GridConfig.cellCenter(GridConfig.goalCell._1, GridConfig.goalCell._2)
-    val paladin =
-      Enemy(1, goalPos, Balance.PaladinMaxHp, Balance.PaladinMaxHp, speedPerMs = 0.0, UnitKind.Paladin)
-    val state = MazeState.initial.copy(enemies = List(paladin), wood = 5.0, fire = 5.0)
+    val paladin = Creature(
+      1,
+      goalPos,
+      Balance.PaladinMaxHp,
+      Balance.PaladinMaxHp,
+      speedPerMs = 0.0,
+      UnitKind.Paladin
+    )
+    val state = withResources(wood = 5.0, fire = 5.0).copy(creatures = List(paladin))
     val result = CombatEngine.tick(state, deltaMs = 1.0)
-    assertEquals(result.stolenWood, 0.0)
-    assertEquals(result.stolenFire, 0.0)
+    assertEquals(result.stolen.getOrElse(Resource.Wood, 0.0), 0.0)
+    assertEquals(result.stolen.getOrElse(Resource.Fire, 0.0), 0.0)
   }
 
   test("a paladin shields an adjacent unit from forest aura damage") {
-    val forest = Forest(100, col = 5, row = 5, elfSpawnInMs = Balance.ElfSpawnIntervalMs)
+    val forest = Building(100, col = 5, row = 5, BuildingKind.Forest, Balance.ElfSpawnIntervalMs)
     val shieldedPos = GridConfig.cellCenter(6, 5)
-    val elf =
-      Enemy(1, shieldedPos, hp = 10.0, maxHp = 10.0, speedPerMs = 0.0, UnitKind.Elf)
-    val paladin =
-      Enemy(2, shieldedPos, Balance.PaladinMaxHp, Balance.PaladinMaxHp, speedPerMs = 0.0, UnitKind.Paladin)
-    val state = MazeState.initial.copy(enemies = List(elf, paladin), forests = List(forest))
+    val elf = Creature(1, shieldedPos, hp = 10.0, maxHp = 10.0, speedPerMs = 0.0, UnitKind.Elf)
+    val paladin = Creature(
+      2,
+      shieldedPos,
+      Balance.PaladinMaxHp,
+      Balance.PaladinMaxHp,
+      speedPerMs = 0.0,
+      UnitKind.Paladin
+    )
+    val state = withResources().copy(creatures = List(elf, paladin), buildings = List(forest))
     val result = CombatEngine.tick(state, deltaMs = 1000.0)
     // Balance.PaladinAuraDamageReductionPerSec fully cancels Balance.AuraDamagePerSec (both 2.0)
-    val byId = result.state.enemies.map(e => e.id -> e).toMap
+    val byId = result.state.creatures.map(c => c.id -> c).toMap
     assertEquals(byId(1).hp, elf.hp)
   }
 
   test("an unshielded unit still takes full forest aura damage") {
-    val forest = Forest(100, col = 5, row = 5, elfSpawnInMs = Balance.ElfSpawnIntervalMs)
+    val forest = Building(100, col = 5, row = 5, BuildingKind.Forest, Balance.ElfSpawnIntervalMs)
     val elf =
-      Enemy(1, GridConfig.cellCenter(6, 5), hp = 10.0, maxHp = 10.0, speedPerMs = 0.0, UnitKind.Elf)
-    val state = MazeState.initial.copy(enemies = List(elf), forests = List(forest))
+      Creature(1, GridConfig.cellCenter(6, 5), hp = 10.0, maxHp = 10.0, speedPerMs = 0.0, UnitKind.Elf)
+    val state = withResources().copy(creatures = List(elf), buildings = List(forest))
     val result = CombatEngine.tick(state, deltaMs = 1000.0)
-    assertEquals(result.state.enemies.head.hp, elf.hp - Balance.AuraDamagePerSec)
+    assertEquals(result.state.creatures.head.hp, elf.hp - Balance.AuraDamagePerSec)
   }

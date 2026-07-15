@@ -29,6 +29,17 @@ lazy val js = project
     libraryDependencies += "org.scala-js" %%% "scalajs-dom" % "2.8.0",
   )
 
+// ── Sim: headless JVM AI-vs-AI battle runner (no Node/browser, no rendering) ────
+
+lazy val sim = project
+  .in(file("sim"))
+  .dependsOn(coreJVM)
+  .settings(
+    name := "towerdefense-sim",
+    libraryDependencies += "org.scalameta" %%% "munit" % "1.0.0" % Test,
+    testFrameworks += new TestFramework("munit.Framework"),
+  )
+
 // ── Dev server task (attached to js project) ──────────────────────────────
 
 lazy val devServer = taskKey[Unit]("Start live-reload dev server on :8082 (background)")

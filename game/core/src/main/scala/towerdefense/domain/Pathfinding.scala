@@ -18,23 +18,36 @@ object Pathfinding:
   def isReachable(start: (Int, Int), goal: (Int, Int), blocked: Set[(Int, Int)]): Boolean =
     shortestPath(start, goal, blocked).isDefined
 
+  // Tracks one predecessor per visited cell instead of growing a full path per queue
+  // entry — reconstructing via predecessors at the end is O(path length), whereas
+  // appending to a List with `:+` at every step made each call O(cells visited squared).
   private def bfs(
       start: (Int, Int),
       goal: (Int, Int),
       blocked: Set[(Int, Int)]
   ): Option[List[(Int, Int)]] =
     val visited = mutable.Set(start)
-    val queue = mutable.Queue((start, List(start)))
-    var found: Option[List[(Int, Int)]] = None
-    while queue.nonEmpty && found.isEmpty do
-      val (cell, path) = queue.dequeue()
+    val queue = mutable.Queue(start)
+    val predecessor = mutable.Map.empty[(Int, Int), (Int, Int)]
+    var found = false
+    while queue.nonEmpty && !found do
+      val cell = queue.dequeue()
       neighbors(cell).filterNot(visited).foreach { next =>
         visited += next
-        val nextPath = path :+ next
-        if next == goal then found = Some(nextPath)
-        else if !blocked(next) then queue.enqueue((next, nextPath))
+        predecessor(next) = cell
+        if next == goal then found = true
+        else if !blocked(next) then queue.enqueue(next)
       }
-    found
+    if !found then None else Some(reconstructPath(start, goal, predecessor))
+
+  private def reconstructPath(
+      start: (Int, Int),
+      goal: (Int, Int),
+      predecessor: mutable.Map[(Int, Int), (Int, Int)]
+  ): List[(Int, Int)] =
+    // Walk backwards from goal to start following predecessors, then reverse once —
+    // O(path length) total, instead of appending to a List (O(n) each) along the way.
+    Iterator.iterate(goal)(predecessor).takeWhile(_ != start).toList.reverse.prepended(start)
 
   def neighbors(cell: (Int, Int)): List[(Int, Int)] =
     val (col, row) = cell

@@ -1,9 +1,11 @@
-.PHONY: dev test test-js build clean help
+.PHONY: dev test test-js sim sim-tune build clean help
 
 help:
 	@echo "make dev      — compile + watch + dev server on :8082"
 	@echo "make test     — run unit tests on the JVM (fast — for iterating on AI strategies)"
 	@echo "make test-js  — run unit tests under Node.js (parity check for the browser build)"
+	@echo "make sim      — headless AI-vs-AI battles: make sim ARGS='linear balanced 200'"
+	@echo "make sim-tune — sweep CompositeStrategy weights: make sim-tune ARGS='linear 50 0.25'"
 	@echo "make build    — production JS build → public/"
 	@echo "make clean    — remove build artifacts"
 
@@ -11,10 +13,16 @@ dev:
 	sbt --batch dev
 
 test:
-	sbt --batch "coreJVM/test"
+	sbt --batch "coreJVM/test" "sim/test"
 
 test-js:
 	sbt --batch "coreJS/test"
+
+sim:
+	sbt --batch "sim/runMain towerdefense.sim.run $(ARGS)"
+
+sim-tune:
+	sbt --batch "sim/runMain towerdefense.sim.tune $(ARGS)"
 
 build:
 	sbt --batch "js/fullLinkJS"
