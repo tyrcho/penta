@@ -33,7 +33,18 @@ object AiStrategy:
     "counter-only" -> CompositeStrategy(Weights(resource = 0.0, counter = 1.0, maze = 0.0)),
     "resource-only" -> CompositeStrategy(Weights(resource = 1.0, counter = 0.0, maze = 0.0)),
     "balanced" -> CompositeStrategy(Weights(resource = 1.0, counter = 1.0, maze = 1.0)),
-    "maze-only" -> CompositeStrategy(Weights(resource = 0.0, counter = 0.0, maze = 1.0))
+    "maze-only" -> CompositeStrategy(Weights(resource = 0.0, counter = 0.0, maze = 1.0)),
+    // Builds a fixed MazeTemplate.comb/combVertical layout instead of scoring candidates —
+    // see MazeTemplate's doc for why a comb (not a spiral) is what actually forces a long
+    // path on this grid, and TemplateStrategy's doc for two `make sim`-caught bugs (build
+    // order, building-kind choice) that made early versions lose 0-40 to maze-only despite
+    // a structurally-correct, approval-tested shape. Spot-checked post-fix (30 matches
+    // each, not the full 15-20-per-pairing round robin the rest of this ladder was
+    // measured with): comb beats linear 30-0 and stalemates maze-only 30-30 — roughly
+    // maze-only's tier, not "strongest," so appended after it rather than reordering
+    // entries whose position IS from the full round robin.
+    "comb" -> TemplateStrategy(MazeTemplate.comb),
+    "comb-vertical" -> TemplateStrategy(MazeTemplate.combVertical)
   )
 
   val all: Map[String, AiStrategy] = ladder.toMap

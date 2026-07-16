@@ -38,3 +38,9 @@ If the server isn't running (no response on the port in `.mcp.json`), restart it
 ```
 metals-mcp --workspace . --client claude
 ```
+
+## sbt not on PATH?
+
+In a network-restricted sandbox (no `sbt` binary, `repo.scala-sbt.org`/`github.com`
+downloads blocked), see `docs/setup.md` for how to get `sbt "coreJVM/test"` running
+via a bare `sbt-launch.jar` fetched from Maven Central.

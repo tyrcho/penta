@@ -85,11 +85,13 @@ class AiStrategyTest extends munit.FunSuite:
   // (dangerScore): linear loses to every other tier; counter-only and resource-only both
   // lose outright to maze-only (which routes the enemy path past Forests to kill units,
   // not just delay them); maze-only only stalemates balanced. The browser's difficulty
-  // selector and auto-advance-on-win both walk this exact sequence.
+  // selector and auto-advance-on-win both walk this exact sequence. "comb"/"comb-vertical"
+  // are appended after, not slotted in by strength — they haven't been through the
+  // round-robin sim yet, so where they'd actually land in this order is unmeasured.
   test("the ladder is ordered weakest to strongest by measured win rate, linear first") {
     assertEquals(
       AiStrategy.ladder.map(_._1),
-      Seq("linear", "counter-only", "resource-only", "balanced", "maze-only")
+      Seq("linear", "counter-only", "resource-only", "balanced", "maze-only", "comb", "comb-vertical")
     )
   }
 
