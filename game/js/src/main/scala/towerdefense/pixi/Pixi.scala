@@ -68,9 +68,10 @@ object Assets extends js.Object:
 
 @js.native
 @JSGlobal("PIXI.Sprite")
-class Sprite(texture: Texture) extends Container:
+class Sprite(initialTexture: Texture) extends Container:
   var anchor: AnchorObj = js.native
   var tint: Int = js.native
+  var texture: Texture = js.native
 
 @js.native
 trait AnchorObj extends js.Object:

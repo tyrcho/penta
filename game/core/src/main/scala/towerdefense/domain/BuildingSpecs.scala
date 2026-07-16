@@ -2,20 +2,38 @@ package towerdefense.domain
 
 // What a building costs, what it produces (per second), and what unit it spawns (and
 // how often) — the data-driven replacement for the old per-faction case classes. Combat
-// abilities (Forest's aura, Watchtower's ranged damage) are NOT modeled here — they stay
-// as kind-based special cases in CombatEngine, reading Balance's constants directly.
+// abilities (Forest/Jungle's aura, Watchtower's ranged damage, Wolf's speed buff) are NOT
+// modeled here — they stay as kind-based special cases in CombatEngine, reading Balance's
+// constants directly.
+// buildableDirectly: false for Forest/Jungle — Nature's upgrade chain (Bosquet.md/
+// Foret.md/Jungle.md) only lets Grove be placed from scratch; Forest and Jungle are
+// reached by upgrading an existing Grove/Forest via Placement.tryUpgradeBuilding, using
+// `cost` here as the upgrade's cost, not a from-scratch price.
 case class BuildingSpec(
     cost: Map[Resource, Double],
     produces: Map[Resource, Double], // rate per second
-    spawns: Option[(UnitKind, Double)] // (unit kind, interval ms) — None only for Watchtower
+    spawns: Option[(UnitKind, Double)], // (unit kind, interval ms) — None only for Watchtower
+    buildableDirectly: Boolean = true
 )
 
 object BuildingSpecs:
   val all: Map[BuildingKind, BuildingSpec] = Map(
-    BuildingKind.Forest -> BuildingSpec(
-      cost = Map(Resource.Wood -> Balance.ForestCostWood),
-      produces = Map(Resource.Wood -> Balance.WoodPerSecPerForest),
+    BuildingKind.Grove -> BuildingSpec(
+      cost = Map(Resource.Wood -> Balance.GroveCostWood),
+      produces = Map(Resource.Wood -> Balance.WoodPerSecPerGrove),
       spawns = Some(UnitKind.Elf -> Balance.ElfSpawnIntervalMs)
+    ),
+    BuildingKind.Forest -> BuildingSpec(
+      cost = Map(Resource.Wood -> Balance.ForestUpgradeCostWood),
+      produces = Map(Resource.Wood -> Balance.WoodPerSecPerForest),
+      spawns = Some(UnitKind.Elf -> Balance.ElfSpawnIntervalMs),
+      buildableDirectly = false
+    ),
+    BuildingKind.Jungle -> BuildingSpec(
+      cost = Map(Resource.Wood -> Balance.JungleUpgradeCostWood),
+      produces = Map(Resource.Wood -> Balance.WoodPerSecPerJungle),
+      spawns = Some(UnitKind.Wolf -> Balance.WolfSpawnIntervalMs),
+      buildableDirectly = false
     ),
     BuildingKind.Cave -> BuildingSpec(
       cost = Map(Resource.Wood -> Balance.CaveCostWood, Resource.Fire -> Balance.CaveCostFire),
@@ -43,4 +61,10 @@ object BuildingSpecs:
       produces = Map(Resource.Light -> Balance.LightPerSecPerWatchtower),
       spawns = None
     )
+  )
+
+  // Grove -> Forest -> Jungle. Absent for every other kind (no upgrade path).
+  val upgradesTo: Map[BuildingKind, BuildingKind] = Map(
+    BuildingKind.Grove -> BuildingKind.Forest,
+    BuildingKind.Forest -> BuildingKind.Jungle
   )

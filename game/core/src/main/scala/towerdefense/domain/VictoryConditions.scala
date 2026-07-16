@@ -27,7 +27,13 @@ object VictoryConditions:
     forestCount(state) >= forestTarget(opponent) ||
       state.resourcesPlundered >= plunderTarget(opponent)
 
-  private def forestCount(state: MazeState): Int = state.buildings.count(_.kind == BuildingKind.Forest)
+  // Only Forest and Jungle count as "real forests" — Bosquet.md's own asset is a bush,
+  // not a tree, so a Grove hasn't grown into a forest yet and shouldn't count toward
+  // "the unstoppable expansion" even though it's Nature's own upgrade-chain kin.
+  private val realForestKinds: Set[BuildingKind] = Set(BuildingKind.Forest, BuildingKind.Jungle)
+
+  private def forestCount(state: MazeState): Int =
+    state.buildings.count(b => realForestKinds.contains(b.kind))
 
   // Exposed (not just private) so the UI can display the live target, which moves
   // with the opponent's own count — see the module doc above.

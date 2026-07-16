@@ -1,0 +1,9 @@
+Elf walk-cycle frames (assets/elf/{front,back,left,right}-walk-NN.png) are cropped from
+CraftPix.net's Free Base 4-Direction Male Character Pixel Art pack
+(https://craftpix.net/freebies/free-base-4-direction-male-character-pixel-art/),
+the "Unarmed_Walk_without_shadow.png" sprite sheet (6 frames x 4 directions).
+
+License: https://craftpix.net/file-licenses/ (Freebie License)
+No attribution required; modification and use in shipped commercial/hobby
+projects is permitted. Redistribution of the raw asset files themselves is
+not permitted.

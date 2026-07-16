@@ -24,13 +24,13 @@ object CombatEngine:
   // Re-pathfinds every creature from its current cell to the goal each tick, avoiding
   // building cells — no cached path to invalidate when a new building changes the maze.
   // Plunder varies by kind — see CreatureSpecs.all(_).plunder: Elf takes wood only,
-  // Goblin/Minotaur take both (Minotaur much more), and the Paladin takes neither
-  // (Paladin.md gives it no plunder ability — its value is the shield it provides in
-  // applyDamageSources).
+  // Goblin/Minotaur take both (Minotaur much more), and the Paladin/Wolf take neither
+  // (Paladin.md/Loup.md give them no plunder ability — their value is the shield/speed
+  // buff they provide in applyDamageSources/effectiveSpeedPerMs).
   private def moveCreatures(state: MazeState, deltaMs: Double): (MazeState, Map[Resource, Double]) =
     val blocked = state.buildingCells
     val (remaining, arrived) =
-      state.creatures.map(stepCreature(_, blocked, deltaMs)).partitionMap(identity)
+      state.creatures.map(stepCreature(_, state.creatures, blocked, deltaMs)).partitionMap(identity)
     val plundered = arrived
       .flatMap(c => CreatureSpecs.all(c.kind).plunder)
       .groupMapReduce(_._1)(_._2)(_ + _)
@@ -47,6 +47,7 @@ object CombatEngine:
 
   private def stepCreature(
       creature: Creature,
+      allCreatures: List[Creature],
       blocked: Set[(Int, Int)],
       deltaMs: Double
   ): Either[Creature, Creature] =
@@ -55,32 +56,57 @@ object CombatEngine:
     else
       Pathfinding.shortestPath(currentCell, GridConfig.goalCell, blocked) match
         case None => Left(creature) // no route right now (shouldn't happen, placement guards this)
-        case Some(path) => Left(advanceTowards(creature, path, deltaMs))
+        case Some(path) => Left(advanceTowards(creature, allCreatures, path, deltaMs))
 
-  private def advanceTowards(creature: Creature, path: List[(Int, Int)], deltaMs: Double): Creature =
+  private def advanceTowards(
+      creature: Creature,
+      allCreatures: List[Creature],
+      path: List[(Int, Int)],
+      deltaMs: Double
+  ): Creature =
     val nextCell = if path.size > 1 then path(1) else path.head
     val target = GridConfig.cellCenter(nextCell._1, nextCell._2)
-    creature.copy(pos = moveToward(creature.pos, target, creature.speedPerMs * deltaMs))
+    val speed = effectiveSpeedPerMs(creature, allCreatures)
+    creature.copy(pos = moveToward(creature.pos, target, speed * deltaMs))
+
+  // Loup.md: "augmente la vitesse de deplacement des unites a 2 cases de 50%" — any
+  // Wolf within range multiplies another creature's speed (not its own; the boost is for
+  // *other* units, Wolf's own speed is already baked into its CreatureSpec). Multiple
+  // nearby Wolves don't stack — presence of at least one is enough, mirroring how
+  // Paladin's shield is binary rather than additive per source.
+  private def effectiveSpeedPerMs(creature: Creature, allCreatures: List[Creature]): Double =
+    val cell = GridConfig.cellOf(creature.pos)
+    val boosted = allCreatures.exists(other =>
+      other.id != creature.id && other.kind == UnitKind.Wolf &&
+        chebyshevDistance(cell, GridConfig.cellOf(other.pos)) <= Balance.WolfSpeedAuraRangeCells
+    )
+    if boosted then creature.speedPerMs * Balance.WolfSpeedAuraMultiplier else creature.speedPerMs
 
   private def moveToward(pos: Vec2, target: Vec2, maxDist: Double): Vec2 =
     val delta = target - pos
     if delta.length <= maxDist then target else pos + delta.normalized * maxDist
 
+  // Buildings with the Ent aura — Foret.md introduces it, and Jungle (an upgrade of
+  // Foret) inherits it since "Amelioration" is cumulative; Grove/Bosquet, the base tier,
+  // doesn't have it yet. domain-visible (not private) since CompositeStrategy's maze
+  // scoring needs the same set to value routing paths past these buildings.
+  private[domain] val auraBuildingKinds: Set[BuildingKind] = Set(BuildingKind.Forest, BuildingKind.Jungle)
+
   // Two independent damage sources, combined before Paladin shielding is applied once to
-  // the total (not once per source) — Forests deal passive damage-over-time to every
-  // creature standing on an adjacent cell (Forest.md: "attaquent les unites qui passent
-  // sur les cases adjacentes"), while each Watchtower picks a single nearest target
-  // within its range and hits only that one (Tour de guet.md: "Inflige 10 degats chaque
-  // seconde a une cible"). Caves don't fight back — Cave.md gives them no such ability.
-  // A Paladin shields any creature adjacent to (or sharing a cell with) it from some of
-  // that damage (Paladin.md: "protege les unites adjacentes de 2 degats") — it's on the
-  // receiving maze's side of the fight, same as the units it protects. This combat math
-  // is intentionally kept as kind-based special cases, not folded into BuildingSpec/
+  // the total (not once per source) — Forest/Jungle deal passive damage-over-time to
+  // every creature standing on an adjacent cell (Foret.md: "attaquent les unites qui
+  // passent sur les cases adjacentes"), while each Watchtower picks a single nearest
+  // target within its range and hits only that one (Tour de guet.md: "Inflige 10 degats
+  // chaque seconde a une cible"). Caves don't fight back — Cave.md gives them no such
+  // ability. A Paladin shields any creature adjacent to (or sharing a cell with) it from
+  // some of that damage (Paladin.md: "protege les unites adjacentes de 2 degats") — it's
+  // on the receiving maze's side of the fight, same as the units it protects. This combat
+  // math is intentionally kept as kind-based special cases, not folded into BuildingSpec/
   // CreatureSpec (see the refactor's confirmed scope).
   private def applyDamageSources(state: MazeState, deltaMs: Double): MazeState =
     val forestDamagePerHit = Balance.AuraDamagePerSec * deltaMs / 1000.0
     val watchtowerDamagePerHit = Balance.WatchtowerDamagePerSec * deltaMs / 1000.0
-    val forests = state.buildings.filter(_.kind == BuildingKind.Forest)
+    val forests = state.buildings.filter(b => auraBuildingKinds.contains(b.kind))
     val watchtowers = state.buildings.filter(_.kind == BuildingKind.Watchtower)
     val fromForests = forests.foldLeft(Map.empty[Long, Double])((acc, f) =>
       accumulateAuraHits(f, state.creatures, forestDamagePerHit, acc)

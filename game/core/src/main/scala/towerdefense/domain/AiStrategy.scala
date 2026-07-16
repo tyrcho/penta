@@ -16,6 +16,12 @@ trait AiStrategy:
   // itself has none either (see Demolition's doc).
   def maybeDestroy(state: MazeState, opponent: MazeState): MazeState = state
 
+  // Default no-op: every strategy shipped so far only builds new cells, never upgrades
+  // an existing Grove/Forest into the next tier (see BuildingSpecs.upgradesTo). Driven
+  // the same way as maybeBuild by BattleEngine.tick, sharing its cooldown (upgrading
+  // compounds the economy just like building does, so it gets paced the same way).
+  def maybeUpgrade(state: MazeState, opponent: MazeState): MazeState = state
+
 object AiStrategy:
   // Ordered weakest to strongest by measured head-to-head win rate (sim/run round-robin,
   // 15-20 matches per pairing). Re-measured after CompositeStrategy's maze component

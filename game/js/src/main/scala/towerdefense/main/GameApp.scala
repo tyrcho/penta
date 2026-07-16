@@ -36,34 +36,46 @@ private class GameSpeed:
 // a single generic sync function replaces what used to be 5 near-identical ones.
 private class MazeSprites:
   val creatures = mutable.Map.empty[Long, Container]
-  // Which of the goblin's 4 direction frame sets is currently applied — avoids
-  // resetting the walk-cycle animation every tick, only when the facing changes.
-  val goblinFacing = mutable.Map.empty[Long, String]
+  // Which of a directional creature's (Goblin, Elf) 4 frame sets is currently applied —
+  // avoids resetting the walk-cycle animation every tick, only when the facing changes.
+  val directionalFacing = mutable.Map.empty[Long, String]
   val buildings = mutable.Map.empty[Long, Sprite]
   // Only populated for kinds with a spawn timer (BuildingSpecs.all(_).spawns.isDefined) —
   // Watchtower is naturally absent, no special-casing needed.
   val buildingTimers = mutable.Map.empty[Long, Double]
+  // Which BuildingKind each sprite is currently textured/sized/tinted for — Placement's
+  // upgrade path keeps the same id/cell but changes kind, so this is how syncBuildings
+  // notices a Grove just became a Forest and needs to re-skin the existing sprite,
+  // instead of only ever skinning it once at creation (see syncBuildings).
+  val buildingKinds = mutable.Map.empty[Long, BuildingKind]
 
 private object AssetPaths:
+  // One distinct icon per Nature tier — see Bosquet.md/Foret.md/Jungle.md, each embeds
+  // its own reference image (see LICENSE-grove/forest/jungle.txt for sourcing).
+  val Grove = "./assets/grove.png"
   val Forest = "./assets/forest.png"
+  val Jungle = "./assets/jungle.png"
   val CaveRock = "./assets/cave.png"
   val LabyrintheIcon = "./assets/labyrinthe.png"
   val EgliseIcon = "./assets/eglise.png"
   val WatchtowerIcon = "./assets/watchtower.png"
-  val Elf = "./assets/enemy.png"
   val Minotaur = "./assets/minotaur.png"
   val Paladin = "./assets/paladin.png"
   val Flames =
     List("./assets/flame1.png", "./assets/flame2.png", "./assets/flame3.png", "./assets/flame4.png")
-  val GoblinFrameCount = 10
-  val GoblinDirections = List("front", "back", "left", "right")
-  val GoblinFrames: Map[String, List[String]] =
-    GoblinDirections
-      .map(d => d -> (0 until GoblinFrameCount).map(i => f"./assets/goblin/$d-walk-$i%02d.png").toList)
-      .toMap
+  val Wolf = List("./assets/wolf/run-0.png", "./assets/wolf/run-1.png", "./assets/wolf/run-2.png")
+  private val Directions = List("front", "back", "left", "right")
+  // 4-direction walk-cycle frame sets, keyed by direction — shared shape for any
+  // creature animated this way (see newDirectionalFrames/syncCreatures' facing logic).
+  private def directionalFrames(folder: String, frameCount: Int): Map[String, List[String]] =
+    Directions.map(d => d -> (0 until frameCount).map(i => f"./assets/$folder/$d-walk-$i%02d.png").toList).toMap
+  val GoblinFrames: Map[String, List[String]] = directionalFrames("goblin", frameCount = 10)
+  // See LICENSE-elf.txt: cropped from CraftPix's Free Base 4-Direction Male Character
+  // Pixel Art pack's unarmed walk-cycle sheet (6 frames per direction).
+  val ElfFrames: Map[String, List[String]] = directionalFrames("elf", frameCount = 6)
   val All: List[String] =
-    List(Forest, CaveRock, LabyrintheIcon, EgliseIcon, WatchtowerIcon, Elf, Minotaur, Paladin) ++
-      GoblinFrames.values.flatten ++ Flames
+    List(Grove, Forest, Jungle, CaveRock, LabyrintheIcon, EgliseIcon, WatchtowerIcon, Minotaur, Paladin) ++
+      GoblinFrames.values.flatten ++ ElfFrames.values.flatten ++ Flames ++ Wolf
 
 private val CaveTint = 0xff7a45 // warm/fiery recolor for an otherwise cool-gray rock tile
 
@@ -72,8 +84,12 @@ private val CaveTint = 0xff7a45 // warm/fiery recolor for an otherwise cool-gray
 private case class BuildingVisual(texturePath: String, renderSize: Double, tint: Option[Int])
 
 private object BuildingVisuals:
+  // A distinct icon per Nature tier (see AssetPaths.Grove/Forest/Jungle), each matching
+  // the reference image embedded in its own vault doc — see LICENSE-grove/forest/jungle.txt.
   val all: Map[BuildingKind, BuildingVisual] = Map(
+    BuildingKind.Grove -> BuildingVisual(AssetPaths.Grove, GridConfig.cellSize * 0.75, None),
     BuildingKind.Forest -> BuildingVisual(AssetPaths.Forest, GridConfig.cellSize * 0.9, None),
+    BuildingKind.Jungle -> BuildingVisual(AssetPaths.Jungle, GridConfig.cellSize * 1.15, None),
     BuildingKind.Cave -> BuildingVisual(AssetPaths.CaveRock, GridConfig.cellSize * 0.9, Some(CaveTint)),
     BuildingKind.Labyrinth -> BuildingVisual(AssetPaths.LabyrintheIcon, GridConfig.cellSize * 0.9, None),
     BuildingKind.Church -> BuildingVisual(AssetPaths.EgliseIcon, GridConfig.cellSize * 0.9, None),
@@ -82,13 +98,22 @@ private object BuildingVisuals:
 
 // DOM id suffix per kind (index.html's #build-<slug> buttons and #<prefix>-<slug>
 // stats) — separate from BuildingKind.toString since Labyrinth's French asset/DOM naming
-// ("labyrinthe") diverges from the enum case spelling.
+// ("labyrinthe") diverges from the enum case spelling. Forest/Jungle have no build button
+// (see buildableKinds — they're upgrade-only) but still need a slug for consistency.
 private def domSlug(kind: BuildingKind): String = kind match
+  case BuildingKind.Grove      => "grove"
   case BuildingKind.Forest     => "forest"
+  case BuildingKind.Jungle     => "jungle"
   case BuildingKind.Cave       => "cave"
   case BuildingKind.Labyrinth  => "labyrinthe"
   case BuildingKind.Church     => "eglise"
   case BuildingKind.Watchtower => "watchtower"
+
+// Only these can be placed fresh via a toolbar button — Forest/Jungle are reached only
+// by upgrading an existing Grove/Forest (see Placement.tryUpgradeBuilding), so they get
+// no build-<slug> button at all (see wireBuildingButtons/updateBuildButtonsAffordability).
+private def buildableKinds: List[BuildingKind] =
+  BuildingKind.values.toList.filter(BuildingSpecs.all(_).buildableDirectly)
 
 private def resourceName(res: Resource): String = res match
   case Resource.Wood    => "wood"
@@ -145,12 +170,15 @@ def onReady(app: Application, textures: js.Dictionary[Texture]): Unit =
   aiWorld.addChild(drawGrid())
 
   val flameFrames = js.Array(AssetPaths.Flames.map(textures(_))*)
+  val wolfFrames = js.Array(AssetPaths.Wolf.map(textures(_))*)
   val goblinFrames: Map[String, js.Array[Texture]] =
     AssetPaths.GoblinFrames.map { case (dir, paths) => dir -> js.Array(paths.map(textures(_))*) }
+  val elfFrames: Map[String, js.Array[Texture]] =
+    AssetPaths.ElfFrames.map { case (dir, paths) => dir -> js.Array(paths.map(textures(_))*) }
   val (initialBattle, initialAiLevelIndex) = Persistence.load().getOrElse((BattleState.initial, 0))
   var battle = initialBattle
   var aiLevelIndex = initialAiLevelIndex
-  var selectedBuilding: BuildingKind = BuildingKind.Forest
+  var selectedBuilding: BuildingKind = BuildingKind.Grove
   var hovered: Option[HoverTarget] = None
   // Set by clicking a building (not just hovering it) — takes priority over `hovered`
   // for the tooltip/destroy button, and its position is set once at click time and never
@@ -184,6 +212,7 @@ def onReady(app: Application, textures: js.Dictionary[Texture]): Unit =
   wireFullscreenButton()
   wireAiLevelSelect(aiLevelIndex, index => aiLevelIndex = index)
   wireDestroyButton((col, row) => battle = destroyPlayerBuilding(battle, col, row))
+  wireUpgradeButton((col, row) => battle = upgradePlayerBuilding(battle, col, row))
 
   app.stage.eventMode = "static"
   app.stage.on(
@@ -232,6 +261,8 @@ def onReady(app: Application, textures: js.Dictionary[Texture]): Unit =
       playerSprites,
       textures,
       goblinFrames,
+      elfFrames,
+      wolfFrames,
       flameFrames,
       isPlayer = true,
       h => hovered = h
@@ -242,6 +273,8 @@ def onReady(app: Application, textures: js.Dictionary[Texture]): Unit =
       aiSprites,
       textures,
       goblinFrames,
+      elfFrames,
+      wolfFrames,
       flameFrames,
       isPlayer = false,
       h => hovered = h
@@ -288,10 +321,10 @@ private def cellColor(col: Int, row: Int): Int =
 // ── Input (only the left/player maze is tappable; both buildings are available —
 // symmetric game, see CLAUDE.md — so the player picks one via the toolbar buttons) ──
 
-private val ForestTooltip =
-  s"Forêt — cost ${Balance.ForestCostWood.toInt} wood. " +
-    s"+${formatDecimal(Balance.WoodPerSecPerForest)} wood/s, ${Balance.AuraDamagePerSec.toInt} dmg/s to adjacent enemies, " +
-    s"spawns an Elf every ${(Balance.ElfSpawnIntervalMs / 1000).toInt}s"
+private val GroveTooltip =
+  s"Bosquet — cost ${Balance.GroveCostWood.toInt} wood. " +
+    s"+${formatDecimal(Balance.WoodPerSecPerGrove)} wood/s, spawns an Elf every " +
+    s"${(Balance.ElfSpawnIntervalMs / 1000).toInt}s. Upgrades into a Forêt, then a Jungle."
 
 private val CaveTooltip =
   s"Cave — cost ${Balance.CaveCostWood.toInt} wood + ${Balance.CaveCostFire.toInt} fire. " +
@@ -313,7 +346,7 @@ private val WatchtowerTooltip =
     s"${Balance.WatchtowerDamagePerSec.toInt} dmg/s to the nearest enemy within ${Balance.WatchtowerRangeCells} cells"
 
 private val BuildingTooltips: Map[BuildingKind, String] = Map(
-  BuildingKind.Forest -> ForestTooltip,
+  BuildingKind.Grove -> GroveTooltip,
   BuildingKind.Cave -> CaveTooltip,
   BuildingKind.Labyrinth -> LabyrintheTooltip,
   BuildingKind.Church -> EgliseTooltip,
@@ -328,9 +361,9 @@ private def wireBuildingButtons(
     canAfford: BuildingKind => Boolean,
     setHoveringButton: Boolean => Unit
 ): Unit =
-  val buttons = BuildingKind.values.map(kind => kind -> document.getElementById(s"build-${domSlug(kind)}")).toMap
+  val buttons = buildableKinds.map(kind => kind -> document.getElementById(s"build-${domSlug(kind)}")).toMap
   val allButtons = buttons.values.toList
-  BuildingKind.values.foreach { kind =>
+  buildableKinds.foreach { kind =>
     wireButtonTooltip(buttons(kind), BuildingTooltips(kind), setHoveringButton)
     wireBuildClick(buttons(kind), kind, allButtons, canAfford, onSelect)
   }
@@ -353,7 +386,7 @@ private def canAfford(maze: MazeState, kind: BuildingKind): Boolean =
 // Reflects afford-ability in real time, since the player's resources move every tick
 // even without any click — see wireBuildClick for the matching input gate.
 private def updateBuildButtonsAffordability(maze: MazeState): Unit =
-  BuildingKind.values.foreach(kind => updateButtonDisabled(s"build-${domSlug(kind)}", canAfford(maze, kind)))
+  buildableKinds.foreach(kind => updateButtonDisabled(s"build-${domSlug(kind)}", canAfford(maze, kind)))
 
 private def updateButtonDisabled(id: String, affordable: Boolean): Unit =
   val btn = document.getElementById(id)
@@ -395,6 +428,8 @@ private def showButtonTooltip(text: String): Unit =
   document.getElementById("tooltip-text").textContent = text
   document.getElementById("tooltip").classList.add("visible")
   document.getElementById("tooltip-destroy").classList.remove("visible")
+  document.getElementById("tooltip-upgrade").classList.remove("visible")
+  document.getElementById("tooltip-upgrade-preview").classList.remove("visible")
 
 private def selectBuilding(
     kind: BuildingKind,
@@ -494,9 +529,10 @@ private def fullscreenElement(): Option[dom.Element] =
 private def clearSprites(world: Container, sprites: MazeSprites): Unit =
   (sprites.creatures.values ++ sprites.buildings.values).foreach(world.removeChild)
   sprites.creatures.clear()
-  sprites.goblinFacing.clear()
+  sprites.directionalFacing.clear()
   sprites.buildings.clear()
   sprites.buildingTimers.clear()
+  sprites.buildingKinds.clear()
 
 // The player's maze occupies local x/y in [0, GridConfig.width)/[0, GridConfig.height) —
 // see currentLayout/computeViewTransform. None outside that (including clicks on the
@@ -556,12 +592,26 @@ private def syncMaze(
     sprites: MazeSprites,
     textures: js.Dictionary[Texture],
     goblinFrames: Map[String, js.Array[Texture]],
+    elfFrames: Map[String, js.Array[Texture]],
+    wolfFrames: js.Array[Texture],
     flames: js.Array[Texture],
     isPlayer: Boolean,
     setHovered: Option[HoverTarget] => Unit
 ): Unit =
   val blocked = maze.buildingCells
-  syncCreatures(world, maze, sprites, textures, goblinFrames, flames, blocked, isPlayer, setHovered)
+  syncCreatures(
+    world,
+    maze,
+    sprites,
+    textures,
+    goblinFrames,
+    elfFrames,
+    wolfFrames,
+    flames,
+    blocked,
+    isPlayer,
+    setHovered
+  )
   syncBuildings(world, maze, sprites, textures, flames, isPlayer, setHovered)
 
 private def syncCreatures(
@@ -570,6 +620,8 @@ private def syncCreatures(
     sprites: MazeSprites,
     textures: js.Dictionary[Texture],
     goblinFrames: Map[String, js.Array[Texture]],
+    elfFrames: Map[String, js.Array[Texture]],
+    wolfFrames: js.Array[Texture],
     flames: js.Array[Texture],
     blocked: Set[(Int, Int)],
     isPlayer: Boolean,
@@ -577,7 +629,7 @@ private def syncCreatures(
 ): Unit =
   val liveIds = maze.creatures.map(_.id).toSet
   removeStaleWithEffect(world, sprites.creatures, liveIds, flames)
-  sprites.goblinFacing.filterInPlace((id, _) => liveIds.contains(id))
+  sprites.directionalFacing.filterInPlace((id, _) => liveIds.contains(id))
   maze.creatures.foreach { c =>
     val g = sprites.creatures.getOrElseUpdate(
       c.id,
@@ -586,6 +638,8 @@ private def syncCreatures(
         c.kind,
         textures,
         goblinFrames,
+        elfFrames,
+        wolfFrames,
         HoverTarget(isPlayer, HoverKind.EnemyH, c.id),
         setHovered
       )
@@ -593,15 +647,31 @@ private def syncCreatures(
     setPos(g, c.pos)
     val angle = creatureFacingAngle(c, blocked)
     c.kind match
-      case UnitKind.Elf | UnitKind.Minotaur | UnitKind.Paladin => angle.foreach(a => g.rotation = a)
+      case UnitKind.Minotaur | UnitKind.Paladin | UnitKind.Wolf =>
+        angle.foreach(a => g.rotation = a)
       case UnitKind.Goblin =>
-        angle.map(facingDirection).foreach { dir =>
-          if !sprites.goblinFacing.get(c.id).contains(dir) then
-            sprites.goblinFacing(c.id) = dir
-            val anim = g.asInstanceOf[AnimatedSprite]
-            anim.textures = goblinFrames(dir)
-            anim.play()
-        }
+        applyFacing(sprites, c.id, g, angle, goblinFrames)
+      case UnitKind.Elf =>
+        applyFacing(sprites, c.id, g, angle, elfFrames)
+  }
+
+// Swaps a directional creature's AnimatedSprite to the frame set matching its current
+// facing, only when the facing actually changes — avoids resetting the walk-cycle
+// animation (and the visible stutter that causes) every tick. Shared by Goblin and Elf,
+// which differ only in their frame set (10 vs 6 frames per direction — see AssetPaths).
+private def applyFacing(
+    sprites: MazeSprites,
+    id: Long,
+    g: Container,
+    angle: Option[Double],
+    frames: Map[String, js.Array[Texture]]
+): Unit =
+  angle.map(facingDirection).foreach { dir =>
+    if !sprites.directionalFacing.get(id).contains(dir) then
+      sprites.directionalFacing(id) = dir
+      val anim = g.asInstanceOf[AnimatedSprite]
+      anim.textures = frames(dir)
+      anim.play()
   }
 
 private def newCreatureSprite(
@@ -609,11 +679,15 @@ private def newCreatureSprite(
     kind: UnitKind,
     textures: js.Dictionary[Texture],
     goblinFrames: Map[String, js.Array[Texture]],
+    elfFrames: Map[String, js.Array[Texture]],
+    wolfFrames: js.Array[Texture],
     target: HoverTarget,
     setHovered: Option[HoverTarget] => Unit
 ): Container = kind match
   case UnitKind.Elf =>
-    newHoverSprite(world, textures(AssetPaths.Elf), GridConfig.cellSize * 0.8, target, setHovered)
+    val s = newAnimatedSprite(elfFrames("front"), GridConfig.cellSize * 0.8)
+    wireHover(s, target, setHovered)
+    addTo(world, s)
   case UnitKind.Minotaur =>
     // Heavier raider than the Goblin (Minotaure.md: 50 HP vs 5) — a bigger sprite reflects that.
     newHoverSprite(
@@ -627,6 +701,13 @@ private def newCreatureSprite(
     newHoverSprite(world, textures(AssetPaths.Paladin), GridConfig.cellSize * 1.0, target, setHovered)
   case UnitKind.Goblin =>
     val s = newAnimatedSprite(goblinFrames("front"), GridConfig.cellSize * 0.8)
+    wireHover(s, target, setHovered)
+    addTo(world, s)
+  case UnitKind.Wolf =>
+    // Only one facing/frame set (see AssetPaths.Wolf, cropped from the sprite sheet's
+    // first row) — rotated to face its movement direction, same as the single-icon
+    // Minotaur/Paladin sprites, rather than direction-swapped like the Goblin/Elf's 4 sets.
+    val s = newAnimatedSprite(wolfFrames, GridConfig.cellSize * 1.0)
     wireHover(s, target, setHovered)
     addTo(world, s)
 
@@ -651,21 +732,28 @@ private def syncBuildings(
   val liveIds = maze.buildings.map(_.id).toSet
   removeStaleWithEffect(world, sprites.buildings, liveIds, flames)
   sprites.buildingTimers.filterInPlace((id, _) => liveIds.contains(id))
+  sprites.buildingKinds.filterInPlace((id, _) => liveIds.contains(id))
   maze.buildings.foreach { b =>
     val visual = BuildingVisuals.all(b.kind)
     val g = sprites.buildings.getOrElseUpdate(
-      b.id, {
-        val s = newHoverSprite(
-          world,
-          textures(visual.texturePath),
-          visual.renderSize,
-          HoverTarget(isPlayer, HoverKind.BuildingH(b.kind), b.id),
-          setHovered
-        )
-        visual.tint.foreach(t => s.tint = t)
-        s
-      }
+      b.id,
+      newHoverSprite(
+        world,
+        textures(visual.texturePath),
+        visual.renderSize,
+        HoverTarget(isPlayer, HoverKind.BuildingH(b.kind), b.id),
+        setHovered
+      )
     )
+    // Re-skin an existing sprite whose building just upgraded (same id/cell, new kind) —
+    // getOrElseUpdate above only runs its block for a *new* id, so without this a Grove
+    // sprite would keep Grove's texture/size/tint forever even after becoming a Forest.
+    if !sprites.buildingKinds.get(b.id).contains(b.kind) then
+      sprites.buildingKinds(b.id) = b.kind
+      g.texture = textures(visual.texturePath)
+      g.width = visual.renderSize
+      g.height = visual.renderSize
+      g.tint = visual.tint.getOrElse(0xffffff)
     setPos(g, GridConfig.cellCenter(b.col, b.row))
     if BuildingSpecs.all(b.kind).spawns.isDefined then
       val previousCountdown = sprites.buildingTimers.getOrElse(b.id, b.spawnCountdownMs)
@@ -794,6 +882,8 @@ private def updateTooltip(
 ): Unit =
   val tooltip = document.getElementById("tooltip")
   val destroyBtn = document.getElementById("tooltip-destroy").asInstanceOf[dom.html.Button]
+  val upgradeBtn = document.getElementById("tooltip-upgrade").asInstanceOf[dom.html.Button]
+  val upgradePreview = document.getElementById("tooltip-upgrade-preview")
   target.flatMap(t => hoverText(t, battle).map(text => (t, text))) match
     case Some((target, text)) =>
       document.getElementById("tooltip-text").textContent = text
@@ -806,10 +896,24 @@ private def updateTooltip(
           destroyBtn.setAttribute("data-row", row.toString)
           destroyBtn.classList.add("visible")
         case None => destroyBtn.classList.remove("visible")
+      upgradeInfo(target, maze) match
+        case Some((col, row, label, affordable, preview)) =>
+          upgradeBtn.textContent = label
+          upgradeBtn.setAttribute("data-col", col.toString)
+          upgradeBtn.setAttribute("data-row", row.toString)
+          upgradeBtn.classList.add("visible")
+          if affordable then upgradeBtn.classList.remove("disabled") else upgradeBtn.classList.add("disabled")
+          upgradePreview.textContent = s"→ $preview"
+          upgradePreview.classList.add("visible")
+        case None =>
+          upgradeBtn.classList.remove("visible")
+          upgradePreview.classList.remove("visible")
     case None =>
       if !buttonTooltipActive then
         tooltip.classList.remove("visible")
         destroyBtn.classList.remove("visible")
+        upgradeBtn.classList.remove("visible")
+        upgradePreview.classList.remove("visible")
 
 // Only the player's own buildings are destroyable from the UI (the AI destroying its own
 // is driven by AiStrategy.maybeDestroy instead, not this hover affordance) — see
@@ -821,9 +925,13 @@ private def destroyInfo(target: HoverTarget, maze: MazeState): Option[(Int, Int,
   else
     target.kind match
       case HoverKind.EnemyH => None
-      case HoverKind.BuildingH(kind) =>
+      // b.kind, not the pattern-matched kind: HoverKind.BuildingH's kind is frozen at the
+      // moment the tooltip was opened, but Placement.tryUpgradeBuilding can change a
+      // selected building's kind in place afterward (same id, same cell) — reading the
+      // live building avoids showing a stale cost after an upgrade.
+      case HoverKind.BuildingH(_) =>
         maze.buildings.find(_.id == target.id).map { b =>
-          val cost = BuildingSpecs.all(kind).cost
+          val cost = BuildingSpecs.all(b.kind).cost
           val refundText = cost.toList
             .sortBy(_._1.ordinal)
             .map { case (res, amount) =>
@@ -848,6 +956,56 @@ private def destroyPlayerBuilding(battle: BattleState, col: Int, row: Int): Batt
   if battle.outcome.isDefined then battle
   else Demolition.tryDestroy(battle.player, col, row).map(p => battle.copy(player = p)).getOrElse(battle)
 
+// Only the player's own Grove/Forest can be upgraded from the UI (the AI upgrades via
+// AiStrategy.maybeUpgrade instead) — mirrors destroyInfo's shape/wiring exactly. The
+// affordable flag drives the button's disabled look (see updateTooltip) — Placement.
+// tryUpgradeBuilding already rejects an unaffordable upgrade server-side regardless, this
+// is purely the same visual affordance the build-<slug> buttons get from canAfford. The
+// preview string is the *next* tier's own hover text (see buildingHoverText) computed
+// against a synthetic just-upgraded Building, so players see what they're buying before
+// they click — reusing Placement.upgradeBuilding's own countdown-reset rule
+// (spec.spawns.map(_._2).getOrElse(0.0)) so "next Elf in Xs" previews the real value.
+private def upgradeInfo(target: HoverTarget, maze: MazeState): Option[(Int, Int, String, Boolean, String)] =
+  if !target.isPlayer then None
+  else
+    target.kind match
+      case HoverKind.EnemyH => None
+      // b.kind, not the pattern-matched kind — see destroyInfo's comment on the same issue.
+      case HoverKind.BuildingH(_) =>
+        maze.buildings.find(_.id == target.id).flatMap { b =>
+          BuildingSpecs.upgradesTo.get(b.kind).map { nextKind =>
+            val nextSpec = BuildingSpecs.all(nextKind)
+            val costText = nextSpec.cost.toList
+              .sortBy(_._1.ordinal)
+              .map { case (res, amount) => s"${formatDecimal(amount)} ${resourceName(res)}" }
+              .mkString(", ")
+            val previewCountdown = nextSpec.spawns.map(_._2).getOrElse(0.0)
+            val preview = buildingHoverText(nextKind, b.copy(kind = nextKind, spawnCountdownMs = previewCountdown))
+            (
+              b.col,
+              b.row,
+              s"Upgrade to $nextKind ($costText)",
+              Placement.canAfford(maze.resources, nextSpec.cost),
+              preview
+            )
+          }
+        }
+
+private def wireUpgradeButton(onUpgrade: (Int, Int) => Unit): Unit =
+  val btn = document.getElementById("tooltip-upgrade").asInstanceOf[dom.html.Button]
+  btn.addEventListener(
+    "click",
+    (_: dom.Event) => {
+      val col = btn.getAttribute("data-col")
+      val row = btn.getAttribute("data-row")
+      if col != null && row != null && !btn.classList.contains("disabled") then onUpgrade(col.toInt, row.toInt)
+    }
+  )
+
+private def upgradePlayerBuilding(battle: BattleState, col: Int, row: Int): BattleState =
+  if battle.outcome.isDefined then battle
+  else Placement.tryUpgradeBuilding(battle.player, col, row).map(p => battle.copy(player = p)).getOrElse(battle)
+
 private def hoverText(target: HoverTarget, battle: BattleState): Option[String] =
   val maze = if target.isPlayer then battle.player else battle.ai
   target.kind match
@@ -857,6 +1015,9 @@ private def hoverText(target: HoverTarget, battle: BattleState): Option[String] 
           case UnitKind.Paladin =>
             s"Paladin — HP ${c.hp.toInt}/${c.maxHp.toInt}, doesn't plunder; shields adjacent allies " +
               s"from ${Balance.PaladinAuraDamageReductionPerSec.toInt} dmg/s"
+          case UnitKind.Wolf =>
+            s"Wolf — HP ${c.hp.toInt}/${c.maxHp.toInt}, doesn't plunder; speeds up allies within " +
+              s"${Balance.WolfSpeedAuraRangeCells} cells by ${((Balance.WolfSpeedAuraMultiplier - 1) * 100).toInt}%"
           case _ =>
             val (name, plunders) = c.kind match
               case UnitKind.Elf => ("Elf", s"${Balance.PlunderPerUnit.toInt} wood")
@@ -872,17 +1033,24 @@ private def hoverText(target: HoverTarget, battle: BattleState): Option[String] 
                 )
             s"$name — HP ${c.hp.toInt}/${c.maxHp.toInt}, plunders $plunders on arrival"
       }
-    case HoverKind.BuildingH(kind) =>
-      maze.buildings.find(_.id == target.id).map(b => buildingHoverText(kind, b))
+    // b.kind, not the pattern-matched kind — see destroyInfo's comment on the same issue.
+    case HoverKind.BuildingH(_) =>
+      maze.buildings.find(_.id == target.id).map(b => buildingHoverText(b.kind, b))
 
 // Kept as hand-written per-kind text (not derived from BuildingSpecs), same as the
 // tooltip constants above — the ability sentences (Forest's aura, Watchtower's ranged
 // damage) describe combat behavior that lives outside BuildingSpec by design (see the
 // refactor's confirmed scope), so there's nothing generic left to derive them from.
 private def buildingHoverText(kind: BuildingKind, b: Building): String = kind match
+  case BuildingKind.Grove =>
+    val nextElfS = (b.spawnCountdownMs / 1000).ceil.toInt
+    s"Bosquet — +${formatDecimal(Balance.WoodPerSecPerGrove)} wood/s, next Elf in ${nextElfS}s"
   case BuildingKind.Forest =>
     val nextElfS = (b.spawnCountdownMs / 1000).ceil.toInt
-    s"Forest — ${Balance.AuraDamagePerSec.toInt} dmg/s to adjacent enemies, +${formatDecimal(Balance.WoodPerSecPerForest)} wood/s, next Elf in ${nextElfS}s"
+    s"Forêt — ${Balance.AuraDamagePerSec.toInt} dmg/s to adjacent enemies, +${formatDecimal(Balance.WoodPerSecPerForest)} wood/s, next Elf in ${nextElfS}s"
+  case BuildingKind.Jungle =>
+    val nextWolfS = (b.spawnCountdownMs / 1000).ceil.toInt
+    s"Jungle — ${Balance.AuraDamagePerSec.toInt} dmg/s to adjacent enemies, +${formatDecimal(Balance.WoodPerSecPerJungle)} wood/s, next Wolf in ${nextWolfS}s"
   case BuildingKind.Cave =>
     val nextGoblinS = (b.spawnCountdownMs / 1000).ceil.toInt
     s"Cave — +${formatDecimal(Balance.FirePerSecPerCave)} fire/s, next Goblin in ${nextGoblinS}s"
@@ -919,7 +1087,10 @@ private def updateMazePanel(prefix: String, maze: MazeState, opponent: MazeState
     s"(+${formatDecimal(CombatEngine.productionPerSec(maze, Resource.Fire))}/s)"
   document.getElementById(s"$prefix-light-rate").textContent =
     s"(+${formatDecimal(CombatEngine.productionPerSec(maze, Resource.Light))}/s)"
-  val forestCount = maze.buildings.count(_.kind == BuildingKind.Forest)
+  // Only Forest/Jungle count as real forests (see VictoryConditions.realForestKinds) — a
+  // Grove is still just a bush (Bosquet.md's own asset), not yet a forest.
+  val realForestKinds = Set(BuildingKind.Forest, BuildingKind.Jungle)
+  val forestCount = maze.buildings.count(b => realForestKinds.contains(b.kind))
   val forestTarget = VictoryConditions.forestTarget(opponent)
   val plunderTarget = VictoryConditions.plunderTarget(opponent)
   document.getElementById(s"$prefix-forests").textContent = s"$forestCount/${forestTarget.toInt}"

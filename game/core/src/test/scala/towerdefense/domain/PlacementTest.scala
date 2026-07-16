@@ -12,32 +12,32 @@ class PlacementTest extends munit.FunSuite:
 
   test("rejects placement on the spawn cell") {
     val (col, row) = GridConfig.spawnCell
-    assertEquals(Placement.tryPlaceBuilding(richState, BuildingKind.Forest, col, row).isLeft, true)
+    assertEquals(Placement.tryPlaceBuilding(richState, BuildingKind.Grove, col, row).isLeft, true)
   }
 
   test("rejects placement on the goal cell") {
     val (col, row) = GridConfig.goalCell
-    assertEquals(Placement.tryPlaceBuilding(richState, BuildingKind.Forest, col, row).isLeft, true)
+    assertEquals(Placement.tryPlaceBuilding(richState, BuildingKind.Grove, col, row).isLeft, true)
   }
 
   test("rejects placement on an already occupied cell") {
     val (col, row) = emptyCell
-    val afterFirst = Placement.tryPlaceBuilding(richState, BuildingKind.Forest, col, row).toOption.get
+    val afterFirst = Placement.tryPlaceBuilding(richState, BuildingKind.Grove, col, row).toOption.get
     assertEquals(
-      Placement.tryPlaceBuilding(afterFirst, BuildingKind.Forest, col, row).isLeft,
+      Placement.tryPlaceBuilding(afterFirst, BuildingKind.Grove, col, row).isLeft,
       true
     )
   }
 
-  test("a cave cannot be placed on a cell already occupied by a forest, and vice versa") {
+  test("a cave cannot be placed on a cell already occupied by a grove, and vice versa") {
     val (col, row) = emptyCell
-    val withForest = Placement.tryPlaceBuilding(richState, BuildingKind.Forest, col, row).toOption.get
-    assertEquals(Placement.tryPlaceBuilding(withForest, BuildingKind.Cave, col, row).isLeft, true)
+    val withGrove = Placement.tryPlaceBuilding(richState, BuildingKind.Grove, col, row).toOption.get
+    assertEquals(Placement.tryPlaceBuilding(withGrove, BuildingKind.Cave, col, row).isLeft, true)
 
     val (col2, row2) = (6, 6)
     val withCave = Placement.tryPlaceBuilding(richState, BuildingKind.Cave, col2, row2).toOption.get
     assertEquals(
-      Placement.tryPlaceBuilding(withCave, BuildingKind.Forest, col2, row2).isLeft,
+      Placement.tryPlaceBuilding(withCave, BuildingKind.Grove, col2, row2).isLeft,
       true
     )
   }
@@ -45,7 +45,7 @@ class PlacementTest extends munit.FunSuite:
   test("rejects placement without enough wood") {
     val (col, row) = emptyCell
     val poor = withResources(wood = 0.0)
-    assertEquals(Placement.tryPlaceBuilding(poor, BuildingKind.Forest, col, row).isLeft, true)
+    assertEquals(Placement.tryPlaceBuilding(poor, BuildingKind.Grove, col, row).isLeft, true)
   }
 
   test("rejects a cave without enough wood or fire") {
@@ -60,11 +60,11 @@ class PlacementTest extends munit.FunSuite:
     )
   }
 
-  test("places a forest and deducts wood") {
+  test("places a grove and deducts wood") {
     val (col, row) = emptyCell
-    val result = Placement.tryPlaceBuilding(richState, BuildingKind.Forest, col, row).toOption.get
-    assertEquals(result.buildings.count(_.kind == BuildingKind.Forest), 1)
-    assertEquals(result.resources(Resource.Wood), richState.resources(Resource.Wood) - Balance.ForestCostWood)
+    val result = Placement.tryPlaceBuilding(richState, BuildingKind.Grove, col, row).toOption.get
+    assertEquals(result.buildings.count(_.kind == BuildingKind.Grove), 1)
+    assertEquals(result.resources(Resource.Wood), richState.resources(Resource.Wood) - Balance.GroveCostWood)
   }
 
   test("places a cave and deducts both wood and fire") {
@@ -165,11 +165,67 @@ class PlacementTest extends munit.FunSuite:
   test("rejects placement that would seal off the only route to the goal") {
     val corridor = for row <- 0 until GridConfig.rows yield (1, row)
     val withWall = corridor.init.foldLeft(richState) { (state, cell) =>
-      Placement.tryPlaceBuilding(state, BuildingKind.Forest, cell._1, cell._2).toOption.get
+      Placement.tryPlaceBuilding(state, BuildingKind.Grove, cell._1, cell._2).toOption.get
     }
     val (lastCol, lastRow) = corridor.last
     assertEquals(
-      Placement.tryPlaceBuilding(withWall, BuildingKind.Forest, lastCol, lastRow).isLeft,
+      Placement.tryPlaceBuilding(withWall, BuildingKind.Grove, lastCol, lastRow).isLeft,
       true
+    )
+  }
+
+  test("rejects upgrading a cell with no building") {
+    assertEquals(Placement.tryUpgradeBuilding(richState, 5, 5).isLeft, true)
+  }
+
+  test("rejects upgrading a building with no further tier (e.g. a Cave)") {
+    val withCave = Placement.tryPlaceBuilding(richState, BuildingKind.Cave, 5, 5).toOption.get
+    assertEquals(Placement.tryUpgradeBuilding(withCave, 5, 5).isLeft, true)
+  }
+
+  test("rejects upgrading a Grove without enough wood for the Forest tier") {
+    val poor = withResources(wood = Balance.GroveCostWood)
+    val withGrove = Placement.tryPlaceBuilding(poor, BuildingKind.Grove, 5, 5).toOption.get
+    assertEquals(Placement.tryUpgradeBuilding(withGrove, 5, 5).isLeft, true)
+  }
+
+  test("upgrades a Grove into a Forest in place, deducting wood and keeping the same cell/id") {
+    val withGrove = Placement.tryPlaceBuilding(richState, BuildingKind.Grove, 5, 5).toOption.get
+    val before = withGrove.buildings.head
+    val result = Placement.tryUpgradeBuilding(withGrove, 5, 5).toOption.get
+    val after = result.buildings.head
+    assertEquals(after.id, before.id)
+    assertEquals((after.col, after.row), (before.col, before.row))
+    assertEquals(after.kind, BuildingKind.Forest)
+    assertEquals(
+      result.resources(Resource.Wood),
+      withGrove.resources(Resource.Wood) - Balance.ForestUpgradeCostWood
+    )
+  }
+
+  test("upgrades a Forest into a Jungle in place") {
+    val rich = withResources(wood = 1_000.0)
+    val withGrove = Placement.tryPlaceBuilding(rich, BuildingKind.Grove, 5, 5).toOption.get
+    val withForest = Placement.tryUpgradeBuilding(withGrove, 5, 5).toOption.get
+    val result = Placement.tryUpgradeBuilding(withForest, 5, 5).toOption.get
+    assertEquals(result.buildings.head.kind, BuildingKind.Jungle)
+  }
+
+  test("rejects upgrading a Jungle further (top tier)") {
+    val rich = withResources(wood = 1_000.0)
+    val withGrove = Placement.tryPlaceBuilding(rich, BuildingKind.Grove, 5, 5).toOption.get
+    val withForest = Placement.tryUpgradeBuilding(withGrove, 5, 5).toOption.get
+    val withJungle = Placement.tryUpgradeBuilding(withForest, 5, 5).toOption.get
+    assertEquals(Placement.tryUpgradeBuilding(withJungle, 5, 5).isLeft, true)
+  }
+
+  test("Forest and Jungle cannot be placed directly, only reached via upgrade") {
+    assertEquals(
+      Placement.tryPlaceBuilding(richState, BuildingKind.Forest, 5, 5),
+      Left(PlacementError.CannotBuildDirectly)
+    )
+    assertEquals(
+      Placement.tryPlaceBuilding(richState, BuildingKind.Jungle, 5, 5),
+      Left(PlacementError.CannotBuildDirectly)
     )
   }

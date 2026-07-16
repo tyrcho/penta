@@ -3,12 +3,13 @@ package towerdefense.domain
 // Dumbest possible opponent: as soon as it can afford a building, place one on the
 // first buildable cell in row-major order. Deterministic (easy to test), no
 // randomness — a reasonable POC default since the vault doesn't specify AI behavior.
-// Both sides can build any BuildingKind — see CLAUDE.md, "the game is symmetric". Tried
-// by descending wood cost (Eglise 40 > Labyrinthe 20 > Watchtower 10 = Forest 10 >
+// Both sides can build any directly-buildable BuildingKind — see CLAUDE.md, "the game
+// is symmetric" — Forest/Jungle are reached only via maybeUpgrade, never listed here.
+// Tried by descending wood cost (Church 40 > Labyrinth 20 > Watchtower 10 = Grove 10 >
 // Cave 5): each one's wood cost dominates every cheaper building's, so trying it later
 // would make it unreachable — by the time its wood cost is affordable, the cheaper
 // buildings' wood costs always are too (their fire/light requirements are independent
-// currencies and don't create the same trap). Watchtower and Forest tie on wood cost;
+// currencies and don't create the same trap). Watchtower and Grove tie on wood cost;
 // Watchtower is tried first, an arbitrary but stable tie-break. Kept as an explicit
 // list, not derived by sorting BuildingSpecs at runtime — a re-derived sort risks
 // silently flipping that tie with no test to catch it.
@@ -20,12 +21,20 @@ object LinearStrategy extends AiStrategy:
     BuildingKind.Church,
     BuildingKind.Labyrinth,
     BuildingKind.Watchtower,
-    BuildingKind.Forest,
+    BuildingKind.Grove,
     BuildingKind.Cave
   )
 
   def maybeBuild(state: MazeState, opponent: MazeState): MazeState =
     buildOrder.iterator.flatMap(kind => tryBuildOneOf(state, kind)).nextOption().getOrElse(state)
+
+  // Upgrades the first (row-major, by building list order) Grove/Forest it can afford —
+  // same "first that works" simplicity as maybeBuild, no attempt to pick the "best" one.
+  override def maybeUpgrade(state: MazeState, opponent: MazeState): MazeState =
+    state.buildings.iterator
+      .flatMap(b => Placement.tryUpgradeBuilding(state, b.col, b.row).toOption)
+      .nextOption()
+      .getOrElse(state)
 
   private def tryBuildOneOf(state: MazeState, kind: BuildingKind): Option[MazeState] =
     GridConfig.allCells.iterator

@@ -9,10 +9,13 @@ enum Resource derives CanEqual:
   case Wood, Fire, Light, Shadow, Crystal
 
 enum UnitKind derives CanEqual:
-  case Elf, Goblin, Minotaur, Paladin
+  case Elf, Goblin, Minotaur, Paladin, Wolf
 
+// Grove/Forest/Jungle form Nature's upgrade chain (Bosquet.md/Foret.md/Jungle.md) — only
+// Grove is directly buildable; Forest and Jungle are reached by upgrading an existing
+// Grove/Forest in place (see BuildingSpecs.upgradesTo, Placement.tryUpgradeBuilding).
 enum BuildingKind derives CanEqual:
-  case Forest, Cave, Labyrinth, Church, Watchtower
+  case Grove, Forest, Jungle, Cave, Labyrinth, Church, Watchtower
 
 // A unit currently walking this maze. From this maze owner's point of view it's
 // always hostile — sent by one of the opponent's buildings. See CreatureSpecs for

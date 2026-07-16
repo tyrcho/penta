@@ -76,3 +76,35 @@ class VictoryConditionsTest extends munit.FunSuite:
       Some(true)
     )
   }
+
+  test("Forest and Jungle both count toward the target, since both are real forests") {
+    val mixedTiers = List(
+      Building(1, 1, 1, BuildingKind.Forest, spawnCountdownMs = 0.0),
+      Building(2, 2, 2, BuildingKind.Jungle, spawnCountdownMs = 0.0)
+    ) ++ List.fill(Balance.NatureVictoryForestTarget - 2)(forestBuilding(4, 4))
+    val battle =
+      BattleState(player = MazeState.initial.copy(buildings = mixedTiers), ai = MazeState.initial)
+    assertEquals(
+      VictoryConditions.evaluate(battle).map(_.isInstanceOf[MatchResult.PlayerWins]),
+      Some(true)
+    )
+  }
+
+  // Bosquet.md's asset is a bush, not a tree — a Grove hasn't grown into a real forest
+  // yet, so it must not count toward "Nature's unstoppable expansion" even though it's
+  // still Grove's own faction/upgrade-chain kin.
+  test("a Grove does not count toward the forest target — it's a bush, not a forest yet") {
+    val groves = List.fill(Balance.NatureVictoryForestTarget)(Building(1, 1, 1, BuildingKind.Grove, 0.0))
+    val battle =
+      BattleState(player = MazeState.initial.copy(buildings = groves), ai = MazeState.initial)
+    assertEquals(VictoryConditions.evaluate(battle), None)
+  }
+
+  test("a pile of Groves doesn't make up for one real forest short of the target") {
+    val mixedTiers =
+      List.fill(Balance.NatureVictoryForestTarget)(Building(1, 1, 1, BuildingKind.Grove, 0.0)) ++
+        List.fill(Balance.NatureVictoryForestTarget - 1)(forestBuilding(4, 4))
+    val battle =
+      BattleState(player = MazeState.initial.copy(buildings = mixedTiers), ai = MazeState.initial)
+    assertEquals(VictoryConditions.evaluate(battle), None)
+  }

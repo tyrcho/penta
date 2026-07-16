@@ -11,6 +11,15 @@ side, not bolted on as "the AI's thing" or "the player's thing". `VictoryConditi
 `AiController.maybeBuild`, and the player's build-selector UI must all stay in sync:
 whatever one can attempt, the other must be able to attempt too.
 
+## Art asset licensing is not a current concern
+
+We use free icon/sprite packs (Kenney, CraftPix freebies, etc.) without tracking
+licensing carefully right now. This is a deliberate, temporary tradeoff: if the game
+ever gets real traction, we'll swap in properly licensed or commissioned art then. Don't
+spend time chasing down attribution requirements or picking assets based on license
+terms — just use whatever free asset fits, and keep a `LICENSE-<name>.txt` next to it
+for whatever the source page says, on a best-effort basis only.
+
 Symmetry means player vs AI have the same rules and options — it does NOT mean every
 number has to equal every other number. `Balance.StartingWood` (20) and `StartingFire`
 (10) are intentionally different from each other; both mazes still get the identical

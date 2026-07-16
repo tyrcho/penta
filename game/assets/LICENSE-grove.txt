@@ -1,7 +1,7 @@
-Forêt building icon (assets/forest.png) is cropped from CraftPix.net's
+Bosquet building icon (assets/grove.png) is cropped from CraftPix.net's
 Free Simple Summer Top-Down Vector Tileset
 (https://free-game-assets.itch.io/free-simple-summer-top-down-vector-tileset),
-"Prop - Tree Small" piece — matches the asset referenced in Foret.md.
+"Prop - Bushes Large" piece — matches the asset referenced in Bosquet.md.
 
 License: https://craftpix.net/file-licenses/ (Freebie License)
 No attribution required; modification and use in shipped commercial/hobby

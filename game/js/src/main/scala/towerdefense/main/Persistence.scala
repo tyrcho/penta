@@ -83,6 +83,7 @@ private object Persistence:
         case UnitKind.Goblin   => "Goblin"
         case UnitKind.Minotaur => "Minotaur"
         case UnitKind.Paladin  => "Paladin"
+        case UnitKind.Wolf     => "Wolf"
     )
 
   private def encodeBuilding(b: Building): js.Dynamic =
@@ -166,7 +167,8 @@ private object Persistence:
               .getOrElse(0.0)
             Building(asDouble(dd.id).toLong, asDouble(dd.col).toInt, asDouble(dd.row).toInt, kind, countdown)
         )
-    tagged(d.forests, BuildingKind.Forest, Some("elfSpawnInMs")) ++
+    // Pre-upgrade-chain saves' single-tier "forests" is today's Grove (the base tier).
+    tagged(d.forests, BuildingKind.Grove, Some("elfSpawnInMs")) ++
       tagged(d.caves, BuildingKind.Cave, Some("goblinSpawnInMs")) ++
       tagged(d.labyrinths, BuildingKind.Labyrinth, Some("minotaurSpawnInMs")) ++
       tagged(d.eglises, BuildingKind.Church, Some("paladinSpawnInMs")) ++
@@ -186,6 +188,7 @@ private object Persistence:
         case "Elf"      => UnitKind.Elf
         case "Minotaur" => UnitKind.Minotaur
         case "Paladin"  => UnitKind.Paladin
+        case "Wolf"     => UnitKind.Wolf
         case _          => UnitKind.Goblin
     )
 
@@ -195,10 +198,13 @@ private object Persistence:
       col = asDouble(d.col).toInt,
       row = asDouble(d.row).toInt,
       kind = d.kind.asInstanceOf[String] match
+        case "Grove"      => BuildingKind.Grove
         case "Forest"     => BuildingKind.Forest
+        case "Jungle"     => BuildingKind.Jungle
         case "Cave"       => BuildingKind.Cave
         case "Labyrinth"  => BuildingKind.Labyrinth
         case "Eglise"     => BuildingKind.Church
+        case "Church"     => BuildingKind.Church
         case _            => BuildingKind.Watchtower,
       spawnCountdownMs = if js.isUndefined(d.spawnCountdownMs) then 0.0 else asDouble(d.spawnCountdownMs)
     )

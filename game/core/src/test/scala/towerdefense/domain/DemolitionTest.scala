@@ -6,15 +6,15 @@ class DemolitionTest extends munit.FunSuite:
     assertEquals(Demolition.tryDestroy(MazeState.initial, 5, 5).isLeft, true)
   }
 
-  test("destroys a forest and refunds half its wood cost") {
+  test("destroys a grove and refunds half its wood cost") {
     val (col, row) = (5, 5)
-    val withForest =
-      Placement.tryPlaceBuilding(MazeState.initial, BuildingKind.Forest, col, row).toOption.get
-    val result = Demolition.tryDestroy(withForest, col, row).toOption.get
-    assertEquals(result.buildings.count(_.kind == BuildingKind.Forest), 0)
+    val withGrove =
+      Placement.tryPlaceBuilding(MazeState.initial, BuildingKind.Grove, col, row).toOption.get
+    val result = Demolition.tryDestroy(withGrove, col, row).toOption.get
+    assertEquals(result.buildings.count(_.kind == BuildingKind.Grove), 0)
     assertEquals(
       result.resources(Resource.Wood),
-      withForest.resources(Resource.Wood) + Balance.ForestCostWood * Balance.DemolishRefundFraction
+      withGrove.resources(Resource.Wood) + Balance.GroveCostWood * Balance.DemolishRefundFraction
     )
   }
 
@@ -85,7 +85,7 @@ class DemolitionTest extends munit.FunSuite:
     val corridor = for row <- 0 until GridConfig.rows yield (1, row)
     val rich = MazeState.initial.copy(resources = Map(Resource.Wood -> 1_000.0))
     val withWall = corridor.foldLeft(rich) { (state, cell) =>
-      Placement.tryPlaceBuilding(state, BuildingKind.Forest, cell._1, cell._2).toOption.getOrElse(state)
+      Placement.tryPlaceBuilding(state, BuildingKind.Grove, cell._1, cell._2).toOption.getOrElse(state)
     }
     val (someCol, someRow) = corridor.head
     assertEquals(Demolition.tryDestroy(withWall, someCol, someRow).isRight, true)

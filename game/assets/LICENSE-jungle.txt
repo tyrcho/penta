@@ -1,0 +1,6 @@
+Jungle building icon (assets/jungle.png) is the illustration embedded directly in
+Jungle.md (Resources/Nature/Jungle.md, "Pasted image 20260715212311.png") — its flat
+background was keyed out to transparency for use as a game sprite. Source/author
+unknown (pasted into the vault, not sourced from a named asset pack). Per CLAUDE.md's
+licensing policy: used as a best-effort placeholder, to be replaced if the game gets
+real traction.

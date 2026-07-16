@@ -19,11 +19,11 @@ class AiStrategyTest extends munit.FunSuite:
     assertEquals(LinearStrategy.maybeBuild(state, noOpponent), state)
   }
 
-  test("builds a forest when it can only afford a forest") {
-    // light = 0.0 also rules out a Watchtower (wood10+light5, tied with Forest on wood).
-    val state = withResources(wood = Balance.ForestCostWood, fire = 0.0, light = 0.0)
+  test("builds a grove when it can only afford a grove") {
+    // light = 0.0 also rules out a Watchtower (wood10+light5, tied with Grove on wood).
+    val state = withResources(wood = Balance.GroveCostWood, fire = 0.0, light = 0.0)
     val result = LinearStrategy.maybeBuild(state, noOpponent)
-    assertEquals(count(result, BuildingKind.Forest), 1)
+    assertEquals(count(result, BuildingKind.Grove), 1)
     assertEquals(count(result, BuildingKind.Cave), 0)
   }
 
@@ -45,12 +45,11 @@ class AiStrategyTest extends munit.FunSuite:
     val state = withResources(wood = Balance.EgliseCostWood, light = Balance.EgliseCostLight)
     val result = LinearStrategy.maybeBuild(state, noOpponent)
     assertEquals(count(result, BuildingKind.Church), 1)
-    assertEquals(count(result, BuildingKind.Labyrinth), 0)
-    assertEquals(count(result, BuildingKind.Forest), 0)
+    assertEquals(count(result, BuildingKind.Grove), 0)
     assertEquals(count(result, BuildingKind.Cave), 0)
   }
 
-  test("builds a watchtower over a forest when it can afford either (tied wood cost)") {
+  test("builds a watchtower over a grove when it can afford either (tied wood cost)") {
     val state = withResources(
       wood = Balance.WatchtowerCostWood,
       fire = 0.0,
@@ -58,26 +57,45 @@ class AiStrategyTest extends munit.FunSuite:
     )
     val result = LinearStrategy.maybeBuild(state, noOpponent)
     assertEquals(count(result, BuildingKind.Watchtower), 1)
-    assertEquals(count(result, BuildingKind.Forest), 0)
+    assertEquals(count(result, BuildingKind.Grove), 0)
   }
 
   test("skips the spawn and goal cells when picking a spot") {
-    val state = withResources(wood = Balance.ForestCostWood, light = 0.0)
+    val state = withResources(wood = Balance.GroveCostWood, light = 0.0)
     val result = LinearStrategy.maybeBuild(state, noOpponent)
-    val built = result.buildings.find(_.kind == BuildingKind.Forest).get
+    val built = result.buildings.find(_.kind == BuildingKind.Grove).get
     assertNotEquals((built.col, built.row), GridConfig.spawnCell)
     assertNotEquals((built.col, built.row), GridConfig.goalCell)
   }
 
   test("opponent's state does not influence Linear's decision") {
-    val state = withResources(wood = Balance.ForestCostWood, fire = 0.0)
+    val state = withResources(wood = Balance.GroveCostWood, fire = 0.0)
     val busyOpponent = MazeState.initial.copy(
-      buildings = List(Building(1, 5, 5, BuildingKind.Forest, 0.0))
+      buildings = List(Building(1, 5, 5, BuildingKind.Grove, 0.0))
     )
     assertEquals(
       LinearStrategy.maybeBuild(state, noOpponent),
       LinearStrategy.maybeBuild(state, busyOpponent)
     )
+  }
+
+  test("maybeUpgrade does nothing when there is no upgradeable building") {
+    val state = withResources(wood = 1_000.0)
+    assertEquals(LinearStrategy.maybeUpgrade(state, noOpponent), state)
+  }
+
+  test("maybeUpgrade does nothing when the only Grove can't afford the Forest tier") {
+    val poor = withResources(wood = Balance.GroveCostWood)
+    val withGrove = Placement.tryPlaceBuilding(poor, BuildingKind.Grove, 5, 5).toOption.get
+    assertEquals(LinearStrategy.maybeUpgrade(withGrove, noOpponent), withGrove)
+  }
+
+  test("maybeUpgrade upgrades the first affordable Grove into a Forest") {
+    val rich = withResources(wood = 1_000.0)
+    val withGrove = Placement.tryPlaceBuilding(rich, BuildingKind.Grove, 5, 5).toOption.get
+    val result = LinearStrategy.maybeUpgrade(withGrove, noOpponent)
+    assertEquals(count(result, BuildingKind.Forest), 1)
+    assertEquals(count(result, BuildingKind.Grove), 0)
   }
 
   // Order measured via headless AI-vs-AI simulation (sim/run round-robin), re-measured

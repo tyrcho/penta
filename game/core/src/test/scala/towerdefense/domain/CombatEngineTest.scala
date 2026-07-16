@@ -1,5 +1,7 @@
 package towerdefense.domain
 
+import towerdefense.domain.geometry.Vec2
+
 class CombatEngineTest extends munit.FunSuite:
 
   private def withResources(wood: Double = 0.0, fire: Double = 0.0, light: Double = 0.0): MazeState =
@@ -69,6 +71,60 @@ class CombatEngineTest extends munit.FunSuite:
     val state = withResources().copy(creatures = List(creature), buildings = List(forest))
     val result = CombatEngine.tick(state, deltaMs = 1000.0)
     assertEquals(result.state.creatures, Nil)
+  }
+
+  test("jungle damages an adjacent enemy just like a forest (aura is inherited by the top tier)") {
+    val jungle = Building(100, col = 5, row = 5, BuildingKind.Jungle, Balance.WolfSpawnIntervalMs)
+    val adjacent =
+      Creature(1, GridConfig.cellCenter(6, 5), hp = 10.0, maxHp = 10.0, speedPerMs = 0.0, UnitKind.Elf)
+    val state = withResources().copy(creatures = List(adjacent), buildings = List(jungle))
+    val result = CombatEngine.tick(state, deltaMs = 1000.0)
+    assertEquals(result.state.creatures.head.hp, adjacent.hp - Balance.AuraDamagePerSec)
+  }
+
+  test("a jungle emits exactly one wolf-spawn signal per interval, not an elf") {
+    val jungle = Building(100, col = 5, row = 5, BuildingKind.Jungle, Balance.WolfSpawnIntervalMs)
+    val state = withResources().copy(buildings = List(jungle))
+    val before = CombatEngine.tick(state, deltaMs = Balance.WolfSpawnIntervalMs - 1.0)
+    val at = CombatEngine.tick(state, deltaMs = Balance.WolfSpawnIntervalMs)
+    assertEquals(before.spawned.getOrElse(UnitKind.Wolf, 0), 0)
+    assertEquals(at.spawned.getOrElse(UnitKind.Wolf, 0), 1)
+    assertEquals(at.spawned.getOrElse(UnitKind.Elf, 0), 0)
+  }
+
+  private def distanceMoved(before: Vec2, after: Vec2): Double =
+    math.hypot(after.x - before.x, after.y - before.y)
+
+  test("a wolf speeds up any creature within its aura range, itself included") {
+    val wolf =
+      Creature(1, GridConfig.cellCenter(5, 5), Balance.WolfMaxHp, Balance.WolfMaxHp, Balance.WolfSpeedPerMs, UnitKind.Wolf)
+    val nearbyElf =
+      Creature(2, GridConfig.cellCenter(6, 5), Balance.ElfMaxHp, Balance.ElfMaxHp, Balance.ElfSpeedPerMs, UnitKind.Elf)
+    val state = withResources().copy(creatures = List(wolf, nearbyElf))
+    val result = CombatEngine.tick(state, deltaMs = 10.0)
+    val elfAfter = result.state.creatures.find(_.id == 2).get
+    val elfAlone =
+      CombatEngine.tick(withResources().copy(creatures = List(nearbyElf)), deltaMs = 10.0).state.creatures.head
+    val boostedDistance = distanceMoved(nearbyElf.pos, elfAfter.pos)
+    val aloneDistance = distanceMoved(nearbyElf.pos, elfAlone.pos)
+    assert(
+      boostedDistance > aloneDistance,
+      s"expected the wolf-boosted elf to move further than $aloneDistance, but it moved $boostedDistance"
+    )
+    assertEqualsDouble(boostedDistance, aloneDistance * Balance.WolfSpeedAuraMultiplier, 1e-9)
+  }
+
+  test("a wolf's speed aura does not reach a creature more than 2 cells away") {
+    val wolf =
+      Creature(1, GridConfig.cellCenter(0, 0), Balance.WolfMaxHp, Balance.WolfMaxHp, Balance.WolfSpeedPerMs, UnitKind.Wolf)
+    val farElf =
+      Creature(2, GridConfig.cellCenter(5, 5), Balance.ElfMaxHp, Balance.ElfMaxHp, Balance.ElfSpeedPerMs, UnitKind.Elf)
+    val state = withResources().copy(creatures = List(wolf, farElf))
+    val result = CombatEngine.tick(state, deltaMs = 10.0)
+    val boosted = result.state.creatures.find(_.id == 2).get
+    val alone =
+      CombatEngine.tick(withResources().copy(creatures = List(farElf)), deltaMs = 10.0).state.creatures.head
+    assertEquals(boosted.pos, alone.pos)
   }
 
   test("forests produce wood, caves produce fire, over time") {

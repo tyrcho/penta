@@ -19,7 +19,8 @@ case class CompositeStrategy(weights: Weights) extends AiStrategy:
     val candidates = allCandidates(state)
     if candidates.isEmpty then state
     else
-      val scores = candidates.map(c => dangerScore(state, (c.col, c.row), c.kind == BuildingKind.Forest))
+      val scores =
+        candidates.map(c => dangerScore(state, (c.col, c.row), CombatEngine.auraBuildingKinds.contains(c.kind)))
       val minScore = scores.min
       val maxScore = scores.max
       candidates
@@ -43,23 +44,24 @@ case class CompositeStrategy(weights: Weights) extends AiStrategy:
 
   // How dangerous the resulting path is for an enemy to walk, not just how long it is:
   // path length alone only delays plunder, but CombatEngine.applyDamageSources deals
-  // AuraDamagePerSec to any enemy standing adjacent to a Forest (see accumulateAuraHits
-  // there) — routing the path past Forests can kill the enemy outright, which is strictly
-  // better than merely making it walk further. `isForestCandidate` counts the candidate
-  // itself as a Forest for this check, since the Forest being placed also auras once it's
-  // up (existing Forests already do). Exposed at `private[domain]` so tests can verify
-  // the scoring directly instead of reasoning backward from `maybeBuild`'s final pick.
+  // AuraDamagePerSec to any enemy standing adjacent to a Forest/Jungle (see
+  // accumulateAuraHits there) — routing the path past them can kill the enemy outright,
+  // which is strictly better than merely making it walk further. `isAuraCandidate` counts
+  // the candidate itself as an aura source for this check, since it auras once it's up
+  // too (existing Forests/Jungles already do) — Grove has no aura, so a Grove candidate
+  // passes false. Exposed at `private[domain]` so tests can verify the scoring directly
+  // instead of reasoning backward from `maybeBuild`'s final pick.
   private[domain] def dangerScore(
       state: MazeState,
       candidate: (Int, Int),
-      isForestCandidate: Boolean
+      isAuraCandidate: Boolean
   ): Double =
     val path = Pathfinding
       .shortestPath(GridConfig.spawnCell, GridConfig.goalCell, state.buildingCells + candidate)
       .getOrElse(Nil)
     val forestCells =
-      state.buildings.filter(_.kind == BuildingKind.Forest).map(f => (f.col, f.row)).toSet ++
-        (if isForestCandidate then Set(candidate) else Set.empty)
+      state.buildings.filter(b => CombatEngine.auraBuildingKinds.contains(b.kind)).map(f => (f.col, f.row)).toSet ++
+        (if isAuraCandidate then Set(candidate) else Set.empty)
     pathDangerScore(path, forestCells)
 
   // Split out from dangerScore so the scoring math is testable against a hand-built path,
@@ -86,20 +88,24 @@ case class CompositeStrategy(weights: Weights) extends AiStrategy:
     }
     margins.sum / margins.size
 
-  // Mirrors whichever of Nature (Forest) or Chaos (Cave/Labyrinth) the opponent invests
-  // in more — see VictoryConditions: my target for each win condition scales with the
-  // opponent's own count of that stat, so matching their pace keeps that multiplier-based
-  // target rising instead of letting them coast to a low floor. Loi (Eglise and
-  // Watchtower) is deliberately excluded from the comparison and never scores: it feeds
-  // neither VictoryConditions target, so mirroring an opponent that invests heavily in
-  // either would just copy their one unproductive habit and stalemate forever.
+  // Mirrors whichever of Nature (Grove/Forest/Jungle) or Chaos (Cave/Labyrinth) the
+  // opponent invests in more — see VictoryConditions: my target for each win condition
+  // scales with the opponent's own count of that stat, so matching their pace keeps that
+  // multiplier-based target rising instead of letting them coast to a low floor. Loi
+  // (Church and Watchtower) is deliberately excluded from the comparison and never
+  // scores: it feeds neither VictoryConditions target, so mirroring an opponent that
+  // invests heavily in either would just copy their one unproductive habit and
+  // stalemate forever.
+  private val natureBuildingKinds: Set[BuildingKind] =
+    Set(BuildingKind.Grove, BuildingKind.Forest, BuildingKind.Jungle)
+
   private def counterScore(opponent: MazeState, kind: BuildingKind): Double =
-    val natureCount = opponent.buildings.count(_.kind == BuildingKind.Forest)
+    val natureCount = opponent.buildings.count(b => natureBuildingKinds.contains(b.kind))
     val chaosCount =
       opponent.buildings.count(b => b.kind == BuildingKind.Cave || b.kind == BuildingKind.Labyrinth)
     val leaderCount = natureCount.max(chaosCount)
     val ownFactionCount = kind match
-      case BuildingKind.Forest                       => Some(natureCount)
-      case BuildingKind.Cave | BuildingKind.Labyrinth => Some(chaosCount)
-      case BuildingKind.Church | BuildingKind.Watchtower => None
+      case BuildingKind.Grove | BuildingKind.Forest | BuildingKind.Jungle => Some(natureCount)
+      case BuildingKind.Cave | BuildingKind.Labyrinth                    => Some(chaosCount)
+      case BuildingKind.Church | BuildingKind.Watchtower                 => None
     if ownFactionCount.contains(leaderCount) then 1.0 else 0.0

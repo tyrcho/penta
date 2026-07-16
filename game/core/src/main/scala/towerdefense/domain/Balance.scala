@@ -7,13 +7,34 @@ package towerdefense.domain
 object Balance:
 
   // ── Nature (player) ─────────────────────────────────────────────────────
-  val ForestCostWood: Double = 10.0 // Forest.md: "cout en bois: 10"
-  val WoodPerSecPerForest: Double = 0.2 // Forest.md: "produit 1 bois / 5 sec"
-  val AuraDamagePerSec: Double = 2.0 // Forest.md: Ents deal 2 dmg/sec to adjacent units
-  val ElfSpawnIntervalMs: Double = 10_000.0 // Forest.md: "toutes les 10 sec genere un Elf"
+  // Three-tier upgrade chain (Bosquet.md/Foret.md/Jungle.md) — only Grove is directly
+  // buildable; Forest and Jungle are reached by upgrading in place (see
+  // Placement.tryUpgradeBuilding). Each tier's cost is the upgrade cost paid at that
+  // step, not a cumulative total.
+  val GroveCostWood: Double = 10.0 // Bosquet.md: "cout en bois: 10"
+  val WoodPerSecPerGrove: Double = 0.2 // Bosquet.md: "produit 1 bois / 5 sec"
+  val ElfSpawnIntervalMs: Double = 10_000.0 // Bosquet.md: "toutes les 10 sec genere un Elf"
+
+  val ForestUpgradeCostWood: Double = 30.0 // Foret.md: "cout en bois: 30"
+  val WoodPerSecPerForest: Double = 0.5 // Foret.md: "produit 1 bois / 2 sec"
+  // Foret.md: Ents deal 2 dmg/sec to adjacent units — Jungle inherits this (upgrades are
+  // cumulative: Jungle.md doesn't repeat the ability, but "Amelioration" implies it keeps
+  // what the prior tier had, only Grove/Bosquet lacks it).
+  val AuraDamagePerSec: Double = 2.0
+
+  val JungleUpgradeCostWood: Double = 60.0 // Jungle.md: "cout en bois: 60"
+  val WoodPerSecPerJungle: Double = 1.0 // Jungle.md: "produit 1 bois / sec"
+  val WolfSpawnIntervalMs: Double = 5_000.0 // Jungle.md: "toutes les 5 sec"
 
   val ElfMaxHp: Double = 5.0
   val ElfSpeedPerMs: Double = 0.05 // POC default: 50 px/s
+
+  val WolfMaxHp: Double = 40.0 // Loup.md: "PV: 40"
+  val WolfSpeedPerMs: Double = ElfSpeedPerMs * 1.5 // Loup.md: "1.5x plus vite que les unites standard"
+  // Loup.md: "augmente la vitesse de deplacement des unites a 2 cases de 50%" — a
+  // multiplier (1.5x), not a flat addition, applied to any other creature within range.
+  val WolfSpeedAuraMultiplier: Double = 1.5
+  val WolfSpeedAuraRangeCells: Int = 2
 
   // ── Chaos (AI) ───────────────────────────────────────────────────────────
   val CaveCostWood: Double = 5.0 // Cave.md: "cout en wood: 5"

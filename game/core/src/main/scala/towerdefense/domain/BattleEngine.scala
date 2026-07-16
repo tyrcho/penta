@@ -35,7 +35,7 @@ object BattleEngine:
       val aiResult = CombatEngine.tick(battle.ai, deltaMs)
 
       val aiAfterDestroy = aiStrategy.maybeDestroy(aiResult.state, playerResult.state)
-      val (aiBuilt, aiNextCooldown) = maybeBuildThrottled(
+      val (aiBuilt, aiNextCooldown) = maybeActThrottled(
         aiAfterDestroy,
         playerResult.state,
         aiStrategy,
@@ -44,7 +44,7 @@ object BattleEngine:
       val (playerBuilt, playerNextCooldown) = playerStrategy match
         case Some(strategy) =>
           val playerAfterDestroy = strategy.maybeDestroy(playerResult.state, aiResult.state)
-          maybeBuildThrottled(
+          maybeActThrottled(
             playerAfterDestroy,
             aiResult.state,
             strategy,
@@ -61,18 +61,23 @@ object BattleEngine:
   // Wood/fire production compounds with building count, so without a pace limit a side
   // can tile its whole maze within seconds — capping it to at most one *attempt* per
   // Balance.AiBuildCooldownMs keeps it roughly as fast as a human tapping. The cooldown
-  // resets whether or not the attempt actually placed something: a strategy's scan is a
-  // Placement.tryPlace* call (with its own pathfinding check) per candidate cell, and
-  // retrying that scan every tick while broke — rather than once per cooldown window —
-  // is wasted work with no gameplay benefit, since resources barely move tick to tick.
-  private def maybeBuildThrottled(
+  // resets whether or not the attempt actually did anything: a strategy's scan is a
+  // Placement.tryPlace*/tryUpgradeBuilding call (with its own checks) per candidate cell,
+  // and retrying that scan every tick while broke — rather than once per cooldown
+  // window — is wasted work with no gameplay benefit, since resources barely move tick
+  // to tick. Upgrade shares this same cooldown/slot with build (tried first) rather than
+  // getting its own: upgrading compounds the economy just as building does, so pacing it
+  // separately would just let a side do both every tick instead of one or the other.
+  private def maybeActThrottled(
       state: MazeState,
       opponent: MazeState,
       strategy: AiStrategy,
       cooldownMs: Double
   ): (MazeState, Double) =
     if cooldownMs > 0 then (state, cooldownMs)
-    else (strategy.maybeBuild(state, opponent), Balance.AiBuildCooldownMs)
+    else
+      val upgraded = strategy.maybeUpgrade(state, opponent)
+      (strategy.maybeBuild(upgraded, opponent), Balance.AiBuildCooldownMs)
 
   // Resources a Goblin plundered from the opponent land in the attacker's own economy
   // (Chaos.md: "arracher ses ressources"), and count toward the Chaos victory tally.

@@ -27,5 +27,8 @@ object CreatureSpecs:
     ),
     // Paladin.md gives it no plunder ability — its value is the shield it provides to
     // adjacent allies, a combat ability that stays outside this spec (see CombatEngine).
-    UnitKind.Paladin -> CreatureSpec(Balance.PaladinMaxHp, Balance.PaladinSpeedPerMs, plunder = Map.empty)
+    UnitKind.Paladin -> CreatureSpec(Balance.PaladinMaxHp, Balance.PaladinSpeedPerMs, plunder = Map.empty),
+    // Loup.md gives it no plunder ability either — its value is the speed buff it grants
+    // nearby allies, a combat ability that stays outside this spec (see CombatEngine).
+    UnitKind.Wolf -> CreatureSpec(Balance.WolfMaxHp, Balance.WolfSpeedPerMs, plunder = Map.empty)
   )
