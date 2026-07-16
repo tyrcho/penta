@@ -1,0 +1,23 @@
+name: Mirror to GitLab
+
+on:
+  push:
+    branches:
+      - '**'
+    tags:
+      - '**'
+  workflow_dispatch: {}
+
+jobs:
+  mirror:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Mirror repository to GitLab
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLAB_TOKEN: ${{ secrets.GITLAB_TOKEN }}
+        run: |
+          set -euo pipefail
+          git clone --mirror "https://x-access-token:${GITHUB_TOKEN}@github.com/${{ github.repository }}.git" repo-mirror
+          cd repo-mirror
+          git push --mirror "https://oauth2:${GITLAB_TOKEN}@gitlab.com/tyrcho/penta.git"
