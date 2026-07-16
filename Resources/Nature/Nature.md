@@ -6,25 +6,25 @@ La **Nature** incarne la **vie sous toutes ses formes** : les forêts luxuriante
 
 #### **🌱 La Nature et le Chaos**
 
-Voir [Nature engendre Chaos](Relations/Engendre/Nature-Chaos.md).
+Voir [Nature engendre Chaos](../Relations/Engendre/Nature-Chaos.md).
 
 ---
 
 #### **⚔️ La Nature contre la Mort**
 
-Voir [Nature contrôle Mort](Relations/Contrôle/Nature-Mort.md).
+Voir [Nature contrôle Mort](../Relations/Contrôle/Nature-Mort.md).
 
 ---
 
 #### **🔬 La Nature face à la Science**
 
-Voir [Science contrôle Nature](Relations/Contrôle/Science-Nature.md).
+Voir [Science contrôle Nature](../Relations/Contrôle/Science-Nature.md).
 
 ---
 
 #### **☀️ La Nature et la Loi**
 
-Voir [Loi engendre Nature](Relations/Engendre/Loi-Nature.md).
+Voir [Loi engendre Nature](../Relations/Engendre/Loi-Nature.md).
 
 ---
 

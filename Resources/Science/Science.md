@@ -6,25 +6,25 @@ La **Science** incarne la **connaissance absolue**, la **précision** et le **po
 
 #### **🌱 La Science et la Nature**
 
-Voir [Science contrôle Nature](Relations/Contrôle/Science-Nature.md).
+Voir [Science contrôle Nature](../Relations/Contrôle/Science-Nature.md).
 
 ---
 
 #### **⚔️ La Science et le Chaos**
 
-Voir [Chaos contrôle Science](Relations/Contrôle/Chaos-Science.md).
+Voir [Chaos contrôle Science](../Relations/Contrôle/Chaos-Science.md).
 
 ---
 
 #### **☠️ La Science et la Mort**
 
-Voir [Mort engendre Science](Relations/Engendre/Mort-Science.md).
+Voir [Mort engendre Science](../Relations/Engendre/Mort-Science.md).
 
 ---
 
 #### **☀️ La Science et la Loi**
 
-Voir [Science engendre Loi](Relations/Engendre/Science-Loi.md).
+Voir [Science engendre Loi](../Relations/Engendre/Science-Loi.md).
 
 ---
 
@@ -32,4 +32,4 @@ Voir [Science engendre Loi](Relations/Engendre/Science-Loi.md).
 
 Pour l’emporter avec la Science, il faut incarner l’esprit des magiciens et des érudits : **innover sans relâche** en utilisant la **Ressource Cristal**, percer les mystères de l’univers jusqu’à ce que la connaissance soit absolue.
 
-**Condition** : voir [Conditions de Victoire](../Victoire.md)
+**Condition** : voir [Conditions de Victoire](../../Victoire.md)

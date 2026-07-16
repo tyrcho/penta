@@ -1,13 +1,14 @@
 ---
 faction: "[Nature](Nature.md)"
 type: batiment
-cout en bois: 10
+cout en bois: 30
 ressources:
   - "[Bois](Bois.md)"
 ---
-La foret produit 1 bois / 5 sec.
+![](../../game/assets/forest.png)
 
-Elle contient des Ents qui attaquent les unites qui passent sur les cases adjacentes pour 2 degats/sec.
+Produit 1 bois / 2 sec.
 
-Toutes les 10 sec elle genere un [Elfe](Elfe.md).
+Amelioration du [Bosquet](Bosquet.md).
 
+Contient des Ents qui attaquent les unites qui passent sur les cases adjacentes pour 2 degats/sec.

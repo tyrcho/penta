@@ -6,25 +6,25 @@ La **Mort** incarne la **fin de toute chose**, mais aussi la promesse d’un pou
 
 #### **🌱 La Mort et la Nature**
 
-Voir [Nature contrôle Mort](Relations/Contrôle/Nature-Mort.md).
+Voir [Nature contrôle Mort](../Relations/Contrôle/Nature-Mort.md).
 
 ---
 
 #### **⚔️ La Mort et le Chaos**
 
-Voir [Chaos engendre Mort](Relations/Engendre/Chaos-Mort.md).
+Voir [Chaos engendre Mort](../Relations/Engendre/Chaos-Mort.md).
 
 ---
 
 #### **🔬 La Mort et la Science**
 
-Voir [Mort engendre Science](Relations/Engendre/Mort-Science.md).
+Voir [Mort engendre Science](../Relations/Engendre/Mort-Science.md).
 
 ---
 
 #### **☀️ La Mort et la Loi**
 
-Voir [Mort contrôle Loi](Relations/Contrôle/Mort-Loi.md).
+Voir [Mort contrôle Loi](../Relations/Contrôle/Mort-Loi.md).
 
 ---
 
@@ -32,4 +32,4 @@ Voir [Mort contrôle Loi](Relations/Contrôle/Mort-Loi.md).
 
 Pour l’emporter avec la Mort, il faut incarner l’esprit des liches et des nécromants : **corrompre sans relâche** en utilisant la **Ressource Ombre**, étendre son influence jusqu’à ce que tout soit plongé dans les ténèbres.
 
-**Condition** : voir [Conditions de Victoire](../Victoire.md)
+**Condition** : voir [Conditions de Victoire](../../Victoire.md)

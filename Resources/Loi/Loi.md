@@ -6,25 +6,25 @@ La **Loi** incarne la **pureté**, la **justice**, et l’**harmonie absolue**. 
 
 #### **🌱 La Loi et la Nature**
 
-Voir [Loi engendre Nature](Relations/Engendre/Loi-Nature.md).
+Voir [Loi engendre Nature](../Relations/Engendre/Loi-Nature.md).
 
 ---
 
 #### **⚔️ La Loi et le Chaos**
 
-Voir [Loi contrôle Chaos](Relations/Contrôle/Loi-Chaos.md).
+Voir [Loi contrôle Chaos](../Relations/Contrôle/Loi-Chaos.md).
 
 ---
 
 #### **🔬 La Loi et la Science**
 
-Voir [Science engendre Loi](Relations/Engendre/Science-Loi.md).
+Voir [Science engendre Loi](../Relations/Engendre/Science-Loi.md).
 
 ---
 
 #### **☠️ La Loi et la Mort**
 
-Voir [Mort contrôle Loi](Relations/Contrôle/Mort-Loi.md).
+Voir [Mort contrôle Loi](../Relations/Contrôle/Mort-Loi.md).
 
 ---
 
@@ -32,4 +32,4 @@ Voir [Mort contrôle Loi](Relations/Contrôle/Mort-Loi.md).
 
 Pour l’emporter avec la Loi, il faut incarner l’esprit des paladins et des anges : **protéger sans faillir** en utilisant la **Ressource Lumière**, étendre son influence jusqu’à ce que l’ordre règne en maître.
 
-**Condition** : voir [Conditions de Victoire](../Victoire.md)
+**Condition** : voir [Conditions de Victoire](../../Victoire.md)

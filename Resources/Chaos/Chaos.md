@@ -6,25 +6,25 @@ Le **Chaos** incarne la **destruction créatrice**, l’énergie brute qui consu
 
 #### **🌱 Le Chaos et la Nature**
 
-Voir [Nature engendre Chaos](Relations/Engendre/Nature-Chaos.md).
+Voir [Nature engendre Chaos](../Relations/Engendre/Nature-Chaos.md).
 
 ---
 
 #### **⚔️ Le Chaos et la Mort**
 
-Voir [Chaos engendre Mort](Relations/Engendre/Chaos-Mort.md).
+Voir [Chaos engendre Mort](../Relations/Engendre/Chaos-Mort.md).
 
 ---
 
 #### **🔬 Le Chaos et la Science**
 
-Voir [Chaos contrôle Science](Relations/Contrôle/Chaos-Science.md).
+Voir [Chaos contrôle Science](../Relations/Contrôle/Chaos-Science.md).
 
 ---
 
 #### **☀️ Le Chaos et la Loi**
 
-Voir [Loi contrôle Chaos](Relations/Contrôle/Loi-Chaos.md).
+Voir [Loi contrôle Chaos](../Relations/Contrôle/Loi-Chaos.md).
 
 ---
 

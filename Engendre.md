@@ -2,15 +2,14 @@
 
 **Principe** : Chaque **Thème** (et sa Ressource associée) **nourrit** ou **permet l’émergence** de la suivante, selon une logique **naturelle ou symbolique**.
 
-
 ---
 
 ### **🌿 Cycle Engendre : Synergies de Production**
 
 - Nature **engendre** [Chaos](Resources/Chaos/Chaos.md) / Bois **engendre** Feu
-- Chaos **engendre** [Mort](Resources/Mort.md) / Feu **engendre** Ombre
-- Mort **engendre** [Science](Resources/Science.md) / Ombre **engendre** Cristal
-- Science **engendre** [Loi](Resources/Loi.md) / Cristal **engendre** Lumière
+- Chaos **engendre** [Mort](Resources/Mort/Mort.md) / Feu **engendre** Ombre
+- Mort **engendre** [Science](Resources/Science/Science.md) / Ombre **engendre** Cristal
+- Science **engendre** [Loi](Resources/Loi/Loi.md) / Cristal **engendre** Lumière
 - Loi **engendre** [Nature](Resources/Nature/Nature.md) / Lumière **engendre** Bois
 
 ---
