@@ -21,3 +21,25 @@ class SimulatorTest extends munit.FunSuite:
     assertEquals(results, results.sortBy(-_.winRate), "results must be ranked by win rate descending")
     results.foreach(r => assert(r.winRate >= 0.0 && r.winRate <= 1.0, s"winRate out of range: $r"))
   }
+
+  test("runLoggedMatch writes a transcript, ending in a WINS line whenever the match resolves") {
+    val lines = scala.collection.mutable.ArrayBuffer.empty[String]
+    val outcome = Simulator.runLoggedMatch(
+      towerdefense.domain.AiStrategy.all("linear"),
+      towerdefense.domain.AiStrategy.all("linear"),
+      maxTicks = 300,
+      deltaMs = 100.0,
+      logEvery = 100,
+      writeLine = lines.append(_)
+    )
+    outcome.winner.foreach { w =>
+      assert(lines.nonEmpty, "a resolved match must have logged at least the final line")
+      assert(
+        lines.last.startsWith(s"tick ${outcome.ticks}  $w  WINS  "),
+        s"expected the last line to be a WINS line for side $w, got: ${lines.last}"
+      )
+    }
+    // Every logged line must be attributable to the match that produced it (same tick
+    // range) — a loose sanity check that runLoggedMatch isn't leaking state across calls.
+    assert(lines.forall(_.startsWith("tick ")), lines.mkString("\n"))
+  }

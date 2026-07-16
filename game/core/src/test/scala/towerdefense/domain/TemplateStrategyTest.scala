@@ -19,20 +19,34 @@ class TemplateStrategyTest extends munit.FunSuite:
     assert(targetSet.contains((built.col, built.row)), s"(${built.col},${built.row}) is not a comb cell")
   }
 
-  test("prefers Forest over any other affordable kind, so the wall actually deals aura damage") {
-    // Forest is the only BuildingKind with a combat aura (see TemplateStrategy's doc) —
-    // with every currency abundant, Church would win a pure cost-order tie-break, but
-    // Forest must be picked instead.
+  test("prefers Grove over any other affordable kind, so maybeUpgrade can later grow an aura-dealing Forest") {
+    // Grove is Nature's only directly-buildable tier (Forest/Jungle are upgrade-only —
+    // see TemplateStrategy's doc) — with every currency abundant, Church would win a
+    // pure cost-order tie-break, but Grove must be picked instead.
     val state = withResources(wood = 100.0, fire = 100.0, light = 100.0)
     val result = strategy.maybeBuild(state, MazeState.initial)
-    assertEquals(result.buildings.map(_.kind), List(BuildingKind.Forest))
+    assertEquals(result.buildings.map(_.kind), List(BuildingKind.Grove))
   }
 
-  test("with only wood available, the whole template still completes using Forest") {
+  test("with only wood available, the whole template still completes using Grove") {
     var state = withResources(wood = 10_000.0, fire = 0.0, light = 0.0)
     for _ <- 1 to target.size do state = strategy.maybeBuild(state, MazeState.initial)
     assertEquals(state.buildingCells, targetSet)
-    assert(state.buildings.forall(_.kind == BuildingKind.Forest))
+    assert(state.buildings.forall(_.kind == BuildingKind.Grove))
+  }
+
+  test("maybeUpgrade grows a template-cell Grove into an aura-dealing Forest") {
+    val (col, row) = target.head
+    val withGrove = Placement.tryPlaceBuilding(withResources(wood = 1_000.0), BuildingKind.Grove, col, row)
+      .toOption
+      .get
+    val result = strategy.maybeUpgrade(withGrove, MazeState.initial)
+    assertEquals(result.buildings.map(_.kind), List(BuildingKind.Forest))
+  }
+
+  test("maybeUpgrade does nothing when there is no upgradeable building yet") {
+    val state = withResources(wood = 1_000.0)
+    assertEquals(strategy.maybeUpgrade(state, MazeState.initial), state)
   }
 
   test("does nothing without enough resources for any building") {

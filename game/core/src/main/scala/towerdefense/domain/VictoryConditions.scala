@@ -32,7 +32,11 @@ object VictoryConditions:
   // "the unstoppable expansion" even though it's Nature's own upgrade-chain kin.
   private val realForestKinds: Set[BuildingKind] = Set(BuildingKind.Forest, BuildingKind.Jungle)
 
-  private def forestCount(state: MazeState): Int =
+  // Exposed (not just private) alongside forestTarget/plunderTarget below, for the same
+  // reason: any external reader (the UI, the sim module's match logger) that wants to
+  // display live progress needs the exact number `hasWon` itself compares against,
+  // instead of re-deriving "which kinds count as a forest" and risking it drift.
+  def forestCount(state: MazeState): Int =
     state.buildings.count(b => realForestKinds.contains(b.kind))
 
   // Exposed (not just private) so the UI can display the live target, which moves

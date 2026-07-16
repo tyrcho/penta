@@ -18,6 +18,19 @@ case class BattleState(
 object BattleState:
   val initial: BattleState = BattleState(MazeState.initial, MazeState.initial)
 
+// Deaths/arrivals from both sides' CombatEngine.tick calls this BattleEngine.tick
+// otherwise discards — purely observational (see MatchLog in the sim module, the one
+// consumer), so it's returned alongside BattleState rather than folded into it.
+case class TickEvents(
+    playerDeaths: List[Death],
+    aiDeaths: List[Death],
+    playerArrivals: List[UnitKind],
+    aiArrivals: List[UnitKind]
+)
+
+object TickEvents:
+  val empty: TickEvents = TickEvents(Nil, Nil, Nil, Nil)
+
 object BattleEngine:
 
   // `aiStrategy` defaults to today's behavior (the UI never passes one). `playerStrategy`
@@ -29,7 +42,20 @@ object BattleEngine:
       aiStrategy: AiStrategy = LinearStrategy,
       playerStrategy: Option[AiStrategy] = None
   ): BattleState =
-    if battle.outcome.isDefined then battle
+    tickDetailed(battle, deltaMs, aiStrategy, playerStrategy)._1
+
+  // Same behavior as `tick`, plus the per-tick death/arrival events CombatEngine already
+  // computes but `tick` alone throws away — `tick` is defined in terms of this rather than
+  // duplicating the logic, so the two can never drift apart. Split out for the sim
+  // module's match logger; the live browser game (GameApp.scala) keeps calling plain
+  // `tick`, untouched.
+  def tickDetailed(
+      battle: BattleState,
+      deltaMs: Double,
+      aiStrategy: AiStrategy = LinearStrategy,
+      playerStrategy: Option[AiStrategy] = None
+  ): (BattleState, TickEvents) =
+    if battle.outcome.isDefined then (battle, TickEvents.empty)
     else
       val playerResult = CombatEngine.tick(battle.player, deltaMs)
       val aiResult = CombatEngine.tick(battle.ai, deltaMs)
@@ -56,7 +82,13 @@ object BattleEngine:
       val playerFinal = deliverUnits(creditPlunder(playerBuilt, aiResult.stolen), aiResult.spawned)
 
       val next = BattleState(playerFinal, aiFinal, aiNextCooldown, playerNextCooldown)
-      next.copy(outcome = VictoryConditions.evaluate(next))
+      val events = TickEvents(
+        playerDeaths = playerResult.deaths,
+        aiDeaths = aiResult.deaths,
+        playerArrivals = playerResult.arrivals,
+        aiArrivals = aiResult.arrivals
+      )
+      (next.copy(outcome = VictoryConditions.evaluate(next)), events)
 
   // Wood/fire production compounds with building count, so without a pace limit a side
   // can tile its whole maze within seconds — capping it to at most one *attempt* per

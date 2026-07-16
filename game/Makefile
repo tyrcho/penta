@@ -5,6 +5,7 @@ help:
 	@echo "make test     — run unit tests on the JVM (fast — for iterating on AI strategies)"
 	@echo "make test-js  — run unit tests under Node.js (parity check for the browser build)"
 	@echo "make sim      — headless AI-vs-AI battles: make sim ARGS='linear balanced 200'"
+	@echo "                add --log <path> for a one-match transcript: ARGS='linear comb 1 --log /tmp/match.log'"
 	@echo "make sim-tune — sweep CompositeStrategy weights: make sim-tune ARGS='linear 50 0.25'"
 	@echo "make build    — production JS build → public/"
 	@echo "make clean    — remove build artifacts"

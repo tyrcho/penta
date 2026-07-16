@@ -6,28 +6,47 @@ import towerdefense.domain.geometry.Vec2
 // delivers those into the *opponent's* maze.
 // stolen: resources this maze just lost to arriving Goblins/Minotaurs — the caller
 // credits those (and the plunder tally) to the opponent that owns them.
+// deaths: creatures killed this tick by an aura and/or a Watchtower (see DeathCause) —
+// purely observational, nothing else in CombatEngine reads it back.
+// arrivals: the UnitKind of every creature that reached the goal this tick, including
+// ones with no plunder ability (Paladin, Wolf) that `stolen` alone would miss entirely.
 case class TickResult(
     state: MazeState,
     spawned: Map[UnitKind, Int],
-    stolen: Map[Resource, Double]
+    stolen: Map[Resource, Double],
+    deaths: List[Death],
+    arrivals: List[UnitKind]
 )
+
+// Which damage source(s) killed a creature this tick — a *type* of source, not which
+// specific Forest/Watchtower instance (that would need per-building damage maps; not
+// worth the complexity for what this is used for, see MatchLog's doc in the sim module).
+enum DeathCause derives CanEqual:
+  case Aura, Watchtower, AuraAndWatchtower
+
+case class Death(creatureId: Long, kind: UnitKind, cause: DeathCause)
 
 object CombatEngine:
 
   def tick(state: MazeState, deltaMs: Double): TickResult =
-    val (s1, stolen) = moveCreatures(state, deltaMs)
-    val s2 = applyDamageSources(s1, deltaMs)
+    val (s1, stolen, arrivals) = moveCreatures(state, deltaMs)
+    val (s2, deaths) = applyDamageSources(s1, deltaMs)
     val s3 = produceResources(s2, deltaMs)
     val (s4, spawned) = advanceSpawnTimers(s3, deltaMs)
-    TickResult(s4, spawned, stolen)
+    TickResult(s4, spawned, stolen, deaths, arrivals)
 
   // Re-pathfinds every creature from its current cell to the goal each tick, avoiding
   // building cells — no cached path to invalidate when a new building changes the maze.
   // Plunder varies by kind — see CreatureSpecs.all(_).plunder: Elf takes wood only,
   // Goblin/Minotaur take both (Minotaur much more), and the Paladin/Wolf take neither
   // (Paladin.md/Loup.md give them no plunder ability — their value is the shield/speed
-  // buff they provide in applyDamageSources/effectiveSpeedPerMs).
-  private def moveCreatures(state: MazeState, deltaMs: Double): (MazeState, Map[Resource, Double]) =
+  // buff they provide in applyDamageSources/effectiveSpeedPerMs). `arrived`'s kinds are
+  // reported in full via the third return value, since `stolen` alone drops any arrival
+  // with no plunder ability entirely.
+  private def moveCreatures(
+      state: MazeState,
+      deltaMs: Double
+  ): (MazeState, Map[Resource, Double], List[UnitKind]) =
     val blocked = state.buildingCells
     val (remaining, arrived) =
       state.creatures.map(stepCreature(_, state.creatures, blocked, deltaMs)).partitionMap(identity)
@@ -43,7 +62,7 @@ object CombatEngine:
         acc.updated(res, acc.getOrElse(res, 0.0) - amount)
       }
     )
-    (next, stolen)
+    (next, stolen, arrived.map(_.kind))
 
   private def stepCreature(
       creature: Creature,
@@ -103,7 +122,7 @@ object CombatEngine:
   // on the receiving maze's side of the fight, same as the units it protects. This combat
   // math is intentionally kept as kind-based special cases, not folded into BuildingSpec/
   // CreatureSpec (see the refactor's confirmed scope).
-  private def applyDamageSources(state: MazeState, deltaMs: Double): MazeState =
+  private def applyDamageSources(state: MazeState, deltaMs: Double): (MazeState, List[Death]) =
     val forestDamagePerHit = Balance.AuraDamagePerSec * deltaMs / 1000.0
     val watchtowerDamagePerHit = Balance.WatchtowerDamagePerSec * deltaMs / 1000.0
     val forests = state.buildings.filter(b => auraBuildingKinds.contains(b.kind))
@@ -111,9 +130,10 @@ object CombatEngine:
     val fromForests = forests.foldLeft(Map.empty[Long, Double])((acc, f) =>
       accumulateAuraHits(f, state.creatures, forestDamagePerHit, acc)
     )
-    val damageByCreature = watchtowers.foldLeft(fromForests)((acc, w) =>
+    val fromTowers = watchtowers.foldLeft(Map.empty[Long, Double])((acc, w) =>
       accumulateWatchtowerHit(w, state.creatures, watchtowerDamagePerHit, acc)
     )
+    val damageByCreature = mergeSum(fromForests, fromTowers)
     val reductionPerHit = Balance.PaladinAuraDamageReductionPerSec * deltaMs / 1000.0
     val shielded = paladinShieldedIds(state.creatures)
     val damaged = state.creatures.map { c =>
@@ -121,7 +141,28 @@ object CombatEngine:
       val taken = if shielded.contains(c.id) then math.max(0.0, raw - reductionPerHit) else raw
       c.copy(hp = c.hp - taken)
     }
-    state.copy(creatures = damaged.filter(_.hp > 0))
+    val dead = damaged.filter(_.hp <= 0)
+    val deaths = dead.map(c => Death(c.id, c.kind, deathCause(c.id, fromForests, fromTowers)))
+    (state.copy(creatures = damaged.filter(_.hp > 0)), deaths)
+
+  private def mergeSum(a: Map[Long, Double], b: Map[Long, Double]): Map[Long, Double] =
+    b.foldLeft(a) { case (acc, (id, amount)) => acc.updated(id, acc.getOrElse(id, 0.0) + amount) }
+
+  // A creature only dies from a source it actually took damage from this tick — Paladin
+  // shielding can zero out one source's contribution to `damaged` without it being absent
+  // from `fromForests`/`fromTowers` (those record raw pre-shield hits), but a dead
+  // creature's cause listing which sources actually hit it is still accurate: shielding
+  // reduces the total, it doesn't erase which sources fired.
+  private def deathCause(
+      creatureId: Long,
+      fromForests: Map[Long, Double],
+      fromTowers: Map[Long, Double]
+  ): DeathCause =
+    val auraHit = fromForests.contains(creatureId)
+    val towerHit = fromTowers.contains(creatureId)
+    if auraHit && towerHit then DeathCause.AuraAndWatchtower
+    else if towerHit then DeathCause.Watchtower
+    else DeathCause.Aura
 
   private def accumulateAuraHits(
       forest: Building,

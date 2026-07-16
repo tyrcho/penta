@@ -28,6 +28,38 @@ object Simulator:
     }
     MatchOutcome(winner, ticks)
 
+  // Same match as runMatch, but drives BattleEngine.tickDetailed instead of tick and
+  // formats every event through MatchLog, handing each line to `writeLine` — a separate
+  // function rather than a parameter added to runMatch, so runMatches/searchWeights (used
+  // by `tune` and every batch comparison) stay exactly as they were, zero cost when
+  // logging isn't wanted. `writeLine` is the only I/O seam (a plain String => Unit), so
+  // this stays testable with an in-memory buffer instead of a real file — the `run` CLI's
+  // `--log` flag is what wires it to a PrintWriter.
+  def runLoggedMatch(
+      strategyA: AiStrategy,
+      strategyB: AiStrategy,
+      maxTicks: Int,
+      deltaMs: Double,
+      logEvery: Int,
+      writeLine: String => Unit
+  ): MatchOutcome =
+    var battle = BattleState.initial
+    var ticks = 0
+    while battle.outcome.isEmpty && ticks < maxTicks do
+      val before = battle
+      val (next, events) =
+        BattleEngine.tickDetailed(battle, deltaMs, aiStrategy = strategyB, playerStrategy = Some(strategyA))
+      battle = next
+      ticks += 1
+      MatchLog.diff(ticks, before, battle, events).foreach(writeLine)
+      if ticks % logEvery == 0 then writeLine(MatchLog.snapshotLine(ticks, battle))
+    battle.outcome.foreach(outcome => writeLine(MatchLog.finalLine(ticks, outcome)))
+    val winner = battle.outcome.map {
+      case MatchResult.PlayerWins(_) => "a"
+      case MatchResult.AiWins(_)     => "b"
+    }
+    MatchOutcome(winner, ticks)
+
   // Runs `matches` independent games of the two named strategies (resolved via
   // AiStrategy.all) and tallies wins/draws/avg-ticks per side.
   def runMatches(
@@ -94,14 +126,44 @@ object Simulator:
   // is too low.
   // Parsed by hand (not plain @main defaults) because sbt's `runMain` — unlike the
   // standalone `scala` runner — doesn't fill in a Scala 3 @main's default arguments when
-  // trailing ones are omitted; it demands every positional argument or none.
+  // trailing ones are omitted; it demands every positional argument or none. `--log
+  // <path>`/`--log-every <n>` are scanned out and stripped before that positional parsing
+  // runs, so they can appear anywhere in `args` without disturbing today's
+  // `run linear balanced 100`-style usage. `--log` only ever drives `matches`' *first*
+  // match — a per-tick transcript of a 100-match batch would be enormous and useless;
+  // pair `--log` with a small `matches` count (typically 1).
   @main def run(args: String*): Unit =
-    val a = args.lift(0).getOrElse("linear")
-    val b = args.lift(1).getOrElse("balanced")
-    val matches = args.lift(2).map(_.toInt).getOrElse(100)
-    val maxTicks = args.lift(3).map(_.toInt).getOrElse(3_000)
-    val deltaMs = args.lift(4).map(_.toDouble).getOrElse(100.0)
-    println(formatTallyTable(runMatches(a, b, matches, maxTicks, deltaMs), matches))
+    val (logPath, logEvery, rest) = extractLogFlags(args.toList)
+    val a = rest.lift(0).getOrElse("linear")
+    val b = rest.lift(1).getOrElse("balanced")
+    val matches = rest.lift(2).map(_.toInt).getOrElse(100)
+    val maxTicks = rest.lift(3).map(_.toInt).getOrElse(3_000)
+    val deltaMs = rest.lift(4).map(_.toDouble).getOrElse(100.0)
+    logPath match
+      case Some(path) =>
+        val writer = new java.io.PrintWriter(path)
+        try
+          val strategyA = AiStrategy.all(a)
+          val strategyB = AiStrategy.all(b)
+          val outcome = runLoggedMatch(strategyA, strategyB, maxTicks, deltaMs, logEvery, writer.println)
+          val winner = outcome.winner.getOrElse("draw")
+          println(s"Logged 1 match ($a vs $b, ${outcome.ticks} ticks, winner=$winner) to $path")
+        finally writer.close()
+      case None =>
+        println(formatTallyTable(runMatches(a, b, matches, maxTicks, deltaMs), matches))
+
+  private def extractLogFlags(args: List[String]): (Option[String], Int, List[String]) =
+    args match
+      case "--log" :: path :: rest =>
+        val (_, logEvery, rest2) = extractLogFlags(rest)
+        (Some(path), logEvery, rest2)
+      case "--log-every" :: n :: rest =>
+        val (logPath, _, rest2) = extractLogFlags(rest)
+        (logPath, n.toInt, rest2)
+      case other :: rest =>
+        val (logPath, logEvery, rest2) = extractLogFlags(rest)
+        (logPath, logEvery, other :: rest2)
+      case Nil => (None, 100, Nil)
 
   @main def tune(args: String*): Unit =
     val baseline = args.lift(0).getOrElse("linear")

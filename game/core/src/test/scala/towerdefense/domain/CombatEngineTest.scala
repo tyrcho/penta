@@ -343,3 +343,91 @@ class CombatEngineTest extends munit.FunSuite:
     val result = CombatEngine.tick(state, deltaMs = 1000.0)
     assertEquals(result.state.creatures.head.hp, elf.hp - Balance.AuraDamagePerSec)
   }
+
+  test("a creature killed purely by forest aura is reported with cause Aura") {
+    val forest = Building(100, col = 5, row = 5, BuildingKind.Forest, Balance.ElfSpawnIntervalMs)
+    val creature = Creature(
+      1,
+      GridConfig.cellCenter(6, 5),
+      hp = Balance.AuraDamagePerSec,
+      maxHp = Balance.AuraDamagePerSec,
+      speedPerMs = 0.0,
+      UnitKind.Elf
+    )
+    val state = withResources().copy(creatures = List(creature), buildings = List(forest))
+    val result = CombatEngine.tick(state, deltaMs = 1000.0)
+    assertEquals(result.deaths, List(Death(1, UnitKind.Elf, DeathCause.Aura)))
+  }
+
+  test("a creature killed purely by a watchtower is reported with cause Watchtower") {
+    val watchtower = Building(100, col = 5, row = 5, BuildingKind.Watchtower, 0.0)
+    val creature = Creature(
+      1,
+      GridConfig.cellCenter(6, 5),
+      hp = Balance.WatchtowerDamagePerSec,
+      maxHp = Balance.WatchtowerDamagePerSec,
+      speedPerMs = 0.0,
+      UnitKind.Elf
+    )
+    val state = withResources().copy(creatures = List(creature), buildings = List(watchtower))
+    val result = CombatEngine.tick(state, deltaMs = 1000.0)
+    assertEquals(result.deaths, List(Death(1, UnitKind.Elf, DeathCause.Watchtower)))
+  }
+
+  test("a creature killed by both an aura and a watchtower in the same tick is reported as AuraAndWatchtower") {
+    val forest = Building(100, col = 5, row = 5, BuildingKind.Forest, Balance.ElfSpawnIntervalMs)
+    val watchtower = Building(101, col = 7, row = 5, BuildingKind.Watchtower, 0.0)
+    val creature = Creature(
+      1,
+      GridConfig.cellCenter(6, 5),
+      hp = Balance.AuraDamagePerSec + Balance.WatchtowerDamagePerSec,
+      maxHp = Balance.AuraDamagePerSec + Balance.WatchtowerDamagePerSec,
+      speedPerMs = 0.0,
+      UnitKind.Elf
+    )
+    val state = withResources().copy(creatures = List(creature), buildings = List(forest, watchtower))
+    val result = CombatEngine.tick(state, deltaMs = 1000.0)
+    assertEquals(result.deaths, List(Death(1, UnitKind.Elf, DeathCause.AuraAndWatchtower)))
+  }
+
+  test("a creature that survives the tick is not reported as a death") {
+    val forest = Building(100, col = 5, row = 5, BuildingKind.Forest, Balance.ElfSpawnIntervalMs)
+    val creature =
+      Creature(1, GridConfig.cellCenter(6, 5), hp = 100.0, maxHp = 100.0, speedPerMs = 0.0, UnitKind.Elf)
+    val state = withResources().copy(creatures = List(creature), buildings = List(forest))
+    val result = CombatEngine.tick(state, deltaMs = 1000.0)
+    assertEquals(result.deaths, Nil)
+  }
+
+  test("a paladin reaching the goal is reported as an arrival even though it plunders nothing") {
+    val goalPos = GridConfig.cellCenter(GridConfig.goalCell._1, GridConfig.goalCell._2)
+    val paladin = Creature(
+      1,
+      goalPos,
+      Balance.PaladinMaxHp,
+      Balance.PaladinMaxHp,
+      speedPerMs = 0.0,
+      UnitKind.Paladin
+    )
+    val state = withResources().copy(creatures = List(paladin))
+    val result = CombatEngine.tick(state, deltaMs = 1.0)
+    assertEquals(result.arrivals, List(UnitKind.Paladin))
+    assertEquals(result.stolen, Map.empty[Resource, Double])
+  }
+
+  test("a goblin reaching the goal is reported as an arrival alongside its plunder") {
+    val goalPos = GridConfig.cellCenter(GridConfig.goalCell._1, GridConfig.goalCell._2)
+    val goblin =
+      Creature(1, goalPos, Balance.GoblinMaxHp, Balance.GoblinMaxHp, speedPerMs = 0.0, UnitKind.Goblin)
+    val state = withResources(wood = 100.0, fire = 100.0).copy(creatures = List(goblin))
+    val result = CombatEngine.tick(state, deltaMs = 1.0)
+    assertEquals(result.arrivals, List(UnitKind.Goblin))
+  }
+
+  test("a creature still walking is not reported as an arrival") {
+    val creature =
+      Creature(1, GridConfig.cellCenter(0, 0), Balance.ElfMaxHp, Balance.ElfMaxHp, speedPerMs = 0.0, UnitKind.Elf)
+    val state = withResources().copy(creatures = List(creature))
+    val result = CombatEngine.tick(state, deltaMs = 1.0)
+    assertEquals(result.arrivals, Nil)
+  }

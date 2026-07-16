@@ -13,18 +13,21 @@ package towerdefense.domain
 // correct if GridConfig's size ever changes.
 case class TemplateStrategy(template: (Int, Int) => List[(Int, Int)]) extends AiStrategy:
 
-  // Forest first, unlike LinearStrategy's pure cost order: Forest is the only BuildingKind
-  // with a combat aura (CombatEngine.applyDamageSources), so a wall of Forests doesn't just
-  // lengthen the enemy's path the way any other kind would, it kills them outright — the
-  // same reason CompositeStrategy's maze-only always builds Forest (see its dangerScore
-  // doc) and why an early version of this strategy, which reused LinearStrategy's
+  // Grove first, unlike LinearStrategy's pure cost order: Grove is Nature's only
+  // directly-buildable tier (Forest/Jungle are upgrade-only — see Placement's
+  // buildableDirectly check), and Nature is the only faction with a combat aura
+  // (CombatEngine.applyDamageSources/auraBuildingKinds), so a wall built from Groves —
+  // which maybeUpgrade below then grows into Forests — doesn't just lengthen the enemy's
+  // path the way any other kind would, it eventually kills them outright. The same reason
+  // CompositeStrategy's maze-only always favors an aura kind (see its dangerScore doc),
+  // and why an early version of this strategy, which reused LinearStrategy's
   // expensive-first order verbatim, lost 40-0 to maze-only in `make sim`: it was building
-  // whatever Church/Labyrinth/Watchtower it could afford on the comb's cells instead of
-  // Forest, forcing a long walk but never actually killing anything. The remaining kinds
-  // stay in LinearStrategy's original descending-wood-cost order as the affordability
-  // fallback for when wood specifically is scarce.
+  // whatever Church/Labyrinth/Watchtower it could afford on the comb's cells instead,
+  // forcing a long walk but never actually killing anything. The remaining kinds stay in
+  // LinearStrategy's original descending-wood-cost order as the affordability fallback
+  // for when wood specifically is scarce.
   private val buildOrder: Seq[BuildingKind] = Seq(
-    BuildingKind.Forest,
+    BuildingKind.Grove,
     BuildingKind.Church,
     BuildingKind.Labyrinth,
     BuildingKind.Watchtower,
@@ -37,5 +40,16 @@ case class TemplateStrategy(template: (Int, Int) => List[(Int, Int)]) extends Ai
       .flatMap { case (col, row) =>
         buildOrder.iterator.flatMap(kind => Placement.tryPlaceBuilding(state, kind, col, row).toOption)
       }
+      .nextOption()
+      .getOrElse(state)
+
+  // Grows an existing Grove into a Forest (and a Forest into a Jungle) once affordable —
+  // same "first that works" simplicity as maybeBuild, no attempt to pick the "best" one.
+  // Every building this strategy has is already on a template cell (maybeBuild never
+  // places elsewhere), so upgrading any of them is always upgrading the maze wall, no
+  // extra filtering needed — same pattern as LinearStrategy.maybeUpgrade.
+  override def maybeUpgrade(state: MazeState, opponent: MazeState): MazeState =
+    state.buildings.iterator
+      .flatMap(b => Placement.tryUpgradeBuilding(state, b.col, b.row).toOption)
       .nextOption()
       .getOrElse(state)
