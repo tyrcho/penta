@@ -35,34 +35,45 @@ object AiStrategy:
       .nextOption()
       .getOrElse(state)
 
-  // Ordered weakest to strongest by measured head-to-head win rate (sim/run round-robin,
-  // 15-20 matches per pairing). Re-measured after CompositeStrategy's maze component
-  // started weighting aura-damage exposure (dangerScore), not just raw path length:
-  // maze-only jumped from a middling tier to the outright strongest, beating linear,
-  // resource-only, AND counter-only 15-0 each, since it now routes the enemy path past
-  // Forests to kill units instead of merely delaying them — beating an opponent to death
-  // prevents its plunder outright, which raw path length never could. It only stalemates
-  // balanced, which inherits the same routing logic as one of its three components.
-  // counter-only lost outright to both resource-only and maze-only; resource-only lost
-  // outright to maze-only. Drives both the simulator's named presets (`all`) and the
-  // browser's difficulty selector / auto-advance-on-win, so both walk this measured order.
+  // Ordered weakest to strongest by measured head-to-head win rate: a full round-robin
+  // across every entry below (`sim/runMain towerdefense.sim.tournament`). Re-measured
+  // here after two CompositeStrategy fixes (a missing maybeUpgrade override, then Grove
+  // being undervalued against non-upgradeable kinds — see CompositeStrategy's doc) landed
+  // in the same session, since both directly change how the maze-weighted entries
+  // (maze-only, balanced) actually play.
+  //
+  // Match count turned out not to matter: there is no randomness anywhere in `core`/`sim`
+  // (no `scala.util.Random`, nothing seeded) — every match between the same two
+  // strategies at the same maxTicks/deltaMs has exactly one deterministic outcome. A
+  // 3-matches-per-pairing run and a 15-matches-per-pairing run produced numbers that were
+  // exact 5x multiples of each other across every strategy, confirming this — "matches
+  // per pairing" beyond 1 buys no statistical confidence today, it just repeats the same
+  // game. Left the CLI's default above 1 anyway (useful once/if any real randomness gets
+  // added later), but this ladder didn't need it.
+  //
+  // resource-only is now the outright strongest, not maze-only: its affordability-margin
+  // heuristic stumbles into cheap Watchtowers (good margin off abundant Light), and
+  // Watchtower deals real ranged damage every tick with no upgrade chain required, unlike
+  // Forest's aura — see a real transcript via `sim/run resource-only maze-only 1 --log`.
+  // comb and comb-vertical tie on win rate but comb never lost a single match across
+  // either round-robin (0 losses out of 90 games played), while comb-vertical did lose
+  // some — comb ranks above it on that tiebreak. maze-only and balanced both improved
+  // substantially from the two fixes above but still trail comb/comb-vertical/
+  // resource-only — pure maze-weighting (maze-only) or a three-way blend that includes it
+  // (balanced) is a genuinely weaker archetype here than a fixed, disciplined
+  // full-width-wall template, not just a bug away from "outright strongest" as this
+  // comment used to claim. counter-only and balanced tie on win rate too; balanced ranks
+  // above it for the same fewer-losses/more-draws tiebreak reason as comb over
+  // comb-vertical. Drives both the simulator's named presets (`all`) and the browser's
+  // difficulty selector / auto-advance-on-win, so both walk this measured order.
   val ladder: Seq[(String, AiStrategy)] = Seq(
     "linear" -> LinearStrategy,
     "counter-only" -> CompositeStrategy(Weights(resource = 0.0, counter = 1.0, maze = 0.0)),
-    "resource-only" -> CompositeStrategy(Weights(resource = 1.0, counter = 0.0, maze = 0.0)),
     "balanced" -> CompositeStrategy(Weights(resource = 1.0, counter = 1.0, maze = 1.0)),
     "maze-only" -> CompositeStrategy(Weights(resource = 0.0, counter = 0.0, maze = 1.0)),
-    // Builds a fixed MazeTemplate.comb/combVertical layout instead of scoring candidates —
-    // see MazeTemplate's doc for why a comb (not a spiral) is what actually forces a long
-    // path on this grid, and TemplateStrategy's doc for two `make sim`-caught bugs (build
-    // order, building-kind choice) that made early versions lose 0-40 to maze-only despite
-    // a structurally-correct, approval-tested shape. Spot-checked post-fix (30 matches
-    // each, not the full 15-20-per-pairing round robin the rest of this ladder was
-    // measured with): comb beats linear 30-0 and stalemates maze-only 30-30 — roughly
-    // maze-only's tier, not "strongest," so appended after it rather than reordering
-    // entries whose position IS from the full round robin.
+    "comb-vertical" -> TemplateStrategy(MazeTemplate.combVertical),
     "comb" -> TemplateStrategy(MazeTemplate.comb),
-    "comb-vertical" -> TemplateStrategy(MazeTemplate.combVertical)
+    "resource-only" -> CompositeStrategy(Weights(resource = 1.0, counter = 0.0, maze = 0.0))
   )
 
   val all: Map[String, AiStrategy] = ladder.toMap

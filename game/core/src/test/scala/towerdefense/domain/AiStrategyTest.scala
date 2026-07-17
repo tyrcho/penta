@@ -98,18 +98,18 @@ class AiStrategyTest extends munit.FunSuite:
     assertEquals(count(result, BuildingKind.Grove), 0)
   }
 
-  // Order measured via headless AI-vs-AI simulation (sim/run round-robin), re-measured
-  // after CompositeStrategy's maze component started weighting aura-damage exposure
-  // (dangerScore): linear loses to every other tier; counter-only and resource-only both
-  // lose outright to maze-only (which routes the enemy path past Forests to kill units,
-  // not just delay them); maze-only only stalemates balanced. The browser's difficulty
-  // selector and auto-advance-on-win both walk this exact sequence. "comb"/"comb-vertical"
-  // are appended after, not slotted in by strength — they haven't been through the
-  // round-robin sim yet, so where they'd actually land in this order is unmeasured.
+  // Order measured via a full round-robin tournament (sim/runMain
+  // towerdefense.sim.tournament), re-measured after fixing CompositeStrategy's missing
+  // maybeUpgrade override and its Grove-vs-non-upgradeable-kind scoring gap — see
+  // AiStrategy.ladder's doc for the full story, including why match count above 1 turned
+  // out not to matter (the simulation has no randomness anywhere). resource-only is now
+  // the outright strongest (a cheap-Watchtower economy that deals real damage with no
+  // upgrade chain needed), not maze-only — pure maze-weighting is a weaker archetype than
+  // a fixed wall template (comb/comb-vertical) or a blend that includes it (balanced).
   test("the ladder is ordered weakest to strongest by measured win rate, linear first") {
     assertEquals(
       AiStrategy.ladder.map(_._1),
-      Seq("linear", "counter-only", "resource-only", "balanced", "maze-only", "comb", "comb-vertical")
+      Seq("linear", "counter-only", "balanced", "maze-only", "comb-vertical", "comb", "resource-only")
     )
   }
 
