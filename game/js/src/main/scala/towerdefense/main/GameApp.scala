@@ -5,6 +5,7 @@ import org.scalajs.dom.document
 import scala.collection.mutable
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.scalajs.js
+import scala.util.Random
 import towerdefense.domain.*
 import towerdefense.domain.geometry.Vec2
 import towerdefense.pixi.*
@@ -16,6 +17,38 @@ private enum HoverKind derives CanEqual:
   case BuildingH(kind: BuildingKind)
 
 private case class HoverTarget(isPlayer: Boolean, kind: HoverKind, id: Long)
+
+// Idle/attract-mode vs. the human actually playing. On first load (nothing saved — see
+// Persistence.load) the site defaults to Spectating: two random AiStrategy.ladder entries
+// duel each other on both mazes (playerStrategy is driven too, see BattleEngine.tick),
+// nobody's taps do anything. leftIdx drives the player-side maze, rightIdx the ai-side
+// maze — same left/right split as the rest of the UI (playerWorld/aiWorld). Playing is
+// today's original mode: the player-side maze is human-controlled, ai-side follows the
+// difficulty ladder via aiLevelIndex.
+private enum Mode derives CanEqual:
+  case Spectating(leftIdx: Int, rightIdx: Int)
+  case Playing
+
+// How long a finished spectate match's game-over banner stays up before the mazes reset
+// for the next pairing — long enough to read "X wins", short enough the attract loop
+// doesn't stall.
+private val SpectateRestartDelayMs = 3000.0
+
+private def randomLadderIndex(): Int = Random.nextInt(AiStrategy.ladder.length)
+
+// Picks a random ladder index different from `exclude` (when the ladder has more than one
+// entry) — used both for the initial random pairing (so the two AIs facing off aren't
+// always the same one) and for picking the loser's replacement (so "another random AI" is
+// never just the strategy that already lost).
+private def randomOtherLadderIndex(exclude: Int): Int =
+  if AiStrategy.ladder.length <= 1 then exclude
+  else
+    val idx = Random.nextInt(AiStrategy.ladder.length - 1)
+    if idx >= exclude then idx + 1 else idx
+
+private def randomSpectatingPair(): Mode.Spectating =
+  val left = randomLadderIndex()
+  Mode.Spectating(left, randomOtherLadderIndex(left))
 
 // Pause/speed-up/slow-down: a multiplier applied to each tick's real elapsed time
 // before it reaches BattleEngine — the simulation itself has no notion of speed.
@@ -175,9 +208,16 @@ def onReady(app: Application, textures: js.Dictionary[Texture]): Unit =
     AssetPaths.GoblinFrames.map { case (dir, paths) => dir -> js.Array(paths.map(textures(_))*) }
   val elfFrames: Map[String, js.Array[Texture]] =
     AssetPaths.ElfFrames.map { case (dir, paths) => dir -> js.Array(paths.map(textures(_))*) }
-  val (initialBattle, initialAiLevelIndex) = Persistence.load().getOrElse((BattleState.initial, 0))
-  var battle = initialBattle
-  var aiLevelIndex = initialAiLevelIndex
+  // No saved game (first-ever visit, or a cleared one) means there's nothing to resume
+  // the player into — default to the attract-mode AI duel instead of an empty player-
+  // controlled maze. A saved game always resumes straight into Playing.
+  val savedGame = Persistence.load()
+  var battle = savedGame.map(_._1).getOrElse(BattleState.initial)
+  var aiLevelIndex = savedGame.map(_._2).getOrElse(0)
+  var mode: Mode = savedGame match
+    case Some(_) => Mode.Playing
+    case None    => randomSpectatingPair()
+  var spectateRestartCountdownMs = 0.0
   var selectedBuilding: BuildingKind = BuildingKind.Grove
   var hovered: Option[HoverTarget] = None
   // Set by clicking a building (not just hovering it) — takes priority over `hovered`
@@ -192,27 +232,34 @@ def onReady(app: Application, textures: js.Dictionary[Texture]): Unit =
   val playerSprites = new MazeSprites
   val aiSprites = new MazeSprites
 
+  // Always lands in Playing, whether triggered from a finished/paused game (the original
+  // behavior) or from the attract-mode AI duel (see wireNewGameButton) — that's how a
+  // spectator becomes a player.
   def resetGame(): Unit =
     clearSprites(playerWorld, playerSprites)
     clearSprites(aiWorld, aiSprites)
     battle = BattleState.initial
+    mode = Mode.Playing
+    updateModeUi(mode)
     speed.paused = false
     updateSpeedLabel(speed)
     hovered = None
     selectedTarget = None
     Persistence.clear()
 
+  updateModeUi(mode)
+
   wireBuildingButtons(
-    choice => selectedBuilding = choice,
-    choice => canAfford(battle.player, choice),
+    choice => if mode == Mode.Playing then selectedBuilding = choice,
+    choice => mode == Mode.Playing && canAfford(battle.player, choice),
     active => hoveringButton = active
   )
   wireSpeedControls(speed)
   wireNewGameButton(() => resetGame())
   wireFullscreenButton()
   wireAiLevelSelect(aiLevelIndex, index => aiLevelIndex = index)
-  wireDestroyButton((col, row) => battle = destroyPlayerBuilding(battle, col, row))
-  wireUpgradeButton((col, row) => battle = upgradePlayerBuilding(battle, col, row))
+  wireDestroyButton((col, row) => battle = destroyPlayerBuilding(battle, mode, col, row))
+  wireUpgradeButton((col, row) => battle = upgradePlayerBuilding(battle, mode, col, row))
 
   app.stage.eventMode = "static"
   app.stage.on(
@@ -227,7 +274,7 @@ def onReady(app: Application, textures: js.Dictionary[Texture]): Unit =
           positionTooltip(canvasRect.left + e.globalX, canvasRect.top + e.globalY)
         case None =>
           selectedTarget = None
-          battle = handleTap(app, battle, e, selectedBuilding)
+          if mode == Mode.Playing then battle = handleTap(app, battle, e, selectedBuilding)
     }
   )
   app.stage.on(
@@ -244,17 +291,44 @@ def onReady(app: Application, textures: js.Dictionary[Texture]): Unit =
 
   app.ticker.add { t =>
     val wasUnresolved = battle.outcome.isEmpty
+    val (tickAiStrategy, tickPlayerStrategy) = mode match
+      case Mode.Spectating(leftIdx, rightIdx) =>
+        (AiStrategy.ladder(rightIdx)._2, Some(AiStrategy.ladder(leftIdx)._2))
+      case Mode.Playing => (AiStrategy.ladder(aiLevelIndex)._2, None)
     battle = BattleEngine.tick(
       battle,
       speed.effectiveDeltaMs(t.deltaMS),
-      aiStrategy = AiStrategy.ladder(aiLevelIndex)._2
+      aiStrategy = tickAiStrategy,
+      playerStrategy = tickPlayerStrategy
     )
     if wasUnresolved then
-      battle.outcome match
-        case Some(MatchResult.PlayerWins(_)) if aiLevelIndex < AiStrategy.ladder.length - 1 =>
-          aiLevelIndex += 1
-          updateAiLevelSelect(aiLevelIndex)
-        case _ => ()
+      battle.outcome.foreach { outcome =>
+        mode match
+          case Mode.Playing =>
+            outcome match
+              case MatchResult.PlayerWins(_) if aiLevelIndex < AiStrategy.ladder.length - 1 =>
+                aiLevelIndex += 1
+                updateAiLevelSelect(aiLevelIndex)
+              case _ => ()
+          // The winning side keeps its ladder index for the next pairing; the losing side
+          // gets replaced with another random entry (see randomOtherLadderIndex) — the
+          // mazes themselves stay showing the finished match for SpectateRestartDelayMs so
+          // the "X wins" banner is actually readable before the next duel starts.
+          case Mode.Spectating(leftIdx, rightIdx) =>
+            val leftWon = outcome.isInstanceOf[MatchResult.PlayerWins]
+            mode =
+              if leftWon then Mode.Spectating(leftIdx, randomOtherLadderIndex(leftIdx))
+              else Mode.Spectating(randomOtherLadderIndex(rightIdx), rightIdx)
+            spectateRestartCountdownMs = SpectateRestartDelayMs
+      }
+    mode match
+      // Paced by the same effective (speed/pause-aware) delta as the battle itself, not
+      // raw wall-clock time — pausing to read the "X wins" banner actually holds it up,
+      // and fast-forwarding shortens the wait the same way it shortens everything else.
+      case Mode.Spectating(_, _) if battle.outcome.isDefined =>
+        spectateRestartCountdownMs -= speed.effectiveDeltaMs(t.deltaMS)
+        if spectateRestartCountdownMs <= 0 then battle = BattleState.initial
+      case _ => ()
     syncMaze(
       playerWorld,
       battle.player,
@@ -280,19 +354,25 @@ def onReady(app: Application, textures: js.Dictionary[Texture]): Unit =
       h => hovered = h
     )
     applyViewTransform(app, battleWorld, aiWorld)
+    updateModeUi(mode)
     updateOverlay(battle)
-    updateBuildButtonsAffordability(battle.player)
+    if mode == Mode.Playing then updateBuildButtonsAffordability(battle.player)
+    else disableAllBuildButtons()
     // Self-heal each independently (e.g. a selected building just got destroyed, or a
     // hovered enemy died) rather than picking one "effective" target and healing that —
     // otherwise losing the prioritized one would incorrectly wipe the other too.
     if selectedTarget.exists(t => hoverText(t, battle).isEmpty) then selectedTarget = None
     if hovered.exists(t => hoverText(t, battle).isEmpty) then hovered = None
-    updateTooltip(selectedTarget.orElse(hovered), battle, hoveringButton)
-    updateNewGameButtonVisibility(battle.outcome.isDefined || speed.paused)
-    msSinceLastSave += t.deltaMS
-    if msSinceLastSave >= 1000.0 then
-      Persistence.save(battle, aiLevelIndex)
-      msSinceLastSave = 0.0
+    updateTooltip(selectedTarget.orElse(hovered), battle, mode, hoveringButton)
+    updateNewGameButtonVisibility(mode, battle.outcome.isDefined || speed.paused)
+    // Only a Playing match is worth resuming on refresh — a spectate pairing regenerates
+    // randomly on every fresh load anyway (see savedGame above), so persisting it would
+    // just freeze the attract loop on whatever two AIs happened to be dueling at last save.
+    if mode == Mode.Playing then
+      msSinceLastSave += t.deltaMS
+      if msSinceLastSave >= 1000.0 then
+        Persistence.save(battle, aiLevelIndex)
+        msSinceLastSave = 0.0
   }
 
 // ── Static grid ─────────────────────────────────────────────────────────
@@ -387,6 +467,13 @@ private def canAfford(maze: MazeState, kind: BuildingKind): Boolean =
 // even without any click — see wireBuildClick for the matching input gate.
 private def updateBuildButtonsAffordability(maze: MazeState): Unit =
   buildableKinds.foreach(kind => updateButtonDisabled(s"build-${domSlug(kind)}", canAfford(maze, kind)))
+
+// While Spectating, buildableKinds' buttons are hidden entirely (see #controlbar's
+// body.mode-spectating CSS) but keep them in the disabled state under the hood too, so
+// there's no stale "affordable" look left over if the player had one showing right before
+// a Spectating pairing kicked back in (see updateModeUi/resetGame).
+private def disableAllBuildButtons(): Unit =
+  buildableKinds.foreach(kind => updateButtonDisabled(s"build-${domSlug(kind)}", affordable = false))
 
 private def updateButtonDisabled(id: String, affordable: Boolean): Unit =
   val btn = document.getElementById(id)
@@ -494,14 +581,33 @@ private def wireAiLevelSelect(initialIndex: Int, onSelect: Int => Unit): Unit =
 private def updateAiLevelSelect(index: Int): Unit =
   document.getElementById("ai-level-select").asInstanceOf[dom.html.Select].selectedIndex = index
 
-// ── New game (visible while paused or once the match has ended) ────────
+// ── Spectate/Play mode ──────────────────────────────────────────────────
+
+// Drives the body.mode-spectating CSS hook (hides the build toolbar and the difficulty
+// select, shows #spectate-label instead — see index.html) and that label's text. Called
+// every tick rather than only on transitions: it's a handful of idempotent DOM writes,
+// far cheaper than tracking "did mode just change" separately, and it guarantees the DOM
+// can never drift out of sync with `mode`.
+private def updateModeUi(mode: Mode): Unit =
+  document.body.classList.toggle("mode-spectating", mode.isInstanceOf[Mode.Spectating])
+  mode match
+    case Mode.Spectating(leftIdx, rightIdx) =>
+      val leftName = AiStrategy.ladder(leftIdx)._1
+      val rightName = AiStrategy.ladder(rightIdx)._1
+      document.getElementById("spectate-label").textContent = s"AI duel: $leftName vs $rightName"
+    case Mode.Playing => ()
+
+// ── New game (visible while Spectating — it's how a spectator becomes a player — or,
+// once Playing, while paused or once the match has ended) ──────────────
 
 private def wireNewGameButton(onNewGame: () => Unit): Unit =
   document.getElementById("new-game-btn").addEventListener("click", (_: dom.Event) => onNewGame())
 
-private def updateNewGameButtonVisibility(visible: Boolean): Unit =
+private def updateNewGameButtonVisibility(mode: Mode, playingButNotLive: Boolean): Unit =
   val btn = document.getElementById("new-game-btn")
+  val visible = mode.isInstanceOf[Mode.Spectating] || playingButNotLive
   if visible then btn.classList.add("visible") else btn.classList.remove("visible")
+  btn.textContent = if mode.isInstanceOf[Mode.Spectating] then "Play" else "New Game"
 
 // ── Fullscreen (hides browser chrome — address bar, tab strip — leaving more room for
 // the maze; the resizeTo target in setup() reacts automatically once the browser fires
@@ -878,6 +984,7 @@ private def positionTooltip(x: Double, y: Double): Unit =
 private def updateTooltip(
     target: Option[HoverTarget],
     battle: BattleState,
+    mode: Mode,
     buttonTooltipActive: Boolean
 ): Unit =
   val tooltip = document.getElementById("tooltip")
@@ -889,14 +996,18 @@ private def updateTooltip(
       document.getElementById("tooltip-text").textContent = text
       tooltip.classList.add("visible")
       val maze = if target.isPlayer then battle.player else battle.ai
-      destroyInfo(target, maze) match
+      // Both mazes are AI-driven while Spectating (see CLAUDE.md's symmetry rule — the
+      // destroy/upgrade affordance is a player action, not a game rule, so it's withheld
+      // here rather than in destroyInfo/upgradeInfo themselves) — hovering still shows
+      // read-only stats, it just can't act on them.
+      (if mode == Mode.Playing then destroyInfo(target, maze) else None) match
         case Some((col, row, label)) =>
           destroyBtn.textContent = label
           destroyBtn.setAttribute("data-col", col.toString)
           destroyBtn.setAttribute("data-row", row.toString)
           destroyBtn.classList.add("visible")
         case None => destroyBtn.classList.remove("visible")
-      upgradeInfo(target, maze) match
+      (if mode == Mode.Playing then upgradeInfo(target, maze) else None) match
         case Some((col, row, label, affordable, preview)) =>
           upgradeBtn.textContent = label
           upgradeBtn.setAttribute("data-col", col.toString)
@@ -952,8 +1063,8 @@ private def wireDestroyButton(onDestroy: (Int, Int) => Unit): Unit =
     }
   )
 
-private def destroyPlayerBuilding(battle: BattleState, col: Int, row: Int): BattleState =
-  if battle.outcome.isDefined then battle
+private def destroyPlayerBuilding(battle: BattleState, mode: Mode, col: Int, row: Int): BattleState =
+  if mode != Mode.Playing || battle.outcome.isDefined then battle
   else Demolition.tryDestroy(battle.player, col, row).map(p => battle.copy(player = p)).getOrElse(battle)
 
 // Only the player's own Grove/Forest can be upgraded from the UI (the AI upgrades via
@@ -1002,8 +1113,8 @@ private def wireUpgradeButton(onUpgrade: (Int, Int) => Unit): Unit =
     }
   )
 
-private def upgradePlayerBuilding(battle: BattleState, col: Int, row: Int): BattleState =
-  if battle.outcome.isDefined then battle
+private def upgradePlayerBuilding(battle: BattleState, mode: Mode, col: Int, row: Int): BattleState =
+  if mode != Mode.Playing || battle.outcome.isDefined then battle
   else Placement.tryUpgradeBuilding(battle.player, col, row).map(p => battle.copy(player = p)).getOrElse(battle)
 
 private def hoverText(target: HoverTarget, battle: BattleState): Option[String] =
