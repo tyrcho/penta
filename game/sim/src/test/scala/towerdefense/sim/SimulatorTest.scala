@@ -22,6 +22,16 @@ class SimulatorTest extends munit.FunSuite:
     results.foreach(r => assert(r.winRate >= 0.0 && r.winRate <= 1.0, s"winRate out of range: $r"))
   }
 
+  test("tournament round-robins every pairing and ranks standings by win rate descending") {
+    val standings =
+      Simulator.tournamentStandings(Seq("linear", "comb", "maze-only"), matchesPerPairing = 2, maxTicks = 300, deltaMs = 100.0)
+    assertEquals(standings.map(_.name).toSet, Set("linear", "comb", "maze-only"))
+    // 3 strategies round-robin = 3 pairings, 2 matches each = 4 matches played per strategy.
+    standings.foreach(s => assertEquals(s.matches, 4))
+    standings.foreach(s => assert(s.wins + s.draws + s.losses == s.matches, s"$s"))
+    assertEquals(standings, standings.sortBy(-_.winRate), "standings must be ranked by win rate descending")
+  }
+
   test("runLoggedMatch writes a transcript, ending in a WINS line whenever the match resolves") {
     val lines = scala.collection.mutable.ArrayBuffer.empty[String]
     val outcome = Simulator.runLoggedMatch(
