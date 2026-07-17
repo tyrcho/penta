@@ -35,6 +35,21 @@ case class CompositeStrategy(weights: Weights) extends AiStrategy:
         .maxBy(_._2)
         ._1
 
+  // Grows any of its own buildings to the next upgrade tier when affordable — same
+  // "first that works" simplicity as LinearStrategy.maybeUpgrade/TemplateStrategy's
+  // override, and just as necessary here: dangerScore's whole premise is routing the
+  // enemy path past an aura-dealing building (CombatEngine.auraBuildingKinds = Forest,
+  // Jungle), but maybeBuild can only ever place a Grove directly (Forest/Jungle are
+  // upgrade-only — see Placement.buildableDirectly). Without this override a
+  // maze-weighted CompositeStrategy builds a wall of harmless Groves and never once
+  // realizes the aura damage its own scoring is optimizing for — caught via `make sim`:
+  // maze-only landed zero kills across two full tournament matches before this fix.
+  override def maybeUpgrade(state: MazeState, opponent: MazeState): MazeState =
+    state.buildings.iterator
+      .flatMap(b => Placement.tryUpgradeBuilding(state, b.col, b.row).toOption)
+      .nextOption()
+      .getOrElse(state)
+
   private def allCandidates(state: MazeState): Seq[Candidate] =
     for
       kind <- BuildingKind.values.toSeq

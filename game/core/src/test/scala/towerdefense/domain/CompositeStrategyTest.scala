@@ -208,3 +208,33 @@ class CompositeStrategyTest extends munit.FunSuite:
     val strategy = CompositeStrategy(Weights(resource = 1.0, counter = 1.0, maze = 1.0))
     assertEquals(strategy.maybeBuild(state, noOpponent), state)
   }
+
+  // Regression test: caught via `make sim` — a tournament across the whole AiStrategy
+  // ladder showed maze-only (a CompositeStrategy(maze=1.0) instance) never landing a
+  // single kill across two full matches, because it never upgraded a single Grove into a
+  // Forest, so its entire dangerScore premise (routing the enemy path past an
+  // aura-dealing building) was building harmless Groves the whole game — Grove isn't in
+  // CombatEngine.auraBuildingKinds, only Forest/Jungle are. Every other AiStrategy
+  // implementation (LinearStrategy, TemplateStrategy) already overrides maybeUpgrade;
+  // CompositeStrategy simply never got one.
+  test("maybeUpgrade grows an affordable Grove into a Forest") {
+    val grove = building(1, 5, 5, BuildingKind.Grove)
+    val state = withResources(wood = 1_000.0).copy(buildings = List(grove))
+    val strategy = CompositeStrategy(Weights(resource = 0.0, counter = 0.0, maze = 1.0))
+    val result = strategy.maybeUpgrade(state, noOpponent)
+    assertEquals(count(result, BuildingKind.Forest), 1)
+    assertEquals(count(result, BuildingKind.Grove), 0)
+  }
+
+  test("maybeUpgrade does nothing when there is no upgradeable building") {
+    val state = withResources(wood = 1_000.0)
+    val strategy = CompositeStrategy(Weights(resource = 0.0, counter = 0.0, maze = 1.0))
+    assertEquals(strategy.maybeUpgrade(state, noOpponent), state)
+  }
+
+  test("maybeUpgrade does nothing when the only Grove can't afford the Forest tier") {
+    val grove = building(1, 5, 5, BuildingKind.Grove)
+    val poor = withResources(wood = Balance.GroveCostWood).copy(buildings = List(grove))
+    val strategy = CompositeStrategy(Weights(resource = 0.0, counter = 0.0, maze = 1.0))
+    assertEquals(strategy.maybeUpgrade(poor, noOpponent), poor)
+  }
