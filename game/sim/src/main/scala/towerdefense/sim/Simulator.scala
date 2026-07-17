@@ -62,17 +62,25 @@ object Simulator:
     MatchOutcome(winner, ticks)
 
   // Runs `matches` independent games of the two named strategies (resolved via
-  // AiStrategy.all) and tallies wins/draws/avg-ticks per side.
+  // AiStrategy.all) and tallies wins/draws/avg-ticks per side. `onProgress` (default
+  // no-op, so this stays a plain pure-ish function for tests/other callers) is called
+  // with the number of matches completed so far, in order — the `run` CLI wires it to a
+  // ProgressReporter per CLAUDE.md's "long-running jobs report an ETA to stderr" rule.
   def runMatches(
       nameA: String,
       nameB: String,
       matches: Int,
       maxTicks: Int,
-      deltaMs: Double
+      deltaMs: Double,
+      onProgress: Int => Unit = _ => ()
   ): Seq[Tally] =
     val strategyA = AiStrategy.all(nameA)
     val strategyB = AiStrategy.all(nameB)
-    val outcomes = Seq.fill(matches)(runMatch(strategyA, strategyB, maxTicks, deltaMs))
+    val outcomes = (1 to matches).map { i =>
+      val outcome = runMatch(strategyA, strategyB, maxTicks, deltaMs)
+      onProgress(i)
+      outcome
+    }
     Seq(tallyFor(nameA, "a", outcomes), tallyFor(nameB, "b", outcomes))
 
   private def tallyFor(name: String, side: String, outcomes: Seq[MatchOutcome]): Tally =
@@ -93,17 +101,20 @@ object Simulator:
       names: Seq[String],
       matchesPerPairing: Int,
       maxTicks: Int,
-      deltaMs: Double
+      deltaMs: Double,
+      onPairingDone: Int => Unit = _ => ()
   ): Seq[Standing] =
     val strategies = names.map(n => n -> AiStrategy.all(n)).toMap
     val records = scala.collection.mutable.Map.empty[String, (Int, Int, Int)].withDefaultValue((0, 0, 0))
-    for Seq(nameA, nameB) <- names.combinations(2) do
+    names.combinations(2).zipWithIndex.foreach { case (Seq(nameA, nameB), idx) =>
       val outcomes =
         Seq.fill(matchesPerPairing)(runMatch(strategies(nameA), strategies(nameB), maxTicks, deltaMs))
       val (winsA, drawsA, lossesA) = record(outcomes, "a")
       val (winsB, drawsB, lossesB) = record(outcomes, "b")
       records(nameA) = addRecord(records(nameA), (winsA, drawsA, lossesA))
       records(nameB) = addRecord(records(nameB), (winsB, drawsB, lossesB))
+      onPairingDone(idx + 1)
+    }
     names
       .map { name =>
         val (wins, draws, losses) = records(name)
@@ -130,14 +141,16 @@ object Simulator:
       matchesPerPoint: Int,
       step: Double,
       maxTicks: Int,
-      deltaMs: Double
+      deltaMs: Double,
+      onPointDone: Int => Unit = _ => ()
   ): Seq[WeightResult] =
     val baselineStrategy = AiStrategy.all(baseline)
-    weightGrid(step).map { weights =>
+    weightGrid(step).zipWithIndex.map { case (weights, idx) =>
       val candidate = CompositeStrategy(weights)
       val outcomes =
         Seq.fill(matchesPerPoint)(runMatch(candidate, baselineStrategy, maxTicks, deltaMs))
       val wins = outcomes.count(_.winner.contains("a"))
+      onPointDone(idx + 1)
       WeightResult(weights, wins.toDouble / matchesPerPoint)
     }.sortBy(-_.winRate)
 
@@ -198,7 +211,8 @@ object Simulator:
           println(s"Logged 1 match ($a vs $b, ${outcome.ticks} ticks, winner=$winner) to $path")
         finally writer.close()
       case None =>
-        println(formatTallyTable(runMatches(a, b, matches, maxTicks, deltaMs), matches))
+        val reporter = new ProgressReporter(s"$a vs $b", matches)
+        println(formatTallyTable(runMatches(a, b, matches, maxTicks, deltaMs, reporter.tick), matches))
 
   private def extractLogFlags(args: List[String]): (Option[String], Int, List[String]) =
     args match
@@ -220,7 +234,8 @@ object Simulator:
     val maxTicks = args.lift(1).map(_.toInt).getOrElse(3_000)
     val deltaMs = args.lift(2).map(_.toDouble).getOrElse(100.0)
     val names = AiStrategy.ladder.map(_._1)
-    val standings = tournamentStandings(names, matchesPerPairing, maxTicks, deltaMs)
+    val reporter = new ProgressReporter("tournament", names.combinations(2).size)
+    val standings = tournamentStandings(names, matchesPerPairing, maxTicks, deltaMs, reporter.tick)
     println(s"Tournament: ${names.mkString(", ")} ($matchesPerPairing matches/pairing):")
     println(formatStandingsTable(standings))
 
@@ -230,6 +245,7 @@ object Simulator:
     val step = args.lift(2).map(_.toDouble).getOrElse(0.25)
     val maxTicks = args.lift(3).map(_.toInt).getOrElse(3_000)
     val deltaMs = args.lift(4).map(_.toDouble).getOrElse(100.0)
-    val results = searchWeights(baseline, matchesPerPoint, step, maxTicks, deltaMs)
+    val reporter = new ProgressReporter(s"tune vs $baseline", weightGrid(step).size)
+    val results = searchWeights(baseline, matchesPerPoint, step, maxTicks, deltaMs, reporter.tick)
     println(s"CompositeStrategy weight sweep vs '$baseline' ($matchesPerPoint matches/point, step $step):")
     println(formatWeightTable(results, top = 10))

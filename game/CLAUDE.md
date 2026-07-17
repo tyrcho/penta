@@ -48,6 +48,16 @@ If the server isn't running (no response on the port in `.mcp.json`), restart it
 metals-mcp --workspace . --client claude
 ```
 
+## Long-running jobs must report an ETA to stderr
+
+Any job that can run more than a few seconds (the sim CLI's `run`/`tournament`/`tune`
+with a nontrivial match/pairing/weight-grid count, most obviously) must print periodic
+progress with an ETA to stderr — completed/total, elapsed time, estimated time
+remaining. A multi-minute command that goes silent until it's done is a debugging and
+UX trap: there's no way to tell "still working" from "hung" from outside. Throttle the
+actual printing (e.g. at most once every couple of seconds) so a fast run doesn't spam
+the console with a line per unit of work, but always print on completion.
+
 ## sbt not on PATH?
 
 In a network-restricted sandbox (no `sbt` binary, `repo.scala-sbt.org`/`github.com`

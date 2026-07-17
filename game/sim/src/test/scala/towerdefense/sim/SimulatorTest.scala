@@ -32,6 +32,42 @@ class SimulatorTest extends munit.FunSuite:
     assertEquals(standings, standings.sortBy(-_.winRate), "standings must be ranked by win rate descending")
   }
 
+  // CLAUDE.md: "any job running more than a few seconds should report an ETA to stderr" —
+  // these prove the batch functions actually invoke their progress callback once per unit
+  // of work completed, in order. The stderr-printing/throttling itself lives in
+  // ProgressReporter, tested separately below without any wall-clock dependency here.
+  test("runMatches reports progress once per match completed, in order") {
+    val progress = scala.collection.mutable.ArrayBuffer.empty[Int]
+    Simulator.runMatches("linear", "linear", matches = 3, maxTicks = 300, deltaMs = 100.0, onProgress = progress.append(_))
+    assertEquals(progress.toList, List(1, 2, 3))
+  }
+
+  test("tournamentStandings reports progress once per pairing completed, in order") {
+    val progress = scala.collection.mutable.ArrayBuffer.empty[Int]
+    Simulator.tournamentStandings(
+      Seq("linear", "comb", "maze-only"),
+      matchesPerPairing = 1,
+      maxTicks = 300,
+      deltaMs = 100.0,
+      onPairingDone = progress.append(_)
+    )
+    // 3 strategies round-robin = 3 pairings (linear-comb, linear-maze-only, comb-maze-only).
+    assertEquals(progress.toList, List(1, 2, 3))
+  }
+
+  test("searchWeights reports progress once per weight-grid point completed, in order") {
+    val progress = scala.collection.mutable.ArrayBuffer.empty[Int]
+    val results = Simulator.searchWeights(
+      "linear",
+      matchesPerPoint = 1,
+      step = 1.0,
+      maxTicks = 300,
+      deltaMs = 100.0,
+      onPointDone = progress.append(_)
+    )
+    assertEquals(progress.toList, (1 to results.size).toList)
+  }
+
   test("runLoggedMatch writes a transcript, ending in a WINS line whenever the match resolves") {
     val lines = scala.collection.mutable.ArrayBuffer.empty[String]
     val outcome = Simulator.runLoggedMatch(
