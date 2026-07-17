@@ -135,27 +135,28 @@ class AiStrategyTest extends munit.FunSuite:
   // SpendingPolicy combinations — see AiStrategy.ladder's doc and docs/adr/0010. Linear
   // (the deterministic, non-reactive baseline) is always first.
   test("the ladder is ordered weakest to strongest by measured win rate, linear first") {
+    // Re-measured after Death/Science landed — see AiStrategy.ladder's doc for the full
+    // tournament run and why several pre-existing entries reshuffled, not just the two new
+    // corruption ones.
     assertEquals(
       AiStrategy.ladder.map(_._1),
       Seq(
         "linear",
-        "maze-only",
-        "comb",
-        "comb-vertical",
         "counter-only",
-        "resource-only",
+        "comb-vertical",
+        "comb",
         "maze-counter",
-        "comb-vertical-resource",
         "comb-resource",
-        "balanced",
-        "comb-plunder",
-        "comb-vertical-plunder",
-        "maze-plunder",
-        "resource-maze",
-        // Provisional placement — see AiStrategy.ladder's doc: not yet re-measured via a
-        // tournament round-robin the way every entry above it was.
         "comb-corruption",
-        "maze-corruption"
+        "comb-vertical-resource",
+        "resource-only",
+        "maze-corruption",
+        "balanced",
+        "maze-plunder",
+        "maze-only",
+        "comb-vertical-plunder",
+        "comb-plunder",
+        "resource-maze"
       )
     )
   }

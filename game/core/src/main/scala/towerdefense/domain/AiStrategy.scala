@@ -88,47 +88,85 @@ object AiStrategy:
   // — an accurate reflection of "pure maze scoring, zero resource-awareness" as an
   // archetype, not a leftover bug.
   //
-  // The `-plunder` family (maze-plunder, comb-plunder, comb-vertical-plunder) and
-  // resource-maze form a tight top tier, all 27-12-0 — no losses at all across the whole
-  // ladder — differing only by Elo (resource-maze 1736 > maze-plunder 1721 >
-  // comb-vertical-plunder 1712 > comb-plunder 1703), used as the tiebreak among otherwise
-  // identical win/draw/loss records. Racing Chaos buildings (PlunderSpending) or a
-  // diversified, growth-aware resource economy (WeightedSpending with growthBonus) both
-  // beat every fixed-Grove-first wall (comb/comb-vertical) and every non-plunder blend
-  // (balanced, the comb-resource pair) outright.
+  // Re-measured (`sim/runMain towerdefense.sim.tournament 3`, all 16 entries incl. the two
+  // Mort-racing ones below) after three changes landed together: Death (Tomb/BlackCastle,
+  // corruption) and Science (5 labs + full leveled research, every strategy now researches
+  // opportunistically via maybeResearch) were added, and BuildingKind's count roughly
+  // doubled (7 → 14), which reshuffles every LayoutPolicy/SpendingPolicy score's relative
+  // weighting even for strategies that never touch a Mort/Science building directly — so
+  // this order isn't just "the old order plus two new rows", several older entries moved.
+  //
+  // resource-maze stays champion (0.80 winRate, elo 1797, 0 losses). The zero-loss tier is
+  // now resource-maze, maze-only, maze-plunder, AND maze-corruption (25-20-0, elo 1705) —
+  // FreeformLayout-based strategies broadly hold up better than any fixed TemplateLayout
+  // wall once there are 14 kinds of candidate to weigh instead of 7.
+  //
+  // maze-corruption's 0.56 winRate is real and reproducible, but NOT mostly earned through
+  // Death's own mechanic: `sim/run maze-corruption linear 1 --log` and `sim/run
+  // maze-corruption comb 1 --log` both show it winning via Chaos plunder (a stray Cave,
+  // built through CorruptionSpending's 0.25*resourceScore fallback term, sends Goblins
+  // that a Cave-focused opponent never bothers defending against) — corruption itself never
+  // landed a single building-destroying hit in either transcript. This matches Corruption.md's
+  // own math: a Zombie needs ~100 continuous seconds of adjacency to one building (1%/sec)
+  // to destroy it, but a creature only grazes past buildings for a few seconds while pathing
+  // to the goal, even against a densely-walled `comb` defender — the rate is the vault's own
+  // explicit number, not a POC default, so it's left untouched rather than silently buffed.
+  // comb-corruption (TemplateLayout(comb) instead of FreeformLayout) does much worse
+  // (0.38 winRate) — the fixed wall doesn't prioritize the same fallback economy maze-
+  // corruption stumbles into. Treat "maze-corruption" as measuring "CorruptionSpending's
+  // resourceScore fallback with a Chaos-adjacent economy", not "corruption is viable" —
+  // Mort's own mechanic needs a design revisit (denser required adjacency, or units that
+  // linger rather than path straight through) before a strategy can race it on purpose.
+  //
+  // maze-only is the one entry with 0 wins that still ranks above linear: it has 0 losses
+  // too — a genuine, reproducible defensive lockout, not matchmaking luck. Its SpendingPolicy
+  // weight is (resource=0, counter=0), so it never once considers whether a spend is
+  // sustainable — it builds Watchtowers as long as FreeformLayout's ranged-damage credit
+  // outscores everything else, drains Wood to exactly 0 with no Grove ever built to
+  // replenish it, and then freezes permanently with a small, apparently-effective Watchtower
+  // cluster that denies every opponent a win without ever mounting a real offense of its own.
+  //
+  // That same freeze was originally hitting maze-only AND resource-maze, which is what
+  // motivated growthBonus (see SpendingPolicy): a spend-margin penalty alone discourages
+  // draining a resource with no producer, but doesn't credit *fixing* the shortage —
+  // Watchtower (Wood+Light) kept outscoring Grove (Wood only, Wood's only producer)
+  // because Watchtower's margin got pulled up by averaging in Light, which Grove has
+  // nothing to average against. resource-maze (whose weight does include resource=1.0) now
+  // wins normally, since growthBonus flips Grove ahead of Watchtower once Wood's production
+  // has actually hit zero. maze-only keeps the freeze, since its own weight zeroes
+  // growthBonus out along with everything else resource-aware — an accurate reflection of
+  // "pure maze scoring, zero resource-awareness" as an archetype, not a leftover bug.
   val ladder: Seq[(String, AiStrategy)] = Seq(
     "linear" -> LinearStrategy,
-    "maze-only" -> ComposedStrategy(FreeformLayout, WeightedSpending(resourceWeight = 0.0, counterWeight = 0.0)),
-    "comb" -> ComposedStrategy(TemplateLayout(MazeTemplate.comb), GrovePriority),
-    "comb-vertical" -> ComposedStrategy(TemplateLayout(MazeTemplate.combVertical), GrovePriority),
     "counter-only" -> ComposedStrategy(NoLayoutPreference, WeightedSpending(resourceWeight = 0.0, counterWeight = 1.0)),
-    "resource-only" -> ComposedStrategy(NoLayoutPreference, WeightedSpending(resourceWeight = 1.0, counterWeight = 0.0)),
+    "comb-vertical" -> ComposedStrategy(TemplateLayout(MazeTemplate.combVertical), GrovePriority),
+    "comb" -> ComposedStrategy(TemplateLayout(MazeTemplate.comb), GrovePriority),
     "maze-counter" -> ComposedStrategy(FreeformLayout, WeightedSpending(resourceWeight = 0.0, counterWeight = 1.0)),
-    "comb-vertical-resource" -> ComposedStrategy(
-      TemplateLayout(MazeTemplate.combVertical),
-      WeightedSpending(resourceWeight = 1.0, counterWeight = 0.0)
-    ),
     "comb-resource" -> ComposedStrategy(
       TemplateLayout(MazeTemplate.comb),
       WeightedSpending(resourceWeight = 1.0, counterWeight = 0.0)
     ),
+    // Mort's Tomb/BlackCastle-racing counterparts to comb-plunder/maze-plunder below — see
+    // this doc's maze-corruption paragraph for why their win rate doesn't mean what the name
+    // implies.
+    "comb-corruption" -> ComposedStrategy(TemplateLayout(MazeTemplate.comb), CorruptionSpending),
+    "comb-vertical-resource" -> ComposedStrategy(
+      TemplateLayout(MazeTemplate.combVertical),
+      WeightedSpending(resourceWeight = 1.0, counterWeight = 0.0)
+    ),
+    "resource-only" -> ComposedStrategy(NoLayoutPreference, WeightedSpending(resourceWeight = 1.0, counterWeight = 0.0)),
+    "maze-corruption" -> ComposedStrategy(FreeformLayout, CorruptionSpending),
     "balanced" -> ComposedStrategy(FreeformLayout, WeightedSpending(resourceWeight = 1.0, counterWeight = 1.0)),
-    "comb-plunder" -> ComposedStrategy(TemplateLayout(MazeTemplate.comb), PlunderSpending),
-    "comb-vertical-plunder" -> ComposedStrategy(TemplateLayout(MazeTemplate.combVertical), PlunderSpending),
     "maze-plunder" -> ComposedStrategy(FreeformLayout, PlunderSpending),
+    "maze-only" -> ComposedStrategy(FreeformLayout, WeightedSpending(resourceWeight = 0.0, counterWeight = 0.0)),
+    "comb-vertical-plunder" -> ComposedStrategy(TemplateLayout(MazeTemplate.combVertical), PlunderSpending),
+    "comb-plunder" -> ComposedStrategy(TemplateLayout(MazeTemplate.comb), PlunderSpending),
     "resource-maze" -> ComposedStrategy(
       FreeformLayout,
       WeightedSpending(resourceWeight = 1.0, counterWeight = 0.0),
       layoutWeight = 0.25,
       spendingWeight = 0.5
-    ),
-    // Mort's Tomb/BlackCastle-racing counterparts to comb-plunder/maze-plunder above,
-    // added alongside Death's corruption mechanic — NOT yet measured via a tournament
-    // round-robin (unlike every entry above, whose position reflects actual win rates —
-    // see this doc's history), so their position here is a provisional placeholder pending
-    // that measurement, not a ranking claim.
-    "comb-corruption" -> ComposedStrategy(TemplateLayout(MazeTemplate.comb), CorruptionSpending),
-    "maze-corruption" -> ComposedStrategy(FreeformLayout, CorruptionSpending)
+    )
   )
 
   val all: Map[String, AiStrategy] = ladder.toMap
