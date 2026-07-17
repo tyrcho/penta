@@ -195,7 +195,9 @@ object CombatEngine:
       .headOption
       .map(_._1)
 
-  private def chebyshevDistance(a: (Int, Int), b: (Int, Int)): Int =
+  // private[domain] (not private) so CompositeStrategy's dangerScore can use the exact
+  // same distance metric Watchtower targeting itself uses, instead of redefining it.
+  private[domain] def chebyshevDistance(a: (Int, Int), b: (Int, Int)): Int =
     math.max(math.abs(a._1 - b._1), math.abs(a._2 - b._2))
 
   private def paladinShieldedIds(creatures: List[Creature]): Set[Long] =

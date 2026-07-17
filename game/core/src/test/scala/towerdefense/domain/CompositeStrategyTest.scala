@@ -28,6 +28,31 @@ class CompositeStrategyTest extends munit.FunSuite:
     assertEquals(count(result, BuildingKind.Grove), 0)
   }
 
+  test("resourceScore divides the raw margin by one plus how many of that kind are already built") {
+    val strategy = CompositeStrategy(Weights(resource = 1.0, counter = 0.0, maze = 0.0))
+    val bare = withResources(wood = 100.0, fire = 100.0, light = 0.0)
+    val threeCaves = bare.copy(buildings =
+      List(building(1, 1, 1, BuildingKind.Cave), building(2, 1, 2, BuildingKind.Cave), building(3, 1, 3, BuildingKind.Cave))
+    )
+    assertEquals(strategy.resourceScore(bare, BuildingKind.Cave), strategy.resourceScore(threeCaves, BuildingKind.Cave) * 4.0)
+  }
+
+  test("resource-only avoids piling into a single already-overbuilt kind once a fresher one scores better") {
+    // Same currencies as the "prefers the building that leaves the largest affordability
+    // margin" test above, where a bare board picks Cave over Grove — but this board
+    // already has three Caves, so diminishing returns should flip the pick to Grove
+    // instead of a fourth Cave. Regression for resource-only's observed single-resource
+    // spam trap (a real transcript showed it building Cave after Cave while Grove/Church/
+    // Watchtower sat untouched, stalling its own economy on one currency pair).
+    val state = withResources(wood = 100.0, fire = 100.0, light = 0.0).copy(buildings =
+      List(building(1, 1, 1, BuildingKind.Cave), building(2, 1, 2, BuildingKind.Cave), building(3, 1, 3, BuildingKind.Cave))
+    )
+    val strategy = CompositeStrategy(Weights(resource = 1.0, counter = 0.0, maze = 0.0))
+    val result = strategy.maybeBuild(state, noOpponent)
+    assertEquals(count(result, BuildingKind.Grove), 1)
+    assertEquals(count(result, BuildingKind.Cave), 3)
+  }
+
   test("counter-only mirrors the opponent's dominant faction") {
     val state = withResources(wood = 100.0, fire = 100.0, light = 100.0)
     val chaosHeavyOpponent = MazeState.initial.copy(
@@ -161,6 +186,81 @@ class CompositeStrategyTest extends munit.FunSuite:
     val twoFlankScore = strategy.pathDangerScore(onePath, twoFlanks)
     assertEquals(oneFlankScore, 1.0 + Balance.AuraDamagePerSec)
     assertEquals(twoFlankScore, 1.0 + 2 * Balance.AuraDamagePerSec)
+  }
+
+  test("dangerScore combines path length with ranged damage exposure from an existing watchtower") {
+    val strategy = CompositeStrategy(Weights(resource = 0.0, counter = 0.0, maze = 1.0))
+    val withTower = MazeState.initial.copy(buildings = List(building(1, 6, 5, BuildingKind.Watchtower)))
+    val exposedPath =
+      Pathfinding.shortestPath(GridConfig.spawnCell, GridConfig.goalCell, withTower.buildingCells + ((6, 6))).get
+    val inRangeCount = exposedPath.count(c => CombatEngine.chebyshevDistance(c, (6, 5)) <= Balance.WatchtowerRangeCells)
+    assertEquals(
+      strategy.dangerScore(withTower, (6, 6), isAuraCandidate = false),
+      exposedPath.length.toDouble + Balance.WatchtowerDamagePerSec * inRangeCount,
+      "each path cell within WatchtowerRangeCells of an existing watchtower adds one WatchtowerDamagePerSec hit"
+    )
+  }
+
+  test("dangerScore credits a new Watchtower candidate for its own range only when scored as ranged") {
+    val strategy = CompositeStrategy(Weights(resource = 0.0, counter = 0.0, maze = 1.0))
+    val state = MazeState.initial
+    val path = Pathfinding.shortestPath(GridConfig.spawnCell, GridConfig.goalCell, state.buildingCells + ((6, 6))).get
+    val selfRangeCount = path.count(c => CombatEngine.chebyshevDistance(c, (6, 6)) <= Balance.WatchtowerRangeCells)
+    assertEquals(
+      strategy.dangerScore(state, (6, 6), isAuraCandidate = false, isRangedCandidate = true),
+      path.length.toDouble + Balance.WatchtowerDamagePerSec * selfRangeCount,
+      "a candidate scored isRangedCandidate=true credits its own range, since it auras once built (same idea as isAuraCandidate for Grove)"
+    )
+    assertEquals(
+      strategy.dangerScore(state, (6, 6), isAuraCandidate = false, isRangedCandidate = false),
+      path.length.toDouble,
+      "without isRangedCandidate, a Watchtower candidate doesn't credit itself for its own range"
+    )
+  }
+
+  test("pathDangerScore sums watchtower damage for every tower a path cell is within range of") {
+    val strategy = CompositeStrategy(Weights(resource = 0.0, counter = 0.0, maze = 1.0))
+    val onePath = List((5, 5))
+    val oneTower = Set((5, 4))
+    val twoTowers = Set((5, 4), (6, 6))
+    val oneTowerScore = strategy.pathDangerScore(onePath, Set.empty, oneTower)
+    val twoTowerScore = strategy.pathDangerScore(onePath, Set.empty, twoTowers)
+    assertEquals(oneTowerScore, 1.0 + Balance.WatchtowerDamagePerSec)
+    assertEquals(twoTowerScore, 1.0 + 2 * Balance.WatchtowerDamagePerSec)
+  }
+
+  test("pathDangerScore combines aura and watchtower damage together when both are present") {
+    val strategy = CompositeStrategy(Weights(resource = 0.0, counter = 0.0, maze = 1.0))
+    val onePath = List((5, 5))
+    val forest = Set((5, 4))
+    val tower = Set((6, 6))
+    val score = strategy.pathDangerScore(onePath, forest, tower)
+    assertEquals(score, 1.0 + Balance.AuraDamagePerSec + Balance.WatchtowerDamagePerSec)
+  }
+
+  test(
+    "maze-only prefers a Watchtower over a Grove at the same cell, since ranged damage now outscores future aura"
+  ) {
+    // WatchtowerDamagePerSec (10.0) over WatchtowerRangeCells (2) beats AuraDamagePerSec
+    // (2.0) over adjacency (1) even before accounting for range covering more path
+    // cells — Watchtower simply deals far more damage per wood/light spent, and unlike
+    // Forest's aura it doesn't need any upgrade chain to start working (see
+    // isMazeAuraCandidate's doc and ADR 0008 for why maze-weighted strategies used to
+    // have zero reason to ever want one).
+    val state = withResources(wood = 100.0, fire = 0.0, light = 100.0)
+    val strategy = CompositeStrategy(Weights(resource = 0.0, counter = 0.0, maze = 1.0))
+    val (col, row) = GridConfig.allCells
+      .filterNot(Set(GridConfig.spawnCell, GridConfig.goalCell).contains)
+      .maxBy(c => strategy.dangerScore(state, c, isAuraCandidate = false))
+    val watchtowerScore = strategy.dangerScore(state, (col, row), isAuraCandidate = false, isRangedCandidate = true)
+    val groveScore = strategy.dangerScore(state, (col, row), isAuraCandidate = true)
+    assert(
+      watchtowerScore > groveScore,
+      "expected Watchtower's own ranged-damage credit to outscore Grove's future-aura credit at the same cell"
+    )
+    val result = strategy.maybeBuild(state, noOpponent)
+    assertEquals(count(result, BuildingKind.Watchtower), 1)
+    assertEquals(count(result, BuildingKind.Grove), 0)
   }
 
   test(

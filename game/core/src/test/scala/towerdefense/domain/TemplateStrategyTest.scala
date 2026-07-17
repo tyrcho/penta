@@ -28,6 +28,31 @@ class TemplateStrategyTest extends munit.FunSuite:
     assertEquals(result.buildings.map(_.kind), List(BuildingKind.Grove))
   }
 
+  test("fallbackMarginScore favors the kind spending the smallest fraction of what's on hand") {
+    // Same margin math as CompositeStrategy.resourceScore's raw component (no diminishing
+    // returns here — TemplateStrategy only ever wants one building per template cell, not
+    // repeated kinds, so there's no spam pattern to discourage). Cave (wood5/fire10) spends
+    // a much smaller slice of this pool than Labyrinth (wood20/fire40) despite fire being
+    // exactly maxed out for Labyrinth, so Cave must score higher.
+    val state = withResources(wood = 100.0, fire = 100.0, light = 0.0)
+    assert(
+      strategy.fallbackMarginScore(state, BuildingKind.Cave) > strategy.fallbackMarginScore(state, BuildingKind.Labyrinth)
+    )
+  }
+
+  test("falls back to Cave when Grove is unaffordable, since Cave is the only fallback kind cheap enough on wood") {
+    // Grove/Watchtower both cost wood 10, Labyrinth wood 20, Church wood 40 — only Cave's
+    // wood 5 fits below that floor, so this is the one fallback scenario current Balance
+    // numbers can actually reach: whenever wood >= 10, Grove is tried first and always
+    // wins outright (it needs no other resource), so the margin-aware fallback among
+    // Church/Labyrinth/Watchtower never gets a chance to differ from the old fixed order
+    // in practice — that competition is only provable at the fallbackMarginScore unit
+    // level above, not through a real maybeBuild call.
+    val state = withResources(wood = 8.0, fire = 100.0, light = 100.0)
+    val result = strategy.maybeBuild(state, MazeState.initial)
+    assertEquals(result.buildings.map(_.kind), List(BuildingKind.Cave))
+  }
+
   test("with only wood available, the whole template still completes using Grove") {
     var state = withResources(wood = 10_000.0, fire = 0.0, light = 0.0)
     for _ <- 1 to target.size do state = strategy.maybeBuild(state, MazeState.initial)

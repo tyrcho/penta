@@ -23,25 +23,49 @@ case class TemplateStrategy(template: (Int, Int) => List[(Int, Int)]) extends Ai
   // and why an early version of this strategy, which reused LinearStrategy's
   // expensive-first order verbatim, lost 40-0 to maze-only in `make sim`: it was building
   // whatever Church/Labyrinth/Watchtower it could afford on the comb's cells instead,
-  // forcing a long walk but never actually killing anything. The remaining kinds stay in
-  // LinearStrategy's original descending-wood-cost order as the affordability fallback
-  // for when wood specifically is scarce.
-  private val buildOrder: Seq[BuildingKind] = Seq(
-    BuildingKind.Grove,
-    BuildingKind.Church,
-    BuildingKind.Labyrinth,
-    BuildingKind.Watchtower,
-    BuildingKind.Cave
-  )
+  // forcing a long walk but never actually killing anything.
+  private val fallbackKinds: Seq[BuildingKind] =
+    Seq(BuildingKind.Church, BuildingKind.Labyrinth, BuildingKind.Watchtower, BuildingKind.Cave)
 
   def maybeBuild(state: MazeState, opponent: MazeState): MazeState =
     val remaining = template(GridConfig.cols, GridConfig.rows).filterNot(state.buildingCells.contains)
     remaining.iterator
       .flatMap { case (col, row) =>
-        buildOrder.iterator.flatMap(kind => Placement.tryPlaceBuilding(state, kind, col, row).toOption)
+        Placement.tryPlaceBuilding(state, BuildingKind.Grove, col, row).toOption.orElse(bestFallback(state, col, row))
       }
       .nextOption()
       .getOrElse(state)
+
+  // Chosen by affordability margin instead of a fixed try-order (old order was
+  // Church > Labyrinth > Watchtower > Cave, so a Church that was merely affordable — not
+  // necessarily a *good* spend — always won a tie against a cheaper option with room to
+  // spare). Every fallback kind still costs some wood (5 to 40 — see BuildingSpecs), and
+  // Grove above already wins outright whenever wood >= 10 since it needs no other
+  // resource, so in practice this competition can only ever be reached when wood < 10,
+  // where only Cave (wood 5) is ever affordable among these four — the margin comparison
+  // itself is real and unit-tested (see fallbackMarginScore), but current Balance numbers
+  // never give it more than one candidate to choose between end-to-end. Documented
+  // honestly rather than claimed as a bigger fix than it is — same as isMazeAuraCandidate's
+  // "narrows, doesn't eliminate" framing in CompositeStrategy.
+  private def bestFallback(state: MazeState, col: Int, row: Int): Option[MazeState] =
+    fallbackKinds
+      .flatMap(kind => Placement.tryPlaceBuilding(state, kind, col, row).toOption.map(result => (kind, result)))
+      .maxByOption { case (kind, _) => fallbackMarginScore(state, kind) }
+      .map(_._2)
+
+  // Average affordability margin left over the currencies this kind consumes — higher
+  // when the spend is a smaller fraction of what's on hand. Same raw math as
+  // CompositeStrategy.resourceScore, minus its diminishing-returns divisor: that divisor
+  // exists to stop resource-only spamming one kind over and over, but this strategy only
+  // ever wants a single building per template cell, so there's no repeat-kind pattern to
+  // discourage here. Exposed at `private[domain]` so the comparison is testable directly.
+  private[domain] def fallbackMarginScore(state: MazeState, kind: BuildingKind): Double =
+    val cost = BuildingSpecs.all(kind).cost
+    val margins = cost.map { case (res, amount) =>
+      val available = state.resources.getOrElse(res, 0.0)
+      (available - amount) / available
+    }
+    margins.sum / margins.size
 
   // Grows an existing Grove into a Forest (and a Forest into a Jungle) once affordable —
   // see AiStrategy.upgradeAnyAffordable. Every building this strategy has is already on a

@@ -19,7 +19,9 @@ case class CompositeStrategy(weights: Weights) extends AiStrategy:
     val candidates = allCandidates(state)
     if candidates.isEmpty then state
     else
-      val scores = candidates.map(c => dangerScore(state, (c.col, c.row), isMazeAuraCandidate(c.kind)))
+      val scores = candidates.map(c =>
+        dangerScore(state, (c.col, c.row), isMazeAuraCandidate(c.kind), c.kind == BuildingKind.Watchtower)
+      )
       val minScore = scores.min
       val maxScore = scores.max
       candidates
@@ -82,7 +84,8 @@ case class CompositeStrategy(weights: Weights) extends AiStrategy:
   private[domain] def dangerScore(
       state: MazeState,
       candidate: (Int, Int),
-      isAuraCandidate: Boolean
+      isAuraCandidate: Boolean,
+      isRangedCandidate: Boolean = false
   ): Double =
     val path = Pathfinding
       .shortestPath(GridConfig.spawnCell, GridConfig.goalCell, state.buildingCells + candidate)
@@ -90,31 +93,56 @@ case class CompositeStrategy(weights: Weights) extends AiStrategy:
     val forestCells =
       state.buildings.filter(b => CombatEngine.auraBuildingKinds.contains(b.kind)).map(f => (f.col, f.row)).toSet ++
         (if isAuraCandidate then Set(candidate) else Set.empty)
-    pathDangerScore(path, forestCells)
+    val towerCells =
+      state.buildings.filter(_.kind == BuildingKind.Watchtower).map(w => (w.col, w.row)).toSet ++
+        (if isRangedCandidate then Set(candidate) else Set.empty)
+    pathDangerScore(path, forestCells, towerCells)
 
   // Split out from dangerScore so the scoring math is testable against a hand-built path,
   // independent of BFS routing specifics. Sums one AuraDamagePerSec hit per *adjacent
   // forest*, not per cell: CombatEngine.applyDamageSources adds damagePerHit once for every
   // forest bordering an enemy's cell (a corridor flanked by forests on both sides deals
   // double damage per second), so a cell adjacent to two forests must score double a cell
-  // adjacent to only one, not the same.
-  private[domain] def pathDangerScore(path: List[(Int, Int)], forestCells: Set[(Int, Int)]): Double =
+  // adjacent to only one, not the same. Watchtower damage works the same way but by range
+  // (CombatEngine.chebyshevDistance <= Balance.WatchtowerRangeCells) instead of adjacency,
+  // mirroring accumulateWatchtowerHit/nearestTargetInRange's own targeting rule — see
+  // CompositeStrategyTest for why a maze-weighted strategy now values a Watchtower over a
+  // Grove at the same cell (far more damage per wood/light, no upgrade chain needed).
+  private[domain] def pathDangerScore(
+      path: List[(Int, Int)],
+      forestCells: Set[(Int, Int)],
+      towerCells: Set[(Int, Int)] = Set.empty
+  ): Double =
     val auraHits = path.map(cell => Pathfinding.neighbors(cell).count(forestCells.contains)).sum
-    path.length.toDouble + Balance.AuraDamagePerSec * auraHits
+    val towerHits =
+      path.map(cell => towerCells.count(t => CombatEngine.chebyshevDistance(cell, t) <= Balance.WatchtowerRangeCells)).sum
+    path.length.toDouble + Balance.AuraDamagePerSec * auraHits + Balance.WatchtowerDamagePerSec * towerHits
 
   private def normalizedMazeScore(score: Double, minScore: Double, maxScore: Double): Double =
     if maxScore == minScore then 1.0 else (score - minScore) / (maxScore - minScore)
 
   // Average affordability margin left over the currencies this building kind consumes —
-  // higher when the spend is a smaller fraction of what's on hand. Costs come straight
-  // from BuildingSpecs, the same map Placement checks against.
-  private def resourceScore(state: MazeState, kind: BuildingKind): Double =
+  // higher when the spend is a smaller fraction of what's on hand — divided by one plus
+  // however many of that same kind are already built. Without the diminishing-returns
+  // divisor, a pure resource-margin strategy locks onto whichever single kind has the
+  // best margin at the start and never reconsiders: margins barely move build to build
+  // (production keeps every currency roughly topped up), so the same kind wins every
+  // tick forever. Seen directly in a `make sim` transcript: resource-only built Cave
+  // after Cave off a wood/fire margin edge while Grove/Church/Watchtower sat untouched
+  // the entire match, stalling its own economy on one currency pair instead of
+  // diversifying. `1 + count` (not just `count`) keeps the very first building of any
+  // kind scored at its full raw margin, only discounting repeats. Exposed at
+  // `private[domain]` so the divisor's exact math is testable directly, same reasoning
+  // as dangerScore/pathDangerScore above.
+  private[domain] def resourceScore(state: MazeState, kind: BuildingKind): Double =
     val cost = BuildingSpecs.all(kind).cost
     val margins = cost.map { case (res, amount) =>
       val available = state.resources.getOrElse(res, 0.0)
       (available - amount) / available
     }
-    margins.sum / margins.size
+    val rawScore = margins.sum / margins.size
+    val existingCount = state.buildings.count(_.kind == kind)
+    rawScore / (1.0 + existingCount)
 
   // Mirrors whichever of Nature (Grove/Forest/Jungle) or Chaos (Cave/Labyrinth) the
   // opponent invests in more — see VictoryConditions: my target for each win condition
