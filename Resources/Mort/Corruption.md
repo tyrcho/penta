@@ -1,0 +1,1 @@
+Les unites de cette faction corrompent les batiments qu'elles touchent. Quand un batiment est corrompu a 100% il disparait et l'adversaire de son proprietaire recupere les ressources (dans le cas d'un batiment ameliore comme la [Jungle](../Nature/Jungle.md), uniquement le cout de la derniere amelioration).
