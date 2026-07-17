@@ -19,11 +19,15 @@ package towerdefense.domain
 // opponent victory-target increase) or Science's own victory condition. Those touch
 // every other faction's numbers (a genuine architecture change — new per-maze research-
 // level state, cross-cutting modifiers threaded through Balance/CombatEngine/Placement/
-// VictoryConditions) rather than being new data rows like a building/unit is, and the
-// vault's own spec for the fundamental-research victory condition is self-contradictory
-// (lists 5 target levels for "the other 4 labs"). Labs are wired up here only as Crystal
-// producers, same deliberate-gap treatment CLAUDE.md/README already give Loi's unwired
-// victory condition.
+// VictoryConditions) rather than being new data rows like a building/unit is. The vault's
+// spec for the fundamental-research victory condition is well-defined once read as its
+// own 5-level research (Recherche fondamentale.md's numbered list is per-level, not per-
+// lab): level N requires all 4 other labs at level (6-N) or higher — level 1 needs every
+// other lab at 5, level 5 needs them only at 1+, trading fondamentale's own doubling cost
+// against the other labs'. This is a scope decision, not an ambiguity: deferred by choice
+// to a follow-up rather than built alongside Death this session. Labs are wired up here
+// only as Crystal producers, same deliberate-gap treatment CLAUDE.md/README already give
+// Loi's unwired victory condition.
 case class BuildingSpec(
     cost: Map[Resource, Double],
     produces: Map[Resource, Double], // rate per second
