@@ -34,6 +34,11 @@ private enum Mode derives CanEqual:
 // doesn't stall.
 private val SpectateRestartDelayMs = 3000.0
 
+// How long a finished *Playing* match's game-over banner sits idle before the app gives
+// up on the human coming back and drops into the attract-mode AI duel — an abandoned
+// game-over screen would otherwise just sit there forever with nothing watchable on it.
+private val PlayingIdleToSpectateDelayMs = 30000.0
+
 private def randomLadderIndex(): Int = Random.nextInt(AiStrategy.ladder.length)
 
 // Picks a random ladder index different from `exclude` (when the ladder has more than one
@@ -218,6 +223,7 @@ def onReady(app: Application, textures: js.Dictionary[Texture]): Unit =
     case Some(_) => Mode.Playing
     case None    => randomSpectatingPair()
   var spectateRestartCountdownMs = 0.0
+  var playingIdleCountdownMs = 0.0
   var selectedBuilding: BuildingKind = BuildingKind.Grove
   var hovered: Option[HoverTarget] = None
   // Set by clicking a building (not just hovering it) — takes priority over `hovered`
@@ -245,6 +251,7 @@ def onReady(app: Application, textures: js.Dictionary[Texture]): Unit =
     updateSpeedLabel(speed)
     hovered = None
     selectedTarget = None
+    playingIdleCountdownMs = 0.0
     Persistence.clear()
 
   updateModeUi(mode)
@@ -310,6 +317,10 @@ def onReady(app: Application, textures: js.Dictionary[Texture]): Unit =
                 aiLevelIndex += 1
                 updateAiLevelSelect(aiLevelIndex)
               case _ => ()
+            // Starts the idle clock the moment a Playing match ends — see the ticker's
+            // matching countdown below, which drops back to Spectating once it lapses
+            // without the human clicking New Game.
+            playingIdleCountdownMs = PlayingIdleToSpectateDelayMs
           // The winning side keeps its ladder index for the next pairing; the losing side
           // gets replaced with another random entry (see randomOtherLadderIndex) — the
           // mazes themselves stay showing the finished match for SpectateRestartDelayMs so
@@ -328,6 +339,16 @@ def onReady(app: Application, textures: js.Dictionary[Texture]): Unit =
       case Mode.Spectating(_, _) if battle.outcome.isDefined =>
         spectateRestartCountdownMs -= speed.effectiveDeltaMs(t.deltaMS)
         if spectateRestartCountdownMs <= 0 then battle = BattleState.initial
+      // An abandoned game-over screen (human never clicked New Game) falls back to the
+      // attract-mode duel after PlayingIdleToSpectateDelayMs, same as a fresh page load
+      // with no saved game — see randomSpectatingPair. Pausing holds this off too (same
+      // effective-delta pacing as the branch above), so a paused game-over screen doesn't
+      // get yanked away out from under someone still reading it.
+      case Mode.Playing if battle.outcome.isDefined =>
+        playingIdleCountdownMs -= speed.effectiveDeltaMs(t.deltaMS)
+        if playingIdleCountdownMs <= 0 then
+          mode = randomSpectatingPair()
+          battle = BattleState.initial
       case _ => ()
     syncMaze(
       playerWorld,
@@ -365,10 +386,14 @@ def onReady(app: Application, textures: js.Dictionary[Texture]): Unit =
     if hovered.exists(t => hoverText(t, battle).isEmpty) then hovered = None
     updateTooltip(selectedTarget.orElse(hovered), battle, mode, hoveringButton)
     updateNewGameButtonVisibility(mode, battle.outcome.isDefined || speed.paused)
-    // Only a Playing match is worth resuming on refresh — a spectate pairing regenerates
-    // randomly on every fresh load anyway (see savedGame above), so persisting it would
-    // just freeze the attract loop on whatever two AIs happened to be dueling at last save.
-    if mode == Mode.Playing then
+    // Only an in-progress Playing match is worth resuming on refresh — a spectate pairing
+    // regenerates randomly on every fresh load anyway (see savedGame above), so persisting
+    // it would just freeze the attract loop on whatever two AIs happened to be dueling at
+    // last save. A *finished* Playing match isn't resumable either (BattleEngine.tick
+    // no-ops once outcome is set) — leaving it saved would otherwise reload straight back
+    // into a stale game-over screen that the idle countdown above immediately yanks away
+    // again, a jarring flash for no benefit.
+    if mode == Mode.Playing && battle.outcome.isEmpty then
       msSinceLastSave += t.deltaMS
       if msSinceLastSave >= 1000.0 then
         Persistence.save(battle, aiLevelIndex)
