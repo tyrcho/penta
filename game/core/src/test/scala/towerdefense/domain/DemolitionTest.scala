@@ -81,6 +81,35 @@ class DemolitionTest extends munit.FunSuite:
     )
   }
 
+  test("destroys a tomb and refunds half its wood and shadow cost") {
+    val (col, row) = (5, 5)
+    val withTomb = Placement.tryPlaceBuilding(MazeState.initial, BuildingKind.Tomb, col, row).toOption.get
+    val result = Demolition.tryDestroy(withTomb, col, row).toOption.get
+    assertEquals(result.buildings.count(_.kind == BuildingKind.Tomb), 0)
+    assertEquals(
+      result.resources(Resource.Wood),
+      withTomb.resources(Resource.Wood) + Balance.TombCostWood * Balance.DemolishRefundFraction
+    )
+    assertEquals(
+      result.resources(Resource.Shadow),
+      withTomb.resources(Resource.Shadow) + Balance.TombCostShadow * Balance.DemolishRefundFraction
+    )
+  }
+
+  test("destroys a Science lab and refunds half its cost, freeing up the max-one-per-kind slot") {
+    val (col, row) = (5, 5)
+    val rich = MazeState.initial.copy(resources = Map(Resource.Wood -> 1_000.0, Resource.Crystal -> 1_000.0))
+    val withLab = Placement.tryPlaceBuilding(rich, BuildingKind.LaboNaturel, col, row).toOption.get
+    val result = Demolition.tryDestroy(withLab, col, row).toOption.get
+    assertEquals(result.buildings.count(_.kind == BuildingKind.LaboNaturel), 0)
+    assertEquals(
+      result.resources(Resource.Crystal),
+      withLab.resources(Resource.Crystal) + Balance.LaboNaturelCostCrystal * Balance.DemolishRefundFraction
+    )
+    // Rebuilding after demolishing is allowed — maxPerMaze counts current buildings only.
+    assertEquals(Placement.tryPlaceBuilding(result, BuildingKind.LaboNaturel, col, row).isRight, true)
+  }
+
   test("destroying the only wall of a corridor is allowed (removing an obstacle can't seal a path)") {
     val corridor = for row <- 0 until GridConfig.rows yield (1, row)
     val rich = MazeState.initial.copy(resources = Map(Resource.Wood -> 1_000.0))

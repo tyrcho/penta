@@ -9,11 +9,27 @@ package towerdefense.domain
 // Foret.md/Jungle.md) only lets Grove be placed from scratch; Forest and Jungle are
 // reached by upgrading an existing Grove/Forest via Placement.tryUpgradeBuilding, using
 // `cost` here as the upgrade's cost, not a from-scratch price.
+// maxPerMaze: Some(1) for the five Science labs (Note sur les laboratoires.md: "Il n'est
+// possible de controler qu'un seul laboratoire de chaque type") — every other kind is
+// unlimited (None), see Placement.checkMaxCount.
+//
+// Deliberately NOT modeled here yet: Science's leveled research tree (5 levels/lab,
+// doubling cost per level — Recherches*.md/Recherche fondamentale.md) and its global
+// modifiers (building cost reduction, building damage boost, plunder efficiency boost,
+// opponent victory-target increase) or Science's own victory condition. Those touch
+// every other faction's numbers (a genuine architecture change — new per-maze research-
+// level state, cross-cutting modifiers threaded through Balance/CombatEngine/Placement/
+// VictoryConditions) rather than being new data rows like a building/unit is, and the
+// vault's own spec for the fundamental-research victory condition is self-contradictory
+// (lists 5 target levels for "the other 4 labs"). Labs are wired up here only as Crystal
+// producers, same deliberate-gap treatment CLAUDE.md/README already give Loi's unwired
+// victory condition.
 case class BuildingSpec(
     cost: Map[Resource, Double],
     produces: Map[Resource, Double], // rate per second
-    spawns: Option[(UnitKind, Double)], // (unit kind, interval ms) — None only for Watchtower
-    buildableDirectly: Boolean = true
+    spawns: Option[(UnitKind, Double)], // (unit kind, interval ms) — None for Watchtower and the Science labs
+    buildableDirectly: Boolean = true,
+    maxPerMaze: Option[Int] = None
 )
 
 object BuildingSpecs:
@@ -60,6 +76,46 @@ object BuildingSpecs:
       ),
       produces = Map(Resource.Light -> Balance.LightPerSecPerWatchtower),
       spawns = None
+    ),
+    BuildingKind.Tomb -> BuildingSpec(
+      cost = Map(Resource.Wood -> Balance.TombCostWood, Resource.Shadow -> Balance.TombCostShadow),
+      produces = Map(Resource.Shadow -> Balance.ShadowPerSecPerTomb),
+      spawns = Some(UnitKind.Zombie -> Balance.ZombieSpawnIntervalMs)
+    ),
+    BuildingKind.BlackCastle -> BuildingSpec(
+      cost = Map(Resource.Wood -> Balance.BlackCastleCostWood, Resource.Shadow -> Balance.BlackCastleCostShadow),
+      produces = Map(Resource.Shadow -> Balance.ShadowPerSecPerBlackCastle),
+      spawns = Some(UnitKind.Vampire -> Balance.VampireSpawnIntervalMs)
+    ),
+    BuildingKind.LaboNaturel -> BuildingSpec(
+      cost = Map(Resource.Wood -> Balance.LaboNaturelCostWood, Resource.Crystal -> Balance.LaboNaturelCostCrystal),
+      produces = Map(Resource.Crystal -> Balance.CrystalPerSecPerLaboNaturel),
+      spawns = None,
+      maxPerMaze = Some(1)
+    ),
+    BuildingKind.LaboSombre -> BuildingSpec(
+      cost = Map(Resource.Shadow -> Balance.LaboSombreCostShadow, Resource.Crystal -> Balance.LaboSombreCostCrystal),
+      produces = Map(Resource.Crystal -> Balance.CrystalPerSecPerLaboSombre),
+      spawns = None,
+      maxPerMaze = Some(1)
+    ),
+    BuildingKind.LaboDeRecherche -> BuildingSpec(
+      cost = Map(Resource.Crystal -> Balance.LaboDeRechercheCostCrystal),
+      produces = Map(Resource.Crystal -> Balance.CrystalPerSecPerLaboDeRecherche),
+      spawns = None,
+      maxPerMaze = Some(1)
+    ),
+    BuildingKind.LaboDeLaLoi -> BuildingSpec(
+      cost = Map(Resource.Light -> Balance.LaboDeLaLoiCostLight, Resource.Crystal -> Balance.LaboDeLaLoiCostCrystal),
+      produces = Map(Resource.Crystal -> Balance.CrystalPerSecPerLaboDeLaLoi),
+      spawns = None,
+      maxPerMaze = Some(1)
+    ),
+    BuildingKind.LaboDuChaos -> BuildingSpec(
+      cost = Map(Resource.Fire -> Balance.LaboDuChaosCostFire, Resource.Crystal -> Balance.LaboDuChaosCostCrystal),
+      produces = Map(Resource.Crystal -> Balance.CrystalPerSecPerLaboDuChaos),
+      spawns = None,
+      maxPerMaze = Some(1)
     )
   )
 

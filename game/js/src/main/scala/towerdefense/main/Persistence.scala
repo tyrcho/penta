@@ -58,6 +58,7 @@ private object Persistence:
       buildings = js.Array(m.buildings.map(encodeBuilding)*),
       resources = encodeResources(m.resources),
       resourcesPlundered = m.resourcesPlundered,
+      buildingsCorrupted = m.buildingsCorrupted,
       nextId = m.nextId.toDouble
     )
 
@@ -84,6 +85,8 @@ private object Persistence:
         case UnitKind.Minotaur => "Minotaur"
         case UnitKind.Paladin  => "Paladin"
         case UnitKind.Wolf     => "Wolf"
+        case UnitKind.Zombie   => "Zombie"
+        case UnitKind.Vampire  => "Vampire"
     )
 
   private def encodeBuilding(b: Building): js.Dynamic =
@@ -92,7 +95,8 @@ private object Persistence:
       col = b.col,
       row = b.row,
       kind = b.kind.toString,
-      spawnCountdownMs = b.spawnCountdownMs
+      spawnCountdownMs = b.spawnCountdownMs,
+      corruptionPercent = b.corruptionPercent
     )
 
   private def encodeOutcome(m: MatchResult): js.Dynamic = m match
@@ -126,6 +130,9 @@ private object Persistence:
       buildings = buildings,
       resources = decodeResources(d),
       resourcesPlundered = asDouble(d.resourcesPlundered),
+      // Pre-Mort saves have no buildingsCorrupted field — default to 0.0, same fallback
+      // shape as Shadow/Crystal's decodeResources migration above.
+      buildingsCorrupted = if js.isUndefined(d.buildingsCorrupted) then 0.0 else asDouble(d.buildingsCorrupted),
       nextId = asDouble(d.nextId).toLong
     )
 
@@ -189,6 +196,8 @@ private object Persistence:
         case "Minotaur" => UnitKind.Minotaur
         case "Paladin"  => UnitKind.Paladin
         case "Wolf"     => UnitKind.Wolf
+        case "Zombie"   => UnitKind.Zombie
+        case "Vampire"  => UnitKind.Vampire
         case _          => UnitKind.Goblin
     )
 
@@ -198,15 +207,23 @@ private object Persistence:
       col = asDouble(d.col).toInt,
       row = asDouble(d.row).toInt,
       kind = d.kind.asInstanceOf[String] match
-        case "Grove"      => BuildingKind.Grove
-        case "Forest"     => BuildingKind.Forest
-        case "Jungle"     => BuildingKind.Jungle
-        case "Cave"       => BuildingKind.Cave
-        case "Labyrinth"  => BuildingKind.Labyrinth
-        case "Eglise"     => BuildingKind.Church
-        case "Church"     => BuildingKind.Church
-        case _            => BuildingKind.Watchtower,
-      spawnCountdownMs = if js.isUndefined(d.spawnCountdownMs) then 0.0 else asDouble(d.spawnCountdownMs)
+        case "Grove"           => BuildingKind.Grove
+        case "Forest"          => BuildingKind.Forest
+        case "Jungle"          => BuildingKind.Jungle
+        case "Cave"            => BuildingKind.Cave
+        case "Labyrinth"       => BuildingKind.Labyrinth
+        case "Eglise"          => BuildingKind.Church
+        case "Church"          => BuildingKind.Church
+        case "Tomb"            => BuildingKind.Tomb
+        case "BlackCastle"     => BuildingKind.BlackCastle
+        case "LaboNaturel"     => BuildingKind.LaboNaturel
+        case "LaboSombre"      => BuildingKind.LaboSombre
+        case "LaboDeRecherche" => BuildingKind.LaboDeRecherche
+        case "LaboDeLaLoi"     => BuildingKind.LaboDeLaLoi
+        case "LaboDuChaos"     => BuildingKind.LaboDuChaos
+        case _                 => BuildingKind.Watchtower,
+      spawnCountdownMs = if js.isUndefined(d.spawnCountdownMs) then 0.0 else asDouble(d.spawnCountdownMs),
+      corruptionPercent = if js.isUndefined(d.corruptionPercent) then 0.0 else asDouble(d.corruptionPercent)
     )
 
   private def decodeOutcome(d: js.Dynamic): Option[MatchResult] =

@@ -3,11 +3,24 @@ package towerdefense.domain
 class PlacementTest extends munit.FunSuite:
 
   private val emptyCell = (5, 5)
-  private val richState = withResources(wood = 1_000.0, fire = 1_000.0, light = 1_000.0)
+  private val richState =
+    withResources(wood = 1_000.0, fire = 1_000.0, light = 1_000.0, shadow = 1_000.0, crystal = 1_000.0)
 
-  private def withResources(wood: Double = 0.0, fire: Double = 0.0, light: Double = 0.0): MazeState =
+  private def withResources(
+      wood: Double = 0.0,
+      fire: Double = 0.0,
+      light: Double = 0.0,
+      shadow: Double = 0.0,
+      crystal: Double = 0.0
+  ): MazeState =
     MazeState.initial.copy(
-      resources = Map(Resource.Wood -> wood, Resource.Fire -> fire, Resource.Light -> light)
+      resources = Map(
+        Resource.Wood -> wood,
+        Resource.Fire -> fire,
+        Resource.Light -> light,
+        Resource.Shadow -> shadow,
+        Resource.Crystal -> crystal
+      )
     )
 
   test("rejects placement on the spawn cell") {
@@ -228,4 +241,89 @@ class PlacementTest extends munit.FunSuite:
       Placement.tryPlaceBuilding(richState, BuildingKind.Jungle, 5, 5),
       Left(PlacementError.CannotBuildDirectly)
     )
+  }
+
+  test("rejects a tomb without enough wood or shadow") {
+    val (col, row) = emptyCell
+    assertEquals(
+      Placement.tryPlaceBuilding(withResources(wood = 0.0, shadow = 1_000.0), BuildingKind.Tomb, col, row).isLeft,
+      true
+    )
+    assertEquals(
+      Placement.tryPlaceBuilding(withResources(wood = 1_000.0, shadow = 0.0), BuildingKind.Tomb, col, row).isLeft,
+      true
+    )
+  }
+
+  test("places a tomb and deducts both wood and shadow") {
+    val (col, row) = emptyCell
+    val result = Placement.tryPlaceBuilding(richState, BuildingKind.Tomb, col, row).toOption.get
+    assertEquals(result.buildings.count(_.kind == BuildingKind.Tomb), 1)
+    assertEquals(result.resources(Resource.Wood), richState.resources(Resource.Wood) - Balance.TombCostWood)
+    assertEquals(result.resources(Resource.Shadow), richState.resources(Resource.Shadow) - Balance.TombCostShadow)
+  }
+
+  test("places a black castle and deducts both wood and shadow") {
+    val (col, row) = emptyCell
+    val result = Placement.tryPlaceBuilding(richState, BuildingKind.BlackCastle, col, row).toOption.get
+    assertEquals(result.buildings.count(_.kind == BuildingKind.BlackCastle), 1)
+    assertEquals(
+      result.resources(Resource.Wood),
+      richState.resources(Resource.Wood) - Balance.BlackCastleCostWood
+    )
+    assertEquals(
+      result.resources(Resource.Shadow),
+      richState.resources(Resource.Shadow) - Balance.BlackCastleCostShadow
+    )
+  }
+
+  test("a tomb and a black castle can coexist and stack freely, unlike the Science labs") {
+    val withTomb = Placement.tryPlaceBuilding(richState, BuildingKind.Tomb, 3, 3).toOption.get
+    val withSecondTomb = Placement.tryPlaceBuilding(withTomb, BuildingKind.Tomb, 4, 4).toOption.get
+    assertEquals(withSecondTomb.buildings.count(_.kind == BuildingKind.Tomb), 2)
+  }
+
+  test("places each Science lab, each deducting its own resource mix plus crystal") {
+    val naturel = Placement.tryPlaceBuilding(richState, BuildingKind.LaboNaturel, 1, 1).toOption.get
+    assertEquals(
+      naturel.resources(Resource.Wood),
+      richState.resources(Resource.Wood) - Balance.LaboNaturelCostWood
+    )
+    assertEquals(
+      naturel.resources(Resource.Crystal),
+      richState.resources(Resource.Crystal) - Balance.LaboNaturelCostCrystal
+    )
+
+    val sombre = Placement.tryPlaceBuilding(richState, BuildingKind.LaboSombre, 1, 2).toOption.get
+    assertEquals(
+      sombre.resources(Resource.Shadow),
+      richState.resources(Resource.Shadow) - Balance.LaboSombreCostShadow
+    )
+
+    val recherche = Placement.tryPlaceBuilding(richState, BuildingKind.LaboDeRecherche, 1, 3).toOption.get
+    assertEquals(
+      recherche.resources(Resource.Crystal),
+      richState.resources(Resource.Crystal) - Balance.LaboDeRechercheCostCrystal
+    )
+
+    val loi = Placement.tryPlaceBuilding(richState, BuildingKind.LaboDeLaLoi, 1, 4).toOption.get
+    assertEquals(loi.resources(Resource.Light), richState.resources(Resource.Light) - Balance.LaboDeLaLoiCostLight)
+
+    val chaos = Placement.tryPlaceBuilding(richState, BuildingKind.LaboDuChaos, 1, 5).toOption.get
+    assertEquals(chaos.resources(Resource.Fire), richState.resources(Resource.Fire) - Balance.LaboDuChaosCostFire)
+  }
+
+  test("rejects placing a second lab of the same kind (only one of each type)") {
+    val (col, row) = emptyCell
+    val withFirst = Placement.tryPlaceBuilding(richState, BuildingKind.LaboNaturel, col, row).toOption.get
+    assertEquals(
+      Placement.tryPlaceBuilding(withFirst, BuildingKind.LaboNaturel, 6, 6),
+      Left(PlacementError.MaxCountReached)
+    )
+  }
+
+  test("a different Science lab kind is unaffected by another lab kind's max count") {
+    val withNaturel = Placement.tryPlaceBuilding(richState, BuildingKind.LaboNaturel, 1, 1).toOption.get
+    val result = Placement.tryPlaceBuilding(withNaturel, BuildingKind.LaboSombre, 2, 2)
+    assertEquals(result.isRight, true)
   }

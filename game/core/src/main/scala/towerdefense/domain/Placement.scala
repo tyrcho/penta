@@ -2,7 +2,7 @@ package towerdefense.domain
 
 enum PlacementError derives CanEqual:
   case OutOfBounds, OnSpawnOrGoal, CellOccupied, WouldBlockPath, InsufficientResources,
-    CannotBuildDirectly, NoBuildingThere, NoUpgradeAvailable
+    CannotBuildDirectly, NoBuildingThere, NoUpgradeAvailable, MaxCountReached
 
 object Placement:
 
@@ -17,7 +17,16 @@ object Placement:
       _ <- Either.cond(spec.buildableDirectly, (), PlacementError.CannotBuildDirectly)
       _ <- checkCell(state, col, row)
       _ <- Either.cond(canAfford(state.resources, spec.cost), (), PlacementError.InsufficientResources)
+      _ <- checkMaxCount(state, kind, spec)
     yield placeBuilding(state, kind, spec, col, row)
+
+  // Science's five labs cap at one each (Note sur les laboratoires.md: "Il n'est possible
+  // de controler qu'un seul laboratoire de chaque type") — every other kind has
+  // maxPerMaze = None and is unrestricted.
+  private def checkMaxCount(state: MazeState, kind: BuildingKind, spec: BuildingSpec): Either[PlacementError, Unit] =
+    spec.maxPerMaze match
+      case Some(max) => Either.cond(state.buildings.count(_.kind == kind) < max, (), PlacementError.MaxCountReached)
+      case None       => Right(())
 
   // Upgrades whatever building already sits at (col, row) to the next tier in
   // BuildingSpecs.upgradesTo (Grove -> Forest -> Jungle today) — the only way to reach a

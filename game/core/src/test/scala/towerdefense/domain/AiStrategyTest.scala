@@ -7,9 +7,21 @@ class AiStrategyTest extends munit.FunSuite:
 
   private val noOpponent = MazeState.initial
 
-  private def withResources(wood: Double = 0.0, fire: Double = 0.0, light: Double = 0.0): MazeState =
+  private def withResources(
+      wood: Double = 0.0,
+      fire: Double = 0.0,
+      light: Double = 0.0,
+      shadow: Double = 0.0,
+      crystal: Double = 0.0
+  ): MazeState =
     MazeState.initial.copy(
-      resources = Map(Resource.Wood -> wood, Resource.Fire -> fire, Resource.Light -> light)
+      resources = Map(
+        Resource.Wood -> wood,
+        Resource.Fire -> fire,
+        Resource.Light -> light,
+        Resource.Shadow -> shadow,
+        Resource.Crystal -> crystal
+      )
     )
 
   private def count(state: MazeState, kind: BuildingKind): Int = state.buildings.count(_.kind == kind)
@@ -39,6 +51,26 @@ class AiStrategyTest extends munit.FunSuite:
     assertEquals(count(result, BuildingKind.Labyrinth), 1)
     assertEquals(count(result, BuildingKind.Forest), 0)
     assertEquals(count(result, BuildingKind.Cave), 0)
+  }
+
+  test("builds a tomb when it can only afford a tomb") {
+    val state = withResources(wood = Balance.TombCostWood, shadow = Balance.TombCostShadow)
+    val result = LinearStrategy.maybeBuild(state, noOpponent)
+    assertEquals(count(result, BuildingKind.Tomb), 1)
+    assertEquals(count(result, BuildingKind.Cave), 0)
+  }
+
+  test("builds a black castle when it can only afford one, over cheaper buildings tied on wood") {
+    val state = withResources(wood = Balance.BlackCastleCostWood, shadow = Balance.BlackCastleCostShadow)
+    val result = LinearStrategy.maybeBuild(state, noOpponent)
+    assertEquals(count(result, BuildingKind.BlackCastle), 1)
+    assertEquals(count(result, BuildingKind.Labyrinth), 0)
+  }
+
+  test("builds a science lab when it can only afford one (zero wood cost, tried last)") {
+    val state = withResources(wood = 0.0, crystal = Balance.LaboDeRechercheCostCrystal)
+    val result = LinearStrategy.maybeBuild(state, noOpponent)
+    assertEquals(count(result, BuildingKind.LaboDeRecherche), 1)
   }
 
   test("builds an eglise over any cheaper building once it can afford one") {
@@ -119,7 +151,11 @@ class AiStrategyTest extends munit.FunSuite:
         "comb-plunder",
         "comb-vertical-plunder",
         "maze-plunder",
-        "resource-maze"
+        "resource-maze",
+        // Provisional placement — see AiStrategy.ladder's doc: not yet re-measured via a
+        // tournament round-robin the way every entry above it was.
+        "comb-corruption",
+        "maze-corruption"
       )
     )
   }

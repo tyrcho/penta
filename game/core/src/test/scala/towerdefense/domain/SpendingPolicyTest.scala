@@ -116,6 +116,31 @@ class SpendingPolicyTest extends munit.FunSuite:
     assertEquals(SpendingPolicy.counterScore(loiHeavyOpponent, BuildingKind.Grove), 1.0)
   }
 
+  test("counterScore also mirrors Mort (Tomb/BlackCastle) investment, alongside Nature/Chaos") {
+    val mortHeavyOpponent = MazeState.initial.copy(
+      buildings = List(
+        building(1, 5, 5, BuildingKind.Tomb),
+        building(2, 6, 6, BuildingKind.Tomb),
+        building(3, 7, 7, BuildingKind.Tomb),
+        building(4, 2, 2, BuildingKind.Cave)
+      )
+    )
+    assertEquals(SpendingPolicy.counterScore(mortHeavyOpponent, BuildingKind.Tomb), 1.0)
+    assertEquals(SpendingPolicy.counterScore(mortHeavyOpponent, BuildingKind.Cave), 0.0)
+  }
+
+  test("counterScore ignores Science (the five Labo* kinds) investment since it feeds no victory condition") {
+    val scienceHeavyOpponent = MazeState.initial.copy(
+      buildings = List(
+        building(1, 5, 5, BuildingKind.LaboNaturel),
+        building(2, 6, 6, BuildingKind.LaboSombre),
+        building(3, 2, 2, BuildingKind.Cave)
+      )
+    )
+    assertEquals(SpendingPolicy.counterScore(scienceHeavyOpponent, BuildingKind.LaboNaturel), 0.0)
+    assertEquals(SpendingPolicy.counterScore(scienceHeavyOpponent, BuildingKind.Cave), 1.0)
+  }
+
   // ── WeightedSpending ───────────────────────────────────────────────────
 
   test("WeightedSpending(1,0) ranks kinds by resourceScore alone") {
@@ -161,6 +186,34 @@ class SpendingPolicyTest extends munit.FunSuite:
     assert(
       PlunderSpending.score(state, noOpponent, BuildingKind.Cave) > PlunderSpending.score(state, noOpponent, BuildingKind.Labyrinth),
       "Cave (wood5/fire10) leaves a much larger margin than Labyrinth (wood20/fire40)"
+    )
+  }
+
+  // ── CorruptionSpending ─────────────────────────────────────────────────
+
+  test("CorruptionSpending always favors Mort kinds, regardless of the opponent's faction mix") {
+    val natureHeavyOpponent = MazeState.initial.copy(
+      buildings = List(building(1, 5, 5, BuildingKind.Forest), building(2, 6, 6, BuildingKind.Forest))
+    )
+    val state = withResources(wood = 100.0, fire = 0.0, light = 0.0).copy(
+      resources = Map(Resource.Wood -> 100.0, Resource.Shadow -> 100.0)
+    )
+    assert(
+      CorruptionSpending.score(state, natureHeavyOpponent, BuildingKind.Tomb) >
+        CorruptionSpending.score(state, natureHeavyOpponent, BuildingKind.Grove)
+    )
+    assert(
+      CorruptionSpending.score(state, natureHeavyOpponent, BuildingKind.BlackCastle) >
+        CorruptionSpending.score(state, natureHeavyOpponent, BuildingKind.Church)
+    )
+  }
+
+  test("CorruptionSpending breaks ties between Tomb and BlackCastle by affordability margin") {
+    val state = MazeState.initial.copy(resources = Map(Resource.Wood -> 100.0, Resource.Shadow -> 100.0))
+    assert(
+      CorruptionSpending.score(state, noOpponent, BuildingKind.Tomb) >
+        CorruptionSpending.score(state, noOpponent, BuildingKind.BlackCastle),
+      "Tomb (wood5/shadow10) leaves a much larger margin than BlackCastle (wood20/shadow40)"
     )
   }
 

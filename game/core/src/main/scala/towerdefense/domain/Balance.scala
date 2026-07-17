@@ -65,7 +65,7 @@ object Balance:
   // ── Loi ──────────────────────────────────────────────────────────────────
   val EgliseCostWood: Double = 40.0 // Eglise.md: "cout en bois: 40"
   val EgliseCostLight: Double = 20.0 // Eglise.md: "cout en lumiere: 20"
-  val LightPerSecPerEglise: Double = 1.0 // Eglise.md: "Produit 1 Lumiere par seconde"
+  val LightPerSecPerEglise: Double = 0.3 // Eglise.md: "Produit 0.3 Lumiere par seconde"
   val PaladinSpawnIntervalMs: Double =
     10_000.0 // Eglise.md: "toutes les 10 secondes genere un Paladin"
 
@@ -82,11 +82,85 @@ object Balance:
   // and deals direct single-target damage instead of a passive adjacency aura.
   val WatchtowerCostWood: Double = 10.0 // "cout en bois: 10"
   val WatchtowerCostLight: Double = 5.0 // "cout en lumiere: 5"
-  val LightPerSecPerWatchtower: Double = 1.0 // "Produit 1 Lumiere par seconde"
+  val LightPerSecPerWatchtower: Double = 0.1 // Tour de guet.md: "Produit 0.1 Lumiere par seconde"
   val WatchtowerDamagePerSec: Double = 10.0 // "Inflige 10 degats chaque seconde a une cible"
   // "jusqu'a 2 cases de distance" — Chebyshev (king-move) distance in cells, the usual
   // reading of tower range on a grid: any cell within a 5x5 block centered on the tower.
   val WatchtowerRangeCells: Int = 2
+
+  // ── Mort (Death) ─────────────────────────────────────────────────────────
+  // Tomb/BlackCastle mirror Cave/Labyrinth's costs exactly (5 wood + 10 shadow, 20 wood +
+  // 40 shadow) — Tombe.md/Chateau Noir.md, both added the same session as Cave/Labyrinth's
+  // Chaos-shaped counterparts.
+  val TombCostWood: Double = 5.0 // Tombe.md: "cout en bois: 5"
+  val TombCostShadow: Double = 10.0 // Tombe.md: "cout en ombre: 10"
+  val ShadowPerSecPerTomb: Double = 0.2 // Tombe.md: "Produit 0.2 ombre / sec"
+  val ZombieSpawnIntervalMs: Double = 10_000.0 // Tombe.md: "Envoie un Zombie toutes les 10s"
+
+  val BlackCastleCostWood: Double = 20.0 // Chateau Noir.md: "cout en bois: 20"
+  val BlackCastleCostShadow: Double = 40.0 // Chateau Noir.md: "cout en ombre: 40"
+  val ShadowPerSecPerBlackCastle: Double = 0.5 // Chateau Noir.md: "Produit 0.5 ombre / sec"
+  // Chateau Noir.md's trailing spawn line is corrupted vault data — cut off mid-markdown-
+  // link ("Toutes les 10 sec  genere un [Elf") with no unit actually resolved, apparently a
+  // copy-paste leftover from Bosquet.md/Foret.md's identical phrasing (Tombe.md has the
+  // exact same leftover line, but *also* has its own correct "Envoie un Zombie toutes les
+  // 10s" sentence elsewhere — Chateau Noir.md has no such correct sentence to fall back on).
+  // POC default: Vampire, by symmetry with Tomb→Zombie mirroring Cave→Goblin/Labyrinth→
+  // Minotaur (cheap tier / expensive tier, each with its own unit) — and 10s, the one
+  // number that line does contain, matching Tomb's own interval.
+  val VampireSpawnIntervalMs: Double = 10_000.0
+
+  val ZombieMaxHp: Double = 15.0 // Zombie.md: "PV: 15"
+  // Zombie.md: "Se deplace lentement (1 case en 2 sec)" — half Elf's 1 cell/sec pace.
+  val ZombieSpeedPerMs: Double = ElfSpeedPerMs * 0.5
+  // Zombie.md: "Corrompt les batiments adjacents de 1% par seconde" — see CombatEngine's
+  // corruption mechanic (Corruption.md): a Zombie/Vampire standing adjacent to an enemy
+  // building raises its corruptionPercent each tick; at CorruptionMaxPercent the building
+  // is destroyed and its cost refunded to the corrupting unit's owner (not the building's
+  // own owner, unlike Demolition).
+  val ZombieCorruptionPercentPerSec: Double = 1.0
+
+  val VampireMaxHp: Double = 50.0 // Vampire.md: "PV: 50"
+  val VampireSpeedPerMs: Double = ElfSpeedPerMs * 1.5 // Vampire.md: "Se deplace vite (1.5 case/ sec)" — matches Wolf's pace
+  val VampireCorruptionPercentPerSec: Double = 2.0 // Vampire.md: "Corrompt les batiments adjacents de 2% par seconde"
+  // Vampire.md: "Reduit les degats qu'il subit de 50% (mais n'est pas protege par l'aura du
+  // Paladin)" — an unconditional flat reduction applied in CombatEngine, explicitly instead
+  // of (not stacked with) Paladin's shield: a Vampire is excluded from paladinShieldedIds
+  // even when standing adjacent to a Paladin.
+  val VampireDamageReductionFraction: Double = 0.5
+
+  val CorruptionMaxPercent: Double = 100.0 // Corruption.md: "corrompu a 100% il disparait"
+
+  // Victoire.md leaves Mort's "B: Corrompre ou detruire XX unites/batiments ennemis" as an
+  // unfilled "XX" — POC default, deliberately small: each point requires fully corrupting
+  // and destroying a whole enemy building (removing it outright and refunding its cost),
+  // a far heavier swing than one Elf/Goblin plunder, so the target sits far below
+  // ChaosVictoryPlunderTarget. Tunable via tournament iteration like the other targets.
+  val MortVictoryCorruptionTarget: Double = 8.0
+
+  // ── Science ──────────────────────────────────────────────────────────────
+  // Five labs, one per other faction (Note sur les laboratoires.md: "un seul laboratoire de
+  // chaque type" — see Placement's maxOnePerKind check), each producing Crystal and (not yet
+  // implemented — see BuildingSpecs' doc) unlocking a matching leveled research line. No
+  // UnitKind for Science: the vault defines none, only these five buildings.
+  val LaboNaturelCostWood: Double = 5.0 // Labo Naturel.md: "cout en bois: 5"
+  val LaboNaturelCostCrystal: Double = 10.0 // Labo Naturel.md: "cout en crystal: 10"
+  val CrystalPerSecPerLaboNaturel: Double = 0.2 // Labo Naturel.md: "Produit 0.2 Crystal par sec"
+
+  val LaboSombreCostShadow: Double = 5.0 // Labo Sombre.md: "cout en ombre: 5"
+  val LaboSombreCostCrystal: Double = 10.0 // Labo Sombre.md: "cout en crystal: 10"
+  val CrystalPerSecPerLaboSombre: Double = 0.2 // Labo Sombre.md: "Produit 0.2 Crystal par sec"
+
+  val LaboDeRechercheCostCrystal: Double = 15.0 // Labo de Recherche.md: "cout en crystal: 15"
+  val CrystalPerSecPerLaboDeRecherche: Double = 0.3 // Labo de Recherche.md: "Produit 0.3 Crystal par sec"
+
+  val LaboDeLaLoiCostLight: Double = 5.0 // Labo de la Loi.md: "cout en lumiere: 5"
+  val LaboDeLaLoiCostCrystal: Double = 10.0 // Labo de la Loi.md: "cout en crystal: 10"
+  val CrystalPerSecPerLaboDeLaLoi: Double = 0.2 // Labo de la Loi.md: "Produit 0.2 Crystal par sec"
+
+  val LaboDuChaosCostFire: Double = 5.0 // Labo du Chaos.md: "cout en feu: 5"
+  val LaboDuChaosCostCrystal: Double = 10.0 // Labo du Chaos.md: "cout en crystal: 10"
+  val CrystalPerSecPerLaboDuChaos: Double = 0.2 // Labo du Chaos.md: "Produit 0.2 Crystal par sec"
 
   // ── Shared / meta ────────────────────────────────────────────────────────
 
@@ -101,8 +175,24 @@ object Balance:
   // just enough for exactly one, same relationship as StartingFire to CaveCostFire.
   val StartingLight: Double = 20.0
 
-  val StartingResources: Map[Resource, Double] =
-    Map(Resource.Wood -> StartingWood, Resource.Fire -> StartingFire, Resource.Light -> StartingLight)
+  // Same reasoning as StartingLight: Shadow has no producer besides Tomb itself, which
+  // also costs Shadow, so the very first Tomb needs a starting stock — just enough for one.
+  val StartingShadow: Double = 10.0
+
+  // Same reasoning again: every Science lab costs Crystal and only labs produce it, so
+  // bootstrapping needs at least the cheapest lab's cost up front — the four 10-crystal
+  // labs (Naturel/Sombre/de la Loi/du Chaos), not the pricier 15-crystal Labo de Recherche,
+  // mirroring how Cave (cheaper) is buildable from StartingFire while Labyrinth (pricier)
+  // isn't yet.
+  val StartingCrystal: Double = 10.0
+
+  val StartingResources: Map[Resource, Double] = Map(
+    Resource.Wood -> StartingWood,
+    Resource.Fire -> StartingFire,
+    Resource.Light -> StartingLight,
+    Resource.Shadow -> StartingShadow,
+    Resource.Crystal -> StartingCrystal
+  )
 
   // POC default: wood/fire production compounds with building count, so without a pace
   // limit the AI can tile its maze within seconds. This caps it to roughly a human's

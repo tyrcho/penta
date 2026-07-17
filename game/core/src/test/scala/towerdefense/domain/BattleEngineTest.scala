@@ -140,6 +140,28 @@ class BattleEngineTest extends munit.FunSuite:
     assertEquals(result.ai.resourcesPlundered, 2 * Balance.MinotaurPlunderPerUnit)
   }
 
+  test("a zombie corrupting a building to destruction credits the full cost and tally to the AI") {
+    val almostCorrupted = Building(
+      1,
+      col = 5,
+      row = 5,
+      BuildingKind.Grove,
+      spawnCountdownMs = 0.0,
+      corruptionPercent = Balance.CorruptionMaxPercent - Balance.ZombieCorruptionPercentPerSec
+    )
+    val incomingZombie =
+      Creature(1, GridConfig.cellCenter(6, 5), Balance.ZombieMaxHp, Balance.ZombieMaxHp, 0.0, UnitKind.Zombie)
+    val battle = BattleState(
+      player = withResources().copy(buildings = List(almostCorrupted), creatures = List(incomingZombie)),
+      ai = withResources() // isolates the corruption-credit effect from production
+    )
+    val result = BattleEngine.tick(battle, deltaMs = 1000.0)
+    assertEquals(result.player.buildings, Nil)
+    assertEquals(result.player.buildingsCorrupted, 0.0) // this side lost the building, didn't corrupt one
+    assertEquals(result.ai.resources(Resource.Wood), Balance.GroveCostWood)
+    assertEquals(result.ai.buildingsCorrupted, 1.0)
+  }
+
   test("the battle freezes once the player reaches the Nature victory target") {
     val forests = (0 until Balance.NatureVictoryForestTarget)
       .map(i =>

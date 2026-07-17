@@ -2,20 +2,30 @@ package towerdefense.domain
 
 import towerdefense.domain.geometry.Vec2
 
-// All 5 resources across the vault's factions. Shadow (Mort) and Crystal (Science)
-// have no buildings producing/consuming them yet — enumerated now, per explicit
-// request, rather than re-enumerating once those factions exist.
+// All 5 resources across the vault's factions.
 enum Resource derives CanEqual:
   case Wood, Fire, Light, Shadow, Crystal
 
+// Zombie/Vampire (Mort) have no plunder ability — see CreatureSpecs and CombatEngine's
+// corruption mechanic. Science (Recherches*.md) has no unit at all in the vault, only
+// buildings — see BuildingKind's Science cases.
 enum UnitKind derives CanEqual:
-  case Elf, Goblin, Minotaur, Paladin, Wolf
+  case Elf, Goblin, Minotaur, Paladin, Wolf, Zombie, Vampire
 
 // Grove/Forest/Jungle form Nature's upgrade chain (Bosquet.md/Foret.md/Jungle.md) — only
 // Grove is directly buildable; Forest and Jungle are reached by upgrading an existing
 // Grove/Forest in place (see BuildingSpecs.upgradesTo, Placement.tryUpgradeBuilding).
+//
+// Tomb/BlackCastle (Tombe.md/Chateau Noir.md) are Mort's pair, mirroring Cave/Labyrinth's
+// shape (two independently-buildable tiers, not an upgrade chain).
+//
+// The five Labo* kinds are Science's buildings (Labo Naturel/Sombre/de Recherche/de la
+// Loi/du Chaos) — Crystal producers only in this pass; see BuildingSpecs' doc for what's
+// deliberately not implemented yet (the leveled research tree, its global modifiers, and
+// Science's victory condition).
 enum BuildingKind derives CanEqual:
-  case Grove, Forest, Jungle, Cave, Labyrinth, Church, Watchtower
+  case Grove, Forest, Jungle, Cave, Labyrinth, Church, Watchtower, Tomb, BlackCastle,
+    LaboNaturel, LaboSombre, LaboDeRecherche, LaboDeLaLoi, LaboDuChaos
 
 // A unit currently walking this maze. From this maze owner's point of view it's
 // always hostile — sent by one of the opponent's buildings. See CreatureSpecs for
@@ -32,15 +42,20 @@ case class Creature(
 
 // Replaces the old per-faction Forest/Cave/Labyrinth/Eglise/Watchtower case classes —
 // see BuildingSpecs for what each kind costs/produces/spawns. spawnCountdownMs is
-// inert (0.0, never read) for kinds whose spec has no `spawns` (only Watchtower today)
-// rather than modeled as an Option — cheaper than threading an unwrap through every
-// fold/copy site for the sake of one kind out of five.
+// inert (0.0, never read) for kinds whose spec has no `spawns` (only Watchtower and the
+// Science labs today) rather than modeled as an Option — cheaper than threading an
+// unwrap through every fold/copy site for the sake of a few kinds out of many.
+// corruptionPercent (Corruption.md, Mort's mechanic — see CombatEngine): 0-100, how far a
+// Zombie/Vampire standing adjacent has corrupted this building; defaults to 0.0 so every
+// existing call site (none of which involves Mort) is unaffected. Inert for any maze this
+// faction never touches, same reasoning as spawnCountdownMs above.
 case class Building(
     id: Long,
     col: Int,
     row: Int,
     kind: BuildingKind,
-    spawnCountdownMs: Double
+    spawnCountdownMs: Double,
+    corruptionPercent: Double = 0.0
 )
 
 // One player's maze: grid, economy and units currently walking it. A battle is two of these.
@@ -53,6 +68,12 @@ case class MazeState(
                                 // Minotaur plunder different resource combinations into
                                 // the same tally), so it stays a flat Double rather than
                                 // living inside `resources`.
+    buildingsCorrupted: Double = 0.0, // this maze's own progress toward the Mort victory
+                                       // condition (Corruption.md/Victoire.md "B") — counts
+                                       // enemy buildings this maze's Zombies/Vampires have
+                                       // corrupted to 100% and destroyed, symmetric in shape
+                                       // to resourcesPlundered above (see CombatEngine/
+                                       // BattleEngine's corruption handling).
     nextId: Long
 ):
   // Cells occupied by any building — the single source of truth for both pathfinding
@@ -65,5 +86,6 @@ object MazeState:
     buildings = Nil,
     resources = Balance.StartingResources,
     resourcesPlundered = 0.0,
+    buildingsCorrupted = 0.0,
     nextId = 1L
   )

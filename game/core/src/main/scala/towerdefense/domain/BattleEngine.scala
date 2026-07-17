@@ -18,18 +18,23 @@ case class BattleState(
 object BattleState:
   val initial: BattleState = BattleState(MazeState.initial, MazeState.initial)
 
-// Deaths/arrivals from both sides' CombatEngine.tick calls this BattleEngine.tick
-// otherwise discards — purely observational (see MatchLog in the sim module, the one
-// consumer), so it's returned alongside BattleState rather than folded into it.
+// Deaths/arrivals/corruptions from both sides' CombatEngine.tick calls this
+// BattleEngine.tick otherwise discards — purely observational (see MatchLog in the sim
+// module, the one consumer), so it's returned alongside BattleState rather than folded
+// into it. playerCorrupted/aiCorrupted are buildings destroyed *in* that side's own maze
+// this tick (by the opponent's Zombie/Vampire) — same "named after the maze it happened
+// in" convention as playerDeaths/aiDeaths.
 case class TickEvents(
     playerDeaths: List[Death],
     aiDeaths: List[Death],
     playerArrivals: List[UnitKind],
-    aiArrivals: List[UnitKind]
+    aiArrivals: List[UnitKind],
+    playerCorrupted: List[Corrosion] = Nil,
+    aiCorrupted: List[Corrosion] = Nil
 )
 
 object TickEvents:
-  val empty: TickEvents = TickEvents(Nil, Nil, Nil, Nil)
+  val empty: TickEvents = TickEvents(Nil, Nil, Nil, Nil, Nil, Nil)
 
 object BattleEngine:
 
@@ -78,15 +83,19 @@ object BattleEngine:
           )
         case None => (playerResult.state, 0.0)
 
-      val aiFinal = deliverUnits(creditPlunder(aiBuilt, playerResult.stolen), playerResult.spawned)
-      val playerFinal = deliverUnits(creditPlunder(playerBuilt, aiResult.stolen), aiResult.spawned)
+      val aiCredited = creditCorruption(creditPlunder(aiBuilt, playerResult.stolen), playerResult.corrupted)
+      val playerCredited = creditCorruption(creditPlunder(playerBuilt, aiResult.stolen), aiResult.corrupted)
+      val aiFinal = deliverUnits(aiCredited, playerResult.spawned)
+      val playerFinal = deliverUnits(playerCredited, aiResult.spawned)
 
       val next = BattleState(playerFinal, aiFinal, aiNextCooldown, playerNextCooldown)
       val events = TickEvents(
         playerDeaths = playerResult.deaths,
         aiDeaths = aiResult.deaths,
         playerArrivals = playerResult.arrivals,
-        aiArrivals = aiResult.arrivals
+        aiArrivals = aiResult.arrivals,
+        playerCorrupted = playerResult.corrupted,
+        aiCorrupted = aiResult.corrupted
       )
       (next.copy(outcome = VictoryConditions.evaluate(next)), events)
 
@@ -121,6 +130,20 @@ object BattleEngine:
       resources = credited,
       resourcesPlundered = state.resourcesPlundered + stolen.values.sum
     )
+
+  // A corrupted-to-death building's full cost (Corruption.md) lands in the corrupting
+  // creature's owner's economy — the same "attacker's own state gets credited" shape as
+  // creditPlunder, plus one point per building toward this side's own Mort victory tally
+  // (buildingsCorrupted, symmetric to resourcesPlundered).
+  private def creditCorruption(state: MazeState, corrupted: List[Corrosion]): MazeState =
+    if corrupted.isEmpty then state
+    else
+      val credited = corrupted.foldLeft(state.resources) { case (acc, corrosion) =>
+        corrosion.cost.foldLeft(acc) { case (acc2, (res, amount)) =>
+          acc2.updated(res, acc2.getOrElse(res, 0.0) + amount)
+        }
+      }
+      state.copy(resources = credited, buildingsCorrupted = state.buildingsCorrupted + corrupted.size)
 
   private def deliverUnits(state: MazeState, spawned: Map[UnitKind, Int]): MazeState =
     spawned.foldLeft(state) { case (s, (kind, count)) =>

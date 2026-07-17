@@ -10,12 +10,16 @@ import towerdefense.domain.geometry.Vec2
 // purely observational, nothing else in CombatEngine reads it back.
 // arrivals: the UnitKind of every creature that reached the goal this tick, including
 // ones with no plunder ability (Paladin, Wolf) that `stolen` alone would miss entirely.
+// corrupted: buildings this maze just lost to an enemy Zombie/Vampire finishing a
+// corruption (Corruption.md) — like `stolen`, the caller credits their cost (in full,
+// see Corrosion's doc) and a count toward the corrupting side's own Mort victory tally.
 case class TickResult(
     state: MazeState,
     spawned: Map[UnitKind, Int],
     stolen: Map[Resource, Double],
     deaths: List[Death],
-    arrivals: List[UnitKind]
+    arrivals: List[UnitKind],
+    corrupted: List[Corrosion]
 )
 
 // Which damage source(s) killed a creature this tick — a *type* of source, not which
@@ -26,14 +30,24 @@ enum DeathCause derives CanEqual:
 
 case class Death(creatureId: Long, kind: UnitKind, cause: DeathCause)
 
+// A building destroyed by corruption this tick (Corruption.md) — cost is the full
+// BuildingSpecs cost of `kind`, refunded to the corrupting creature's owner by
+// BattleEngine (unlike Demolition's partial self-refund). `cost` already reflects only
+// the last upgrade's price for an upgraded kind like Jungle (see BuildingSpecs/
+// Placement.upgradeBuilding — cost was never modeled as cumulative), matching
+// Corruption.md's own clarification that an upgraded building only refunds its last
+// upgrade's cost.
+case class Corrosion(buildingId: Long, kind: BuildingKind, col: Int, row: Int, cost: Map[Resource, Double])
+
 object CombatEngine:
 
   def tick(state: MazeState, deltaMs: Double): TickResult =
     val (s1, stolen, arrivals) = moveCreatures(state, deltaMs)
     val (s2, deaths) = applyDamageSources(s1, deltaMs)
-    val s3 = produceResources(s2, deltaMs)
-    val (s4, spawned) = advanceSpawnTimers(s3, deltaMs)
-    TickResult(s4, spawned, stolen, deaths, arrivals)
+    val (s3, corrupted) = applyCorruption(s2, deltaMs)
+    val s4 = produceResources(s3, deltaMs)
+    val (s5, spawned) = advanceSpawnTimers(s4, deltaMs)
+    TickResult(s5, spawned, stolen, deaths, arrivals, corrupted)
 
   // Re-pathfinds every creature from its current cell to the goal each tick, avoiding
   // building cells — no cached path to invalidate when a new building changes the maze.
@@ -138,7 +152,16 @@ object CombatEngine:
     val shielded = paladinShieldedIds(state.creatures)
     val damaged = state.creatures.map { c =>
       val raw = damageByCreature.getOrElse(c.id, 0.0)
-      val taken = if shielded.contains(c.id) then math.max(0.0, raw - reductionPerHit) else raw
+      // Vampire.md: "Reduit les degats qu'il subit de 50% (mais n'est pas protege par
+      // l'aura du Paladin)" — explicitly excluded from Paladin's shield even when
+      // standing adjacent to one, and instead gets its own unconditional flat reduction
+      // applied to whatever raw damage it takes from any source.
+      val afterShield =
+        if c.kind != UnitKind.Vampire && shielded.contains(c.id) then math.max(0.0, raw - reductionPerHit)
+        else raw
+      val taken =
+        if c.kind == UnitKind.Vampire then afterShield * (1.0 - Balance.VampireDamageReductionFraction)
+        else afterShield
       c.copy(hp = c.hp - taken)
     }
     val dead = damaged.filter(_.hp <= 0)
@@ -205,6 +228,34 @@ object CombatEngine:
       creatures.filter(_.kind == UnitKind.Paladin).map(c => GridConfig.cellOf(c.pos))
     val shieldedCells = paladinCells.flatMap(c => c :: Pathfinding.neighbors(c)).toSet
     creatures.filter(c => shieldedCells.contains(GridConfig.cellOf(c.pos))).map(_.id).toSet
+
+  // Zombie.md/Vampire.md's corruption rates — Corruption.md: "Les unites de cette faction
+  // corrompent les batiments qu'elles touchent", no restriction to particular building
+  // kinds, so every building in `state` is a fair target the same way Forest's aura hits
+  // every creature, not just certain kinds of them.
+  private val corruptionRatesPerSec: Map[UnitKind, Double] =
+    Map(UnitKind.Zombie -> Balance.ZombieCorruptionPercentPerSec, UnitKind.Vampire -> Balance.VampireCorruptionPercentPerSec)
+
+  // Mirrors applyDamageSources' aura pattern but building-side: instead of a *building*
+  // hitting *creatures* on adjacent cells, a *creature* corrupts *buildings* on adjacent
+  // cells. Multiple corrupting creatures near the same building stack (summed, same as
+  // multiple Forests would stack aura damage on a creature between them). A building
+  // whose corruptionPercent reaches Balance.CorruptionMaxPercent is removed from the
+  // maze and reported as a Corrosion for the caller to refund.
+  private def applyCorruption(state: MazeState, deltaMs: Double): (MazeState, List[Corrosion]) =
+    val corruptors = state.creatures.filter(c => corruptionRatesPerSec.contains(c.kind))
+    if corruptors.isEmpty then (state, Nil)
+    else
+      val corruptionByCell = corruptors
+        .groupMapReduce(c => GridConfig.cellOf(c.pos))(c => corruptionRatesPerSec(c.kind) * deltaMs / 1000.0)(_ + _)
+      val updated = state.buildings.map { b =>
+        val hits = Pathfinding.neighbors((b.col, b.row)).flatMap(corruptionByCell.get).sum
+        if hits <= 0.0 then b
+        else b.copy(corruptionPercent = math.min(Balance.CorruptionMaxPercent, b.corruptionPercent + hits))
+      }
+      val (destroyed, remaining) = updated.partition(_.corruptionPercent >= Balance.CorruptionMaxPercent)
+      val corrosions = destroyed.map(b => Corrosion(b.id, b.kind, b.col, b.row, BuildingSpecs.all(b.kind).cost))
+      (state.copy(buildings = remaining), corrosions)
 
   // Exposed (not private) so any other reader of live production rates — the UI's stock
   // display, tooltips — computes the exact same number tick applies, instead of

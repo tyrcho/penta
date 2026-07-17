@@ -105,7 +105,14 @@ object AiStrategy:
       WeightedSpending(resourceWeight = 1.0, counterWeight = 0.0),
       layoutWeight = 0.25,
       spendingWeight = 0.5
-    )
+    ),
+    // Mort's Tomb/BlackCastle-racing counterparts to comb-plunder/maze-plunder above,
+    // added alongside Death's corruption mechanic — NOT yet measured via a tournament
+    // round-robin (unlike every entry above, whose position reflects actual win rates —
+    // see this doc's history), so their position here is a provisional placeholder pending
+    // that measurement, not a ranking claim.
+    "comb-corruption" -> ComposedStrategy(TemplateLayout(MazeTemplate.comb), CorruptionSpending),
+    "maze-corruption" -> ComposedStrategy(FreeformLayout, CorruptionSpending)
   )
 
   val all: Map[String, AiStrategy] = ladder.toMap

@@ -431,3 +431,133 @@ class CombatEngineTest extends munit.FunSuite:
     val result = CombatEngine.tick(state, deltaMs = 1.0)
     assertEquals(result.arrivals, Nil)
   }
+
+  test("a tomb emits exactly one zombie-spawn signal per interval") {
+    val tomb = Building(100, col = 5, row = 5, BuildingKind.Tomb, Balance.ZombieSpawnIntervalMs)
+    val state = withResources().copy(buildings = List(tomb))
+    val before = CombatEngine.tick(state, deltaMs = Balance.ZombieSpawnIntervalMs - 1.0)
+    val at = CombatEngine.tick(state, deltaMs = Balance.ZombieSpawnIntervalMs)
+    assertEquals(before.spawned.getOrElse(UnitKind.Zombie, 0), 0)
+    assertEquals(at.spawned.getOrElse(UnitKind.Zombie, 0), 1)
+  }
+
+  test("a black castle emits exactly one vampire-spawn signal per interval") {
+    val blackCastle = Building(100, col = 5, row = 5, BuildingKind.BlackCastle, Balance.VampireSpawnIntervalMs)
+    val state = withResources().copy(buildings = List(blackCastle))
+    val before = CombatEngine.tick(state, deltaMs = Balance.VampireSpawnIntervalMs - 1.0)
+    val at = CombatEngine.tick(state, deltaMs = Balance.VampireSpawnIntervalMs)
+    assertEquals(before.spawned.getOrElse(UnitKind.Vampire, 0), 0)
+    assertEquals(at.spawned.getOrElse(UnitKind.Vampire, 0), 1)
+  }
+
+  test("tombs and black castles produce shadow over time") {
+    val tomb = Building(100, col = 5, row = 5, BuildingKind.Tomb, Balance.ZombieSpawnIntervalMs)
+    val state = withResources().copy(buildings = List(tomb))
+    val result = CombatEngine.tick(state, deltaMs = 2000.0)
+    assertEquals(result.state.resources(Resource.Shadow), Balance.ShadowPerSecPerTomb * 2.0)
+  }
+
+  test("a zombie corrupts an adjacent enemy building but not a distant one") {
+    val grove = Building(100, col = 5, row = 5, BuildingKind.Grove, 0.0)
+    val adjacent = Creature(1, GridConfig.cellCenter(6, 5), Balance.ZombieMaxHp, Balance.ZombieMaxHp, 0.0, UnitKind.Zombie)
+    val distant = Creature(2, GridConfig.cellCenter(0, 0), Balance.ZombieMaxHp, Balance.ZombieMaxHp, 0.0, UnitKind.Zombie)
+    val other = Building(101, col = 0, row = 5, BuildingKind.Cave, 0.0)
+    val state = withResources().copy(creatures = List(adjacent, distant), buildings = List(grove, other))
+    val result = CombatEngine.tick(state, deltaMs = 1000.0)
+    val byId = result.state.buildings.map(b => b.id -> b).toMap
+    assertEquals(byId(100).corruptionPercent, Balance.ZombieCorruptionPercentPerSec)
+    assertEquals(byId(101).corruptionPercent, 0.0)
+  }
+
+  test("a vampire corrupts twice as fast as a zombie") {
+    val grove = Building(100, col = 5, row = 5, BuildingKind.Grove, 0.0)
+    val vampire = Creature(1, GridConfig.cellCenter(6, 5), Balance.VampireMaxHp, Balance.VampireMaxHp, 0.0, UnitKind.Vampire)
+    val state = withResources().copy(creatures = List(vampire), buildings = List(grove))
+    val result = CombatEngine.tick(state, deltaMs = 1000.0)
+    assertEquals(result.state.buildings.head.corruptionPercent, Balance.VampireCorruptionPercentPerSec)
+    assertEquals(Balance.VampireCorruptionPercentPerSec, Balance.ZombieCorruptionPercentPerSec * 2.0)
+  }
+
+  test("multiple corrupting creatures adjacent to the same building stack their corruption") {
+    val grove = Building(100, col = 5, row = 5, BuildingKind.Grove, 0.0)
+    val zombieA = Creature(1, GridConfig.cellCenter(6, 5), Balance.ZombieMaxHp, Balance.ZombieMaxHp, 0.0, UnitKind.Zombie)
+    val zombieB = Creature(2, GridConfig.cellCenter(4, 5), Balance.ZombieMaxHp, Balance.ZombieMaxHp, 0.0, UnitKind.Zombie)
+    val state = withResources().copy(creatures = List(zombieA, zombieB), buildings = List(grove))
+    val result = CombatEngine.tick(state, deltaMs = 1000.0)
+    assertEquals(result.state.buildings.head.corruptionPercent, Balance.ZombieCorruptionPercentPerSec * 2.0)
+  }
+
+  test("a building corrupted to 100% is destroyed and reported for refund") {
+    val almostCorrupted = Building(
+      100,
+      col = 5,
+      row = 5,
+      BuildingKind.Grove,
+      spawnCountdownMs = 0.0,
+      corruptionPercent = Balance.CorruptionMaxPercent - Balance.ZombieCorruptionPercentPerSec
+    )
+    val zombie = Creature(1, GridConfig.cellCenter(6, 5), Balance.ZombieMaxHp, Balance.ZombieMaxHp, 0.0, UnitKind.Zombie)
+    val state = withResources().copy(creatures = List(zombie), buildings = List(almostCorrupted))
+    val result = CombatEngine.tick(state, deltaMs = 1000.0)
+    assertEquals(result.state.buildings, Nil)
+    assertEquals(
+      result.corrupted,
+      List(Corrosion(100, BuildingKind.Grove, 5, 5, BuildingSpecs.all(BuildingKind.Grove).cost))
+    )
+  }
+
+  test("corruption never exceeds 100%, even with excess corrupting exposure") {
+    val grove = Building(100, col = 5, row = 5, BuildingKind.Grove, 0.0)
+    val zombie = Creature(1, GridConfig.cellCenter(6, 5), Balance.ZombieMaxHp, Balance.ZombieMaxHp, 0.0, UnitKind.Zombie)
+    val state = withResources().copy(creatures = List(zombie), buildings = List(grove))
+    val result = CombatEngine.tick(state, deltaMs = Balance.CorruptionMaxPercent / Balance.ZombieCorruptionPercentPerSec * 1000.0 * 2)
+    assertEquals(result.state.buildings, Nil)
+    assertEquals(result.corrupted.size, 1)
+  }
+
+  test("a vampire takes half damage from a forest aura") {
+    val forest = Building(100, col = 5, row = 5, BuildingKind.Forest, Balance.ElfSpawnIntervalMs)
+    val vampire =
+      Creature(1, GridConfig.cellCenter(6, 5), hp = 100.0, maxHp = 100.0, speedPerMs = 0.0, UnitKind.Vampire)
+    val state = withResources().copy(creatures = List(vampire), buildings = List(forest))
+    val result = CombatEngine.tick(state, deltaMs = 1000.0)
+    assertEquals(result.state.creatures.head.hp, vampire.hp - Balance.AuraDamagePerSec * (1.0 - Balance.VampireDamageReductionFraction))
+  }
+
+  test("a vampire is not protected by an adjacent paladin's shield, unlike other creatures") {
+    val forest = Building(100, col = 5, row = 5, BuildingKind.Forest, Balance.ElfSpawnIntervalMs)
+    val sharedPos = GridConfig.cellCenter(6, 5)
+    val vampire = Creature(1, sharedPos, hp = 100.0, maxHp = 100.0, speedPerMs = 0.0, UnitKind.Vampire)
+    val paladin = Creature(
+      2,
+      sharedPos,
+      Balance.PaladinMaxHp,
+      Balance.PaladinMaxHp,
+      speedPerMs = 0.0,
+      UnitKind.Paladin
+    )
+    val state = withResources().copy(creatures = List(vampire, paladin), buildings = List(forest))
+    val result = CombatEngine.tick(state, deltaMs = 1000.0)
+    val byId = result.state.creatures.map(c => c.id -> c).toMap
+    // No Paladin reduction applied at all — only Vampire's own 50% flat reduction, same as
+    // if no Paladin were present (contrast with the Elf in the shield test above, which
+    // takes zero damage since the Paladin fully cancels Forest's aura for it).
+    assertEquals(byId(1).hp, vampire.hp - Balance.AuraDamagePerSec * (1.0 - Balance.VampireDamageReductionFraction))
+  }
+
+  test("a zombie reaching the goal is reported as an arrival, but plunders nothing") {
+    val goalPos = GridConfig.cellCenter(GridConfig.goalCell._1, GridConfig.goalCell._2)
+    val zombie = Creature(1, goalPos, Balance.ZombieMaxHp, Balance.ZombieMaxHp, speedPerMs = 0.0, UnitKind.Zombie)
+    val state = withResources(wood = 5.0, fire = 5.0).copy(creatures = List(zombie))
+    val result = CombatEngine.tick(state, deltaMs = 1.0)
+    assertEquals(result.arrivals, List(UnitKind.Zombie))
+    assertEquals(result.stolen, Map.empty[Resource, Double])
+  }
+
+  test("labs emit no unit and produce crystal over time") {
+    val labo = Building(100, col = 5, row = 5, BuildingKind.LaboNaturel, 0.0)
+    val state = withResources().copy(buildings = List(labo))
+    val result = CombatEngine.tick(state, deltaMs = 2000.0)
+    assertEquals(result.spawned, Map.empty[UnitKind, Int])
+    assertEquals(result.state.resources(Resource.Crystal), Balance.CrystalPerSecPerLaboNaturel * 2.0)
+  }

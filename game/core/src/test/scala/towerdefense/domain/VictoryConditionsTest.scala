@@ -108,3 +108,33 @@ class VictoryConditionsTest extends munit.FunSuite:
       BattleState(player = MazeState.initial.copy(buildings = mixedTiers), ai = MazeState.initial)
     assertEquals(VictoryConditions.evaluate(battle), None)
   }
+
+  test("ai wins once it has corrupted enough enemy buildings (Mort)") {
+    val battle = BattleState(
+      player = MazeState.initial,
+      ai = MazeState.initial.copy(buildingsCorrupted = Balance.MortVictoryCorruptionTarget)
+    )
+    assertEquals(
+      VictoryConditions.evaluate(battle).map(_.isInstanceOf[MatchResult.AiWins]),
+      Some(true)
+    )
+  }
+
+  test("the player can also win via corruption (symmetric)") {
+    val battle = BattleState(
+      player = MazeState.initial.copy(buildingsCorrupted = Balance.MortVictoryCorruptionTarget),
+      ai = MazeState.initial
+    )
+    assertEquals(
+      VictoryConditions.evaluate(battle).map(_.isInstanceOf[MatchResult.PlayerWins]),
+      Some(true)
+    )
+  }
+
+  test("clearing the corruption floor isn't enough once the opponent has caught up: must double them too") {
+    val battle = BattleState(
+      player = MazeState.initial.copy(buildingsCorrupted = Balance.MortVictoryCorruptionTarget),
+      ai = MazeState.initial.copy(buildingsCorrupted = Balance.MortVictoryCorruptionTarget / 2 + 1)
+    )
+    assertEquals(VictoryConditions.evaluate(battle), None)
+  }

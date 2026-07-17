@@ -25,7 +25,8 @@ object VictoryConditions:
 
   private def hasWon(state: MazeState, opponent: MazeState): Boolean =
     forestCount(state) >= forestTarget(opponent) ||
-      state.resourcesPlundered >= plunderTarget(opponent)
+      state.resourcesPlundered >= plunderTarget(opponent) ||
+      state.buildingsCorrupted >= corruptionTarget(opponent)
 
   // Only Forest and Jungle count as "real forests" — Bosquet.md's own asset is a bush,
   // not a tree, so a Grove hasn't grown into a forest yet and shouldn't count toward
@@ -47,11 +48,21 @@ object VictoryConditions:
   def plunderTarget(opponent: MazeState): Double =
     math.max(Balance.ChaosVictoryPlunderTarget, opponentTarget(opponent.resourcesPlundered))
 
+  // Victoire.md "B: Corruption Totale" — Corrompre ou detruire XX unites/batiments
+  // ennemis. Only buildings corrupted-to-destruction count (not creatures killed by an
+  // unrelated Forest aura/Watchtower) — same shape as Chaos's condition tracking only
+  // Elf/Goblin/Minotaur plunder, not every way resources move.
+  def corruptionTarget(opponent: MazeState): Double =
+    math.max(Balance.MortVictoryCorruptionTarget, opponentTarget(opponent.buildingsCorrupted))
+
   private def opponentTarget(opponentCount: Double): Double =
     Balance.VictoryMultiplierOverOpponent * opponentCount
 
   private def winReason(state: MazeState, opponent: MazeState): String =
     if forestCount(state) >= forestTarget(opponent) then
       s"Nature's unstoppable expansion: ${forestCount(state)} Forests built (target ${forestTarget(opponent).toInt})."
-    else
+    else if state.resourcesPlundered >= plunderTarget(opponent) then
       s"Chaos plunder: ${state.resourcesPlundered.toInt} resources stolen (target ${plunderTarget(opponent).toInt})."
+    else
+      s"Mort corruption: ${state.buildingsCorrupted.toInt} enemy buildings corrupted to dust " +
+        s"(target ${corruptionTarget(opponent).toInt})."
