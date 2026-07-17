@@ -11,18 +11,18 @@ object Balance:
   // buildable; Forest and Jungle are reached by upgrading in place (see
   // Placement.tryUpgradeBuilding). Each tier's cost is the upgrade cost paid at that
   // step, not a cumulative total.
-  val GroveCostWood: Double = 10.0 // Bosquet.md: "cout en bois: 10"
+  val GroveCostWood: Double = 5.0 // Bosquet.md: "cout en bois: 10"
   val WoodPerSecPerGrove: Double = 0.2 // Bosquet.md: "produit 1 bois / 5 sec"
   val ElfSpawnIntervalMs: Double = 10_000.0 // Bosquet.md: "toutes les 10 sec genere un Elf"
 
-  val ForestUpgradeCostWood: Double = 30.0 // Foret.md: "cout en bois: 30"
+  val ForestUpgradeCostWood: Double = 20.0 // Foret.md: "cout en bois: 30"
   val WoodPerSecPerForest: Double = 0.5 // Foret.md: "produit 1 bois / 2 sec"
   // Foret.md: Ents deal 2 dmg/sec to adjacent units — Jungle inherits this (upgrades are
   // cumulative: Jungle.md doesn't repeat the ability, but "Amelioration" implies it keeps
   // what the prior tier had, only Grove/Bosquet lacks it).
   val AuraDamagePerSec: Double = 2.0
 
-  val JungleUpgradeCostWood: Double = 60.0 // Jungle.md: "cout en bois: 60"
+  val JungleUpgradeCostWood: Double = 50.0 // Jungle.md: "cout en bois: 60"
   val WoodPerSecPerJungle: Double = 1.0 // Jungle.md: "produit 1 bois / sec"
   val WolfSpawnIntervalMs: Double = 5_000.0 // Jungle.md: "toutes les 5 sec"
 
@@ -37,7 +37,7 @@ object Balance:
   val WolfSpeedAuraRangeCells: Int = 2
 
   // ── Chaos (AI) ───────────────────────────────────────────────────────────
-  val CaveCostWood: Double = 5.0 // Cave.md: "cout en wood: 5"
+  val CaveCostWood: Double = 0.0 // Cave.md: "cout en wood: 5"
   val CaveCostFire: Double = 10.0 // Cave.md: "cout en fire: 10"
   val FirePerSecPerCave: Double = 0.2 // Cave.md: "produit 1 feu / 5 sec"
   val GoblinSpawnIntervalMs: Double = 5_000.0 // Cave.md: "toutes les 5 sec elle genere un Goblin"
@@ -50,8 +50,8 @@ object Balance:
   // CLAUDE.md), clamped to what's available.
   val PlunderPerUnit: Double = 1.0
 
-  val LabyrintheCostWood: Double = 20.0 // Labyrinthe.md: "cout en bois: 20"
-  val LabyrintheCostFire: Double = 40.0 // Labyrinthe.md: "cout en feu: 40"
+  val LabyrintheCostWood: Double = 10.0 // Labyrinthe.md: "cout en bois: 20"
+  val LabyrintheCostFire: Double = 50.0 // Labyrinthe.md: "cout en feu: 40"
   val MinotaurSpawnIntervalMs: Double =
     10_000.0 // Labyrinthe.md: "toutes les 10 secondes genere un Minotaure"
 
@@ -63,8 +63,8 @@ object Balance:
   val MinotaurPlunderPerUnit: Double = 10.0
 
   // ── Loi ──────────────────────────────────────────────────────────────────
-  val EgliseCostWood: Double = 40.0 // Eglise.md: "cout en bois: 40"
-  val EgliseCostLight: Double = 20.0 // Eglise.md: "cout en lumiere: 20"
+  val EgliseCostWood: Double = 20.0 // Eglise.md: "cout en bois: 40"
+  val EgliseCostLight: Double = 40.0 // Eglise.md: "cout en lumiere: 20"
   val LightPerSecPerEglise: Double = 0.3 // Eglise.md: "Produit 0.3 Lumiere par seconde"
   val PaladinSpawnIntervalMs: Double =
     10_000.0 // Eglise.md: "toutes les 10 secondes genere un Paladin"
@@ -81,7 +81,7 @@ object Balance:
   // Tour de guet.md: Loi's second building — no unit spawn, produces Light like Eglise
   // and deals direct single-target damage instead of a passive adjacency aura.
   val WatchtowerCostWood: Double = 10.0 // "cout en bois: 10"
-  val WatchtowerCostLight: Double = 5.0 // "cout en lumiere: 5"
+  val WatchtowerCostLight: Double = 20.0 // "cout en lumiere: 5"
   val LightPerSecPerWatchtower: Double = 0.1 // Tour de guet.md: "Produit 0.1 Lumiere par seconde"
   val WatchtowerDamagePerSec: Double = 10.0 // "Inflige 10 degats chaque seconde a une cible"
   // "jusqu'a 2 cases de distance" — Chebyshev (king-move) distance in cells, the usual
@@ -89,9 +89,6 @@ object Balance:
   val WatchtowerRangeCells: Int = 2
 
   // ── Mort (Death) ─────────────────────────────────────────────────────────
-  // Tomb/BlackCastle mirror Cave/Labyrinth's costs exactly (5 wood + 10 shadow, 20 wood +
-  // 40 shadow) — Tombe.md/Chateau Noir.md, both added the same session as Cave/Labyrinth's
-  // Chaos-shaped counterparts.
   val TombCostWood: Double = 5.0 // Tombe.md: "cout en bois: 5"
   val TombCostShadow: Double = 10.0 // Tombe.md: "cout en ombre: 10"
   val ShadowPerSecPerTomb: Double = 0.2 // Tombe.md: "Produit 0.2 ombre / sec"
@@ -100,14 +97,6 @@ object Balance:
   val BlackCastleCostWood: Double = 20.0 // Chateau Noir.md: "cout en bois: 20"
   val BlackCastleCostShadow: Double = 40.0 // Chateau Noir.md: "cout en ombre: 40"
   val ShadowPerSecPerBlackCastle: Double = 0.5 // Chateau Noir.md: "Produit 0.5 ombre / sec"
-  // Chateau Noir.md's trailing spawn line is corrupted vault data — cut off mid-markdown-
-  // link ("Toutes les 10 sec  genere un [Elf") with no unit actually resolved, apparently a
-  // copy-paste leftover from Bosquet.md/Foret.md's identical phrasing (Tombe.md has the
-  // exact same leftover line, but *also* has its own correct "Envoie un Zombie toutes les
-  // 10s" sentence elsewhere — Chateau Noir.md has no such correct sentence to fall back on).
-  // POC default: Vampire, by symmetry with Tomb→Zombie mirroring Cave→Goblin/Labyrinth→
-  // Minotaur (cheap tier / expensive tier, each with its own unit) — and 10s, the one
-  // number that line does contain, matching Tomb's own interval.
   val VampireSpawnIntervalMs: Double = 10_000.0
 
   val ZombieMaxHp: Double = 15.0 // Zombie.md: "PV: 15"
@@ -234,14 +223,14 @@ object Balance:
 
   // Same reasoning as StartingLight: Shadow has no producer besides Tomb itself, which
   // also costs Shadow, so the very first Tomb needs a starting stock — just enough for one.
-  val StartingShadow: Double = 10.0
+  val StartingShadow: Double = 20.0
 
   // Same reasoning again: every Science lab costs Crystal and only labs produce it, so
   // bootstrapping needs at least the cheapest lab's cost up front — the four 10-crystal
   // labs (Naturel/Sombre/de la Loi/du Chaos), not the pricier 15-crystal Labo de Recherche,
   // mirroring how Cave (cheaper) is buildable from StartingFire while Labyrinth (pricier)
   // isn't yet.
-  val StartingCrystal: Double = 10.0
+  val StartingCrystal: Double = 20.0
 
   val StartingResources: Map[Resource, Double] = Map(
     Resource.Wood -> StartingWood,
