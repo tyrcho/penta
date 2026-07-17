@@ -19,7 +19,10 @@ class SpendingPolicyTest extends munit.FunSuite:
   // ── resourceScore / rawMargin ──────────────────────────────────────────
 
   test("resourceScore prefers the building that leaves the largest affordability margin") {
-    val state = withResources(wood = 100.0, fire = 100.0, light = 0.0)
+    // Cave costs no Wood at all (Balance.CaveCostWood = 0), so with Wood scarce and Fire
+    // abundant, Grove's Wood-only cost eats most of the scarce pool while Cave's Fire-only
+    // cost barely dents the abundant one — a much larger margin for Cave.
+    val state = withResources(wood = 10.0, fire = 1_000.0, light = 0.0)
     assert(
       SpendingPolicy.resourceScore(state, BuildingKind.Cave) > SpendingPolicy.resourceScore(state, BuildingKind.Grove),
       "Cave spends a smaller fraction of the pool than Grove at this resource level"
@@ -144,7 +147,9 @@ class SpendingPolicyTest extends munit.FunSuite:
   // ── WeightedSpending ───────────────────────────────────────────────────
 
   test("WeightedSpending(1,0) ranks kinds by resourceScore alone") {
-    val state = withResources(wood = 100.0, fire = 100.0, light = 0.0)
+    // Same wood-scarce/fire-abundant setup as the resourceScore test above — Cave's zero
+    // Wood cost gives it the clear edge here.
+    val state = withResources(wood = 10.0, fire = 1_000.0, light = 0.0)
     val policy = WeightedSpending(resourceWeight = 1.0, counterWeight = 0.0)
     assert(policy.score(state, noOpponent, BuildingKind.Cave) > policy.score(state, noOpponent, BuildingKind.Grove))
   }

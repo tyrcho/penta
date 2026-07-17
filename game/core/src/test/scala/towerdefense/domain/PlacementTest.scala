@@ -61,14 +61,18 @@ class PlacementTest extends munit.FunSuite:
     assertEquals(Placement.tryPlaceBuilding(poor, BuildingKind.Grove, col, row).isLeft, true)
   }
 
-  test("rejects a cave without enough wood or fire") {
+  test("rejects a cave without enough fire") {
     val (col, row) = emptyCell
     assertEquals(
-      Placement.tryPlaceBuilding(withResources(wood = 0.0, fire = 1_000.0), BuildingKind.Cave, col, row).isLeft,
+      Placement.tryPlaceBuilding(withResources(wood = 1_000.0, fire = 0.0), BuildingKind.Cave, col, row).isLeft,
       true
     )
+  }
+
+  test("a cave costs no wood at all, so zero wood never blocks it") {
+    val (col, row) = emptyCell
     assertEquals(
-      Placement.tryPlaceBuilding(withResources(wood = 1_000.0, fire = 0.0), BuildingKind.Cave, col, row).isLeft,
+      Placement.tryPlaceBuilding(withResources(wood = 0.0, fire = 1_000.0), BuildingKind.Cave, col, row).isRight,
       true
     )
   }

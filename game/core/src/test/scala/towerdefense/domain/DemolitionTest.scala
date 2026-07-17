@@ -51,8 +51,9 @@ class DemolitionTest extends munit.FunSuite:
 
   test("destroys an eglise and refunds half its wood and light cost") {
     val (col, row) = (5, 5)
+    val rich = MazeState.initial.copy(resources = Map(Resource.Wood -> 1_000.0, Resource.Light -> 1_000.0))
     val withEglise =
-      Placement.tryPlaceBuilding(MazeState.initial, BuildingKind.Church, col, row).toOption.get
+      Placement.tryPlaceBuilding(rich, BuildingKind.Church, col, row).toOption.get
     val result = Demolition.tryDestroy(withEglise, col, row).toOption.get
     assertEquals(result.buildings.count(_.kind == BuildingKind.Church), 0)
     assertEquals(

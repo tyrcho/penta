@@ -53,11 +53,16 @@ class AiStrategyTest extends munit.FunSuite:
     assertEquals(count(result, BuildingKind.Cave), 0)
   }
 
-  test("builds a tomb when it can only afford a tomb") {
+  // A recent rebalance dropped GroveCostWood to equal TombCostWood exactly (5 each), and
+  // Grove costs nothing else — so Grove's cost is now a strict subset of Tomb's. Any
+  // resource level that affords a Tomb necessarily affords a Grove too, and Grove sits
+  // earlier in buildOrder, so LinearStrategy (fixed priority, never reconsiders) always
+  // picks Grove over Tomb now. "Only afford a tomb" is no longer constructible.
+  test("Grove wins the tie over Tomb (subsumed cost, earlier in buildOrder) even when shadow only helps Tomb") {
     val state = withResources(wood = Balance.TombCostWood, shadow = Balance.TombCostShadow)
     val result = LinearStrategy.maybeBuild(state, noOpponent)
-    assertEquals(count(result, BuildingKind.Tomb), 1)
-    assertEquals(count(result, BuildingKind.Cave), 0)
+    assertEquals(count(result, BuildingKind.Grove), 1)
+    assertEquals(count(result, BuildingKind.Tomb), 0)
   }
 
   test("builds a black castle when it can only afford one, over cheaper buildings tied on wood") {

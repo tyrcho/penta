@@ -2,8 +2,7 @@ package towerdefense.domain
 
 class BattleEngineTest extends munit.FunSuite:
 
-  private def buildingCount(m: MazeState): Int =
-    m.buildings.count(_.kind != BuildingKind.Watchtower)
+  private def buildingCount(m: MazeState): Int = m.buildings.size
 
   private def withResources(wood: Double = 0.0, fire: Double = 0.0, light: Double = 0.0): MazeState =
     MazeState.initial.copy(
@@ -41,7 +40,13 @@ class BattleEngineTest extends munit.FunSuite:
 
   test("the default AiStrategy.maybeDestroy is a no-op, so existing strategies never tear anything down") {
     val forest = Building(1, col = 5, row = 5, BuildingKind.Forest, Balance.ElfSpawnIntervalMs)
-    val battle = BattleState.initial.copy(ai = MazeState.initial.copy(buildings = List(forest)))
+    // No Wood at all: isolates the destroy no-op check from LinearStrategy's own
+    // maybeUpgrade step (which runs unconditionally before maybeBuild/maybeDestroy would
+    // matter here) — with StartingWood, this Forest would be affordably upgraded into a
+    // Jungle the same tick, masking whether maybeDestroy left it alone.
+    val battle = BattleState.initial.copy(
+      ai = MazeState.initial.copy(buildings = List(forest), resources = Map(Resource.Wood -> 0.0))
+    )
     val result = BattleEngine.tick(battle, deltaMs = 1.0, aiStrategy = LinearStrategy)
     assertEquals(result.ai.buildings.count(_.kind == BuildingKind.Forest), 1)
   }
