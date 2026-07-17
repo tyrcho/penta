@@ -59,8 +59,17 @@ private object Persistence:
       resources = encodeResources(m.resources),
       resourcesPlundered = m.resourcesPlundered,
       buildingsCorrupted = m.buildingsCorrupted,
+      researchLevels = encodeResearchLevels(m.researchLevels),
       nextId = m.nextId.toDouble
     )
+
+  // One field per Science lab kind, keyed by its own toString — mirrors encodeResources'
+  // shape (a flat JS object, not an array of pairs) since ResearchSpecs.orderedLabs is a
+  // small, fixed set, same as Resource.values.
+  private def encodeResearchLevels(levels: Map[BuildingKind, Int]): js.Dynamic =
+    val obj = js.Dynamic.literal()
+    ResearchSpecs.orderedLabs.foreach(lab => obj.updateDynamic(lab.toString)(levels.getOrElse(lab, 0)))
+    obj
 
   private def encodeResources(r: Map[Resource, Double]): js.Dynamic =
     js.Dynamic.literal(
@@ -133,8 +142,21 @@ private object Persistence:
       // Pre-Mort saves have no buildingsCorrupted field — default to 0.0, same fallback
       // shape as Shadow/Crystal's decodeResources migration above.
       buildingsCorrupted = if js.isUndefined(d.buildingsCorrupted) then 0.0 else asDouble(d.buildingsCorrupted),
+      researchLevels = decodeResearchLevels(d.researchLevels),
       nextId = asDouble(d.nextId).toLong
     )
+
+  // Pre-Science saves have no researchLevels field at all — every lab defaults to 0
+  // (unresearched), same fallback shape as buildingsCorrupted above.
+  private def decodeResearchLevels(d: js.Dynamic): Map[BuildingKind, Int] =
+    if js.isUndefined(d) then Map.empty
+    else
+      ResearchSpecs.orderedLabs
+        .flatMap { lab =>
+          val level = d.selectDynamic(lab.toString)
+          if js.isUndefined(level) then None else Some(lab -> asDouble(level).toInt)
+        }
+        .toMap
 
   // Pre-refactor saves have flat wood/fire/light fields, not a `resources` object — light
   // has no Shadow/Crystal history to migrate (those factions don't exist yet), so a

@@ -74,6 +74,13 @@ case class MazeState(
                                        // corrupted to 100% and destroyed, symmetric in shape
                                        // to resourcesPlundered above (see CombatEngine/
                                        // BattleEngine's corruption handling).
+    // Science's leveled research (Recherches*.md/Recherche fondamentale.md) — keyed by the
+    // five Labo* BuildingKinds, absent/0 meaning "not researched". Placement.tryResearch is
+    // the only way this advances, gated on owning that lab (see its doc); a level, once
+    // reached, persists even if the lab is later destroyed — POC interpretation, since the
+    // vault doesn't say whether losing the building should erase accumulated research.
+    // See ResearchSpecs for what each level costs/does.
+    researchLevels: Map[BuildingKind, Int] = Map.empty,
     nextId: Long
 ):
   // Cells occupied by any building — the single source of truth for both pathfinding

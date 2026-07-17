@@ -22,6 +22,11 @@ trait AiStrategy:
   // compounds the economy just like building does, so it gets paced the same way).
   def maybeUpgrade(state: MazeState, opponent: MazeState): MazeState = state
 
+  // Default no-op, same shape as maybeUpgrade — a strategy that never builds a Science lab
+  // has nothing to research anyway. Driven the same way, sharing the build cooldown
+  // (research compounds a maze's economy/defense the same way building/upgrading does).
+  def maybeResearch(state: MazeState, opponent: MazeState): MazeState = state
+
 object AiStrategy:
   // Shared "first that works" maybeUpgrade body: try each of the strategy's own buildings
   // in order, upgrade the first one that's both eligible (BuildingSpecs.upgradesTo) and
@@ -32,6 +37,17 @@ object AiStrategy:
   def upgradeAnyAffordable(state: MazeState): MazeState =
     state.buildings.iterator
       .flatMap(b => Placement.tryUpgradeBuilding(state, b.col, b.row).toOption)
+      .nextOption()
+      .getOrElse(state)
+
+  // Mirrors upgradeAnyAffordable for Science's research instead of Nature's upgrade chain:
+  // try each lab line in a fixed order, research the first affordable next level, leave
+  // state untouched if none qualify (no lab owned, every owned lab maxed, or none
+  // affordable). Shared unconditionally by ComposedStrategy/LinearStrategy the same way
+  // upgrading already is — opportunistic, not weighed against building a new candidate.
+  def researchAnyAffordable(state: MazeState): MazeState =
+    ResearchSpecs.orderedLabs.iterator
+      .flatMap(lab => Placement.tryResearch(state, lab).toOption)
       .nextOption()
       .getOrElse(state)
 

@@ -41,8 +41,15 @@ case class Corrosion(buildingId: Long, kind: BuildingKind, col: Int, row: Int, c
 
 object CombatEngine:
 
-  def tick(state: MazeState, deltaMs: Double): TickResult =
-    val (s1, stolen, arrivals) = moveCreatures(state, deltaMs)
+  // attackerResearchLevels: the *opponent's* researchLevels (i.e. whoever owns the
+  // creatures walking `state`) — only Recherches chaotiques reads it (see moveCreatures),
+  // needed because a creature's plunder is normally a pure function of its kind, but
+  // chaotiques makes it depend on research the creature's owner did in their *own* maze,
+  // invisible from `state` alone. Defaults to empty so every caller untouched by Science
+  // (every existing test, the live browser game before a match ever researches anything)
+  // keeps today's exact behavior with no plumbing required.
+  def tick(state: MazeState, deltaMs: Double, attackerResearchLevels: Map[BuildingKind, Int] = Map.empty): TickResult =
+    val (s1, stolen, arrivals) = moveCreatures(state, deltaMs, attackerResearchLevels)
     val (s2, deaths) = applyDamageSources(s1, deltaMs)
     val (s3, corrupted) = applyCorruption(s2, deltaMs)
     val s4 = produceResources(s3, deltaMs)
@@ -59,13 +66,14 @@ object CombatEngine:
   // with no plunder ability entirely.
   private def moveCreatures(
       state: MazeState,
-      deltaMs: Double
+      deltaMs: Double,
+      attackerResearchLevels: Map[BuildingKind, Int]
   ): (MazeState, Map[Resource, Double], List[UnitKind]) =
     val blocked = state.buildingCells
     val (remaining, arrived) =
       state.creatures.map(stepCreature(_, state.creatures, blocked, deltaMs)).partitionMap(identity)
     val plundered = arrived
-      .flatMap(c => CreatureSpecs.all(c.kind).plunder)
+      .flatMap(c => effectivePlunder(c.kind, attackerResearchLevels))
       .groupMapReduce(_._1)(_._2)(_ + _)
     val stolen = plundered.map { case (res, amount) =>
       res -> math.min(state.resources.getOrElse(res, 0.0), amount)
@@ -77,6 +85,18 @@ object CombatEngine:
       }
     )
     (next, stolen, arrived.map(_.kind))
+
+  // Recherches chaotiques.md: "Augmente l'efficacite du pillage de chaque unite (meme
+  // celles qui ne pillent pas initialement) dans chaque ressource de: X" — a flat bonus
+  // added to *every* resource (not just ones the kind already plunders), so at a high
+  // enough chaotiques level even Paladin/Wolf/Zombie/Vampire arrivals start stealing.
+  private def effectivePlunder(kind: UnitKind, attackerResearchLevels: Map[BuildingKind, Int]): Map[Resource, Double] =
+    val chaotiquesLevel = attackerResearchLevels.getOrElse(BuildingKind.LaboDuChaos, 0)
+    if chaotiquesLevel <= 0 then CreatureSpecs.all(kind).plunder
+    else
+      val bonus = ResearchSpecs.all(BuildingKind.LaboDuChaos).effectAtLevel(chaotiquesLevel)
+      val base = CreatureSpecs.all(kind).plunder
+      Resource.values.map(res => res -> (base.getOrElse(res, 0.0) + bonus)).toMap
 
   private def stepCreature(
       creature: Creature,
@@ -137,8 +157,13 @@ object CombatEngine:
   // math is intentionally kept as kind-based special cases, not folded into BuildingSpec/
   // CreatureSpec (see the refactor's confirmed scope).
   private def applyDamageSources(state: MazeState, deltaMs: Double): (MazeState, List[Death]) =
-    val forestDamagePerHit = Balance.AuraDamagePerSec * deltaMs / 1000.0
-    val watchtowerDamagePerHit = Balance.WatchtowerDamagePerSec * deltaMs / 1000.0
+    // Recherches loyales.md: "Augmente les degats infliges par les batiments" — purely
+    // local to `state` (the maze whose own buildings are dealing the damage), unlike
+    // chaotiques' plunder bonus above which needs the *opponent's* research instead.
+    val loyalesLevel = state.researchLevels.getOrElse(BuildingKind.LaboDeLaLoi, 0)
+    val loyalesMultiplier = 1.0 + ResearchSpecs.all(BuildingKind.LaboDeLaLoi).effectAtLevel(loyalesLevel)
+    val forestDamagePerHit = Balance.AuraDamagePerSec * deltaMs / 1000.0 * loyalesMultiplier
+    val watchtowerDamagePerHit = Balance.WatchtowerDamagePerSec * deltaMs / 1000.0 * loyalesMultiplier
     val forests = state.buildings.filter(b => auraBuildingKinds.contains(b.kind))
     val watchtowers = state.buildings.filter(_.kind == BuildingKind.Watchtower)
     val fromForests = forests.foldLeft(Map.empty[Long, Double])((acc, f) =>

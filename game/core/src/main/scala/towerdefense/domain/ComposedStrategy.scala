@@ -49,11 +49,19 @@ case class ComposedStrategy(
   override def maybeUpgrade(state: MazeState, opponent: MazeState): MazeState =
     AiStrategy.upgradeAnyAffordable(state)
 
+  // Researches the next level of any owned Science lab when affordable — see
+  // AiStrategy.researchAnyAffordable. Shared unconditionally, same as maybeUpgrade.
+  override def maybeResearch(state: MazeState, opponent: MazeState): MazeState =
+    AiStrategy.researchAnyAffordable(state)
+
+  // nonBlockingCells is computed once per scan (see its doc) and reused across every one
+  // of BuildingKind.values' 14 kinds, instead of re-running the reachability BFS for each.
   private def allCandidates(state: MazeState): Seq[Candidate] =
+    val nonBlocking = Placement.nonBlockingCells(state)
     for
       kind <- BuildingKind.values.toSeq
       (col, row) <- GridConfig.allCells
-      result <- Placement.tryPlaceBuilding(state, kind, col, row).toOption
+      result <- Placement.tryPlaceBuildingCached(state, kind, col, row, nonBlocking).toOption
     yield Candidate(kind, col, row, result)
 
   private def normalize(score: Double, minScore: Double, maxScore: Double): Double =

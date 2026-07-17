@@ -561,3 +561,66 @@ class CombatEngineTest extends munit.FunSuite:
     assertEquals(result.spawned, Map.empty[UnitKind, Int])
     assertEquals(result.state.resources(Resource.Crystal), Balance.CrystalPerSecPerLaboNaturel * 2.0)
   }
+
+  // ── Recherches loyales: boosts this maze's OWN building damage ───────────
+
+  test("Recherches loyales increases forest aura damage by the owning maze's own level") {
+    val forest = Building(100, col = 5, row = 5, BuildingKind.Forest, Balance.ElfSpawnIntervalMs)
+    val elf = Creature(1, GridConfig.cellCenter(6, 5), hp = 1000.0, maxHp = 1000.0, speedPerMs = 0.0, UnitKind.Elf)
+    val loyalesLevel = 2
+    val state = withResources()
+      .copy(creatures = List(elf), buildings = List(forest), researchLevels = Map(BuildingKind.LaboDeLaLoi -> loyalesLevel))
+    val result = CombatEngine.tick(state, deltaMs = 1000.0)
+    val bonus = Balance.LoyalesBuildingDamageIncreaseByLevel(loyalesLevel - 1)
+    assertEquals(result.state.creatures.head.hp, elf.hp - Balance.AuraDamagePerSec * (1.0 + bonus))
+  }
+
+  test("Recherches loyales increases watchtower damage the same way") {
+    val watchtower = Building(100, col = 5, row = 5, BuildingKind.Watchtower, 0.0)
+    val elf = Creature(1, GridConfig.cellCenter(6, 6), hp = 1000.0, maxHp = 1000.0, speedPerMs = 0.0, UnitKind.Elf)
+    val loyalesLevel = 1
+    val state = withResources()
+      .copy(creatures = List(elf), buildings = List(watchtower), researchLevels = Map(BuildingKind.LaboDeLaLoi -> loyalesLevel))
+    val result = CombatEngine.tick(state, deltaMs = 1000.0)
+    val bonus = Balance.LoyalesBuildingDamageIncreaseByLevel(loyalesLevel - 1)
+    assertEquals(result.state.creatures.head.hp, elf.hp - Balance.WatchtowerDamagePerSec * (1.0 + bonus))
+  }
+
+  test("without any Recherches loyales research, building damage is unchanged") {
+    val forest = Building(100, col = 5, row = 5, BuildingKind.Forest, Balance.ElfSpawnIntervalMs)
+    val elf = Creature(1, GridConfig.cellCenter(6, 5), hp = 1000.0, maxHp = 1000.0, speedPerMs = 0.0, UnitKind.Elf)
+    val state = withResources().copy(creatures = List(elf), buildings = List(forest))
+    val result = CombatEngine.tick(state, deltaMs = 1000.0)
+    assertEquals(result.state.creatures.head.hp, elf.hp - Balance.AuraDamagePerSec)
+  }
+
+  // ── Recherches chaotiques: boosts the ATTACKER's own plunder efficiency ──
+
+  test("Recherches chaotiques gives a normally non-plundering unit (Wolf) plunder on arrival") {
+    val goalPos = GridConfig.cellCenter(GridConfig.goalCell._1, GridConfig.goalCell._2)
+    val wolf = Creature(1, goalPos, Balance.WolfMaxHp, Balance.WolfMaxHp, speedPerMs = 0.0, UnitKind.Wolf)
+    val state = withResources(wood = 100.0, fire = 100.0).copy(creatures = List(wolf))
+    val chaotiquesLevel = 3
+    val result = CombatEngine.tick(state, deltaMs = 1.0, attackerResearchLevels = Map(BuildingKind.LaboDuChaos -> chaotiquesLevel))
+    val bonus = Balance.ChaotiquesPlunderBonusByLevel(chaotiquesLevel - 1)
+    assertEquals(result.stolen.getOrElse(Resource.Wood, 0.0), bonus)
+    assertEquals(result.stolen.getOrElse(Resource.Fire, 0.0), bonus)
+  }
+
+  test("Recherches chaotiques adds its flat bonus on top of a unit's existing plunder, per resource") {
+    val goalPos = GridConfig.cellCenter(GridConfig.goalCell._1, GridConfig.goalCell._2)
+    val goblin = Creature(1, goalPos, Balance.GoblinMaxHp, Balance.GoblinMaxHp, speedPerMs = 0.0, UnitKind.Goblin)
+    val state = withResources(wood = 100.0, fire = 100.0).copy(creatures = List(goblin))
+    val chaotiquesLevel = 1
+    val result = CombatEngine.tick(state, deltaMs = 1.0, attackerResearchLevels = Map(BuildingKind.LaboDuChaos -> chaotiquesLevel))
+    val bonus = Balance.ChaotiquesPlunderBonusByLevel(chaotiquesLevel - 1)
+    assertEquals(result.stolen.getOrElse(Resource.Wood, 0.0), Balance.PlunderPerUnit + bonus)
+  }
+
+  test("without attackerResearchLevels, plunder matches today's exact behavior (no bonus, empty for Wolf)") {
+    val goalPos = GridConfig.cellCenter(GridConfig.goalCell._1, GridConfig.goalCell._2)
+    val wolf = Creature(1, goalPos, Balance.WolfMaxHp, Balance.WolfMaxHp, speedPerMs = 0.0, UnitKind.Wolf)
+    val state = withResources(wood = 100.0, fire = 100.0).copy(creatures = List(wolf))
+    val result = CombatEngine.tick(state, deltaMs = 1.0)
+    assertEquals(result.stolen, Map.empty[Resource, Double])
+  }

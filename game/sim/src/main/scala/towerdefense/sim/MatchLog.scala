@@ -34,6 +34,7 @@ object MatchLog:
     buildingLines(tick, side, before, after, corrupted) ++
       plunderLine(tick, side, before, after) ++
       corruptedTallyLine(tick, side, before, after) ++
+      researchLines(tick, side, before, after) ++
       deaths.map(deathLine(tick, side, _)) ++
       corrupted.map(corruptLine(tick, side, _)) ++
       arrivals.filter(k => CreatureSpecs.all(k).plunder.isEmpty).map(arriveLine(tick, side, _))
@@ -99,6 +100,16 @@ object MatchLog:
     if delta <= 0.0 then None
     else Some(formatLine(tick, side, "CORRUPTED_TOTAL", f"+${delta.toInt} (total ${after.buildingsCorrupted.toInt})"))
 
+  // Science's research levels (MazeState.researchLevels) aren't in `buildings`, so they
+  // need their own diff, one line per lab whose level increased this tick.
+  private def researchLines(tick: Int, side: String, before: MazeState, after: MazeState): Seq[String] =
+    ResearchSpecs.orderedLabs.flatMap { lab =>
+      val beforeLevel = before.researchLevels.getOrElse(lab, 0)
+      val afterLevel = after.researchLevels.getOrElse(lab, 0)
+      if afterLevel <= beforeLevel then None
+      else Some(formatLine(tick, side, "RESEARCH", s"$lab level $beforeLevel→$afterLevel"))
+    }
+
   private def plunderLine(tick: Int, side: String, before: MazeState, after: MazeState): Option[String] =
     val delta = after.resourcesPlundered - before.resourcesPlundered
     if delta <= 0.0 then None
@@ -132,7 +143,10 @@ object MatchLog:
     val corrupted = state.buildingsCorrupted.toInt
     val corruptionTarget = VictoryConditions.corruptionTarget(opponent).toInt
     val resources = fmtResources(state.resources)
-    f"forests $forests/$forestTarget  plunder $plundered%.1f/$plunderTarget  corrupted $corrupted/$corruptionTarget  $resources"
+    val research = ResearchSpecs.orderedLabs
+      .flatMap(lab => state.researchLevels.get(lab).filter(_ > 0).map(level => s"$lab:$level"))
+      .mkString(",")
+    f"forests $forests/$forestTarget  plunder $plundered%.1f/$plunderTarget  corrupted $corrupted/$corruptionTarget  research [$research]  $resources"
 
   def finalLine(tick: Int, outcome: MatchResult): String =
     val winnerSide = outcome match

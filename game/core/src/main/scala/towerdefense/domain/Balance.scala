@@ -162,6 +162,54 @@ object Balance:
   val LaboDuChaosCostCrystal: Double = 10.0 // Labo du Chaos.md: "cout en crystal: 10"
   val CrystalPerSecPerLaboDuChaos: Double = 0.2 // Labo du Chaos.md: "Produit 0.2 Crystal par sec"
 
+  // Leveled research, one line per lab (ResearchSpecs.all pairs these with their
+  // BuildingKind) — 5 levels each, level N costing 2^(N-1) times the level-1 (base) cost
+  // below ("Chaque niveau coute le double du precedent", every Recherches*.md file).
+  // Requires owning the matching lab — see Placement.tryResearch.
+  val RecherchesNaturellesCostWood: Double = 5.0 // Recherches naturelles.md: "cout en bois: 5"
+  val RecherchesNaturellesCostCrystal: Double = 10.0 // "cout en crystal: 10"
+  // "Diminue le cout des batiments de: 1. 10% 2. 20% 3. 35% 4. 55% 5. 80%" — applied to
+  // every OTHER building this maze places (Placement.effectiveCost), not to research costs
+  // themselves (the vault only ever says "batiments", buildings).
+  val NaturellesCostReductionByLevel: List[Double] = List(0.10, 0.20, 0.35, 0.55, 0.80)
+
+  val RecherchesSombresCostShadow: Double = 5.0 // Recherches Sombres.md: "cout en ombre: 5"
+  val RecherchesSombresCostCrystal: Double = 10.0 // "cout en crystal: 10"
+  // "Augmente les conditions de victoire de l'adversaire de: 1. 10% 2. 25% 3. 45% 4. 75%
+  // 5. 120%" — read from the *opponent's* researchLevels wherever a victory target is
+  // computed (VictoryConditions.forestTarget/plunderTarget/corruptionTarget already take
+  // `opponent`, so this needs no new plumbing — see their doc).
+  val SombresOpponentTargetIncreaseByLevel: List[Double] = List(0.10, 0.25, 0.45, 0.75, 1.20)
+
+  val RecherchesChaotiquesCostFire: Double = 5.0 // Recherches chaotiques.md: "cout en feu: 5"
+  val RecherchesChaotiquesCostCrystal: Double = 10.0 // "cout en crystal: 10"
+  // "Augmente l'efficacite du pillage de chaque unite (meme celles qui ne pillent pas
+  // initialement) dans chaque ressource de: 1. 1 2. 2 3. 4 4. 7 5. 12" — a flat bonus added
+  // to *every* resource for *every* arriving unit (even Paladin/Wolf/Zombie/Vampire, whose
+  // CreatureSpec.plunder is otherwise empty), read from the attacking side's own
+  // researchLevels (CombatEngine.tick's attackerResearchLevels param — see its doc, since
+  // the attacker's research isn't visible from the defender's MazeState alone).
+  val ChaotiquesPlunderBonusByLevel: List[Double] = List(1.0, 2.0, 4.0, 7.0, 12.0)
+
+  val RecherchesLoyalesCostLight: Double = 5.0 // Recherches loyales.md: "cout en lumiere: 5"
+  val RecherchesLoyalesCostCrystal: Double = 10.0 // "cout en crystal: 10"
+  // "Augmente les degats infliges par les batiments de: 1. 10% 2. 20% 3. 40% 4. 70%
+  // 5. 120%" — purely local: multiplies Forest-aura/Watchtower damage this maze's own
+  // buildings deal (CombatEngine.applyDamageSources), read from state's own researchLevels.
+  val LoyalesBuildingDamageIncreaseByLevel: List[Double] = List(0.10, 0.20, 0.40, 0.70, 1.20)
+
+  // Recherche fondamentale.md's own base cost (20 crystal) deliberately differs from Labo
+  // de Recherche's building cost (15 crystal) — the one research line whose level-1 cost
+  // isn't identical to its lab's own price, unlike the other four.
+  val RechercheFondamentaleCostCrystal: Double = 20.0
+  // Recherche fondamentale.md's numbered list is per level of fondamentale itself: at level
+  // N, the other 4 labs must all be at level (6-N) or higher — level 1 demands every other
+  // lab maxed at 5, level 5 needs them only at 1+, trading fondamentale's own (doubling)
+  // cost against the other labs'. See VictoryConditions.hasWonViaFondamentale.
+  val FondamentaleRequiredOtherLabLevel: List[Int] = List(5, 4, 3, 2, 1)
+
+  val MaxResearchLevel: Int = 5
+
   // ── Shared / meta ────────────────────────────────────────────────────────
 
   // POC default, not required to match each other — both mazes still get the identical

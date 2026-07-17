@@ -187,6 +187,51 @@ class PlacementTest extends munit.FunSuite:
     )
   }
 
+  // Locks in tryPlaceBuilding's check ordering (see its doc): affordability is checked
+  // before the expensive wouldBlockPath BFS, so a candidate failing both reports
+  // InsufficientResources, not WouldBlockPath — a strategy scanning every (kind, cell)
+  // candidate each tick rejects most of them on cost alone, so that BFS shouldn't run
+  // for a cell that was never going to be affordable regardless of its reachability.
+  test("a candidate that's both unaffordable and would block the path reports InsufficientResources") {
+    val corridor = for row <- 0 until GridConfig.rows yield (1, row)
+    val withWall = corridor.init.foldLeft(richState) { (state, cell) =>
+      Placement.tryPlaceBuilding(state, BuildingKind.Grove, cell._1, cell._2).toOption.get
+    }
+    val (lastCol, lastRow) = corridor.last
+    val broke = withWall.copy(resources = Map.empty)
+    assertEquals(
+      Placement.tryPlaceBuilding(broke, BuildingKind.Grove, lastCol, lastRow),
+      Left(PlacementError.InsufficientResources)
+    )
+  }
+
+  test("nonBlockingCells excludes exactly the cells that would seal the only route to the goal") {
+    val corridor = for row <- 0 until GridConfig.rows yield (1, row)
+    val withWall = corridor.init.foldLeft(richState) { (state, cell) =>
+      Placement.tryPlaceBuilding(state, BuildingKind.Grove, cell._1, cell._2).toOption.get
+    }
+    val (lastCol, lastRow) = corridor.last
+    assertEquals(Placement.nonBlockingCells(withWall).contains((lastCol, lastRow)), false)
+    assertEquals(Placement.nonBlockingCells(withWall).contains((5, 5)), true)
+  }
+
+  test("tryPlaceBuildingCached agrees with tryPlaceBuilding for both a blocking and a non-blocking cell") {
+    val corridor = for row <- 0 until GridConfig.rows yield (1, row)
+    val withWall = corridor.init.foldLeft(richState) { (state, cell) =>
+      Placement.tryPlaceBuilding(state, BuildingKind.Grove, cell._1, cell._2).toOption.get
+    }
+    val (lastCol, lastRow) = corridor.last
+    val nonBlocking = Placement.nonBlockingCells(withWall)
+    assertEquals(
+      Placement.tryPlaceBuildingCached(withWall, BuildingKind.Cave, lastCol, lastRow, nonBlocking),
+      Placement.tryPlaceBuilding(withWall, BuildingKind.Cave, lastCol, lastRow)
+    )
+    assertEquals(
+      Placement.tryPlaceBuildingCached(withWall, BuildingKind.Cave, 5, 5, nonBlocking).isRight,
+      Placement.tryPlaceBuilding(withWall, BuildingKind.Cave, 5, 5).isRight
+    )
+  }
+
   test("rejects upgrading a cell with no building") {
     assertEquals(Placement.tryUpgradeBuilding(richState, 5, 5).isLeft, true)
   }
@@ -326,4 +371,95 @@ class PlacementTest extends munit.FunSuite:
     val withNaturel = Placement.tryPlaceBuilding(richState, BuildingKind.LaboNaturel, 1, 1).toOption.get
     val result = Placement.tryPlaceBuilding(withNaturel, BuildingKind.LaboSombre, 2, 2)
     assertEquals(result.isRight, true)
+  }
+
+  // ── tryResearch ──────────────────────────────────────────────────────────
+
+  test("rejects researching a lab this maze doesn't own") {
+    assertEquals(Placement.tryResearch(richState, BuildingKind.LaboNaturel), Left(PlacementError.LabNotOwned))
+  }
+
+  test("rejects researching without enough resources") {
+    val poor = Placement.tryPlaceBuilding(richState, BuildingKind.LaboNaturel, 1, 1).toOption.get
+      .copy(resources = Map.empty)
+    assertEquals(Placement.tryResearch(poor, BuildingKind.LaboNaturel), Left(PlacementError.InsufficientResources))
+  }
+
+  test("researches level 1 of an owned lab, deducting the base cost") {
+    val withLab = Placement.tryPlaceBuilding(richState, BuildingKind.LaboNaturel, 1, 1).toOption.get
+    val result = Placement.tryResearch(withLab, BuildingKind.LaboNaturel).toOption.get
+    assertEquals(result.researchLevels(BuildingKind.LaboNaturel), 1)
+    val spec = ResearchSpecs.all(BuildingKind.LaboNaturel)
+    assertEquals(
+      result.resources(Resource.Wood),
+      withLab.resources(Resource.Wood) - spec.baseCost(Resource.Wood)
+    )
+    assertEquals(
+      result.resources(Resource.Crystal),
+      withLab.resources(Resource.Crystal) - spec.baseCost(Resource.Crystal)
+    )
+  }
+
+  test("each further research level costs double the previous level") {
+    val withLab = Placement.tryPlaceBuilding(richState, BuildingKind.LaboNaturel, 1, 1).toOption.get
+    val level1 = Placement.tryResearch(withLab, BuildingKind.LaboNaturel).toOption.get
+    val level2 = Placement.tryResearch(level1, BuildingKind.LaboNaturel).toOption.get
+    assertEquals(level2.researchLevels(BuildingKind.LaboNaturel), 2)
+    val spec = ResearchSpecs.all(BuildingKind.LaboNaturel)
+    assertEquals(
+      level1.resources(Resource.Crystal) - level2.resources(Resource.Crystal),
+      spec.baseCost(Resource.Crystal) * 2.0
+    )
+  }
+
+  test("rejects researching past the max level") {
+    val withLab = Placement.tryPlaceBuilding(richState, BuildingKind.LaboNaturel, 1, 1).toOption.get
+    val maxed = (1 to Balance.MaxResearchLevel).foldLeft(withLab) { (state, _) =>
+      Placement.tryResearch(state, BuildingKind.LaboNaturel).toOption.get
+    }
+    assertEquals(maxed.researchLevels(BuildingKind.LaboNaturel), Balance.MaxResearchLevel)
+    assertEquals(
+      Placement.tryResearch(maxed, BuildingKind.LaboNaturel),
+      Left(PlacementError.MaxResearchLevelReached)
+    )
+  }
+
+  test("a researched level survives losing the lab, but researching further requires owning it again") {
+    val withLab = Placement.tryPlaceBuilding(richState, BuildingKind.LaboNaturel, 1, 1).toOption.get
+    val researched = Placement.tryResearch(withLab, BuildingKind.LaboNaturel).toOption.get
+    val demolished = Demolition.tryDestroy(researched, 1, 1).toOption.get
+    assertEquals(demolished.researchLevels(BuildingKind.LaboNaturel), 1)
+    assertEquals(Placement.tryResearch(demolished, BuildingKind.LaboNaturel), Left(PlacementError.LabNotOwned))
+  }
+
+  // ── Naturelles cost reduction ────────────────────────────────────────────
+
+  test("Naturelles research reduces the cost of every other building this maze places") {
+    val withLab = Placement.tryPlaceBuilding(richState, BuildingKind.LaboNaturel, 1, 1).toOption.get
+    val researched = Placement.tryResearch(withLab, BuildingKind.LaboNaturel).toOption.get
+    val before = researched.resources(Resource.Wood)
+    val result = Placement.tryPlaceBuilding(researched, BuildingKind.Grove, 5, 5).toOption.get
+    val reduction = Balance.NaturellesCostReductionByLevel.head
+    assertEquals(before - result.resources(Resource.Wood), Balance.GroveCostWood * (1.0 - reduction))
+  }
+
+  test("Naturelles does not reduce another maze's building costs (only its own researchLevels apply)") {
+    val withLab = Placement.tryPlaceBuilding(richState, BuildingKind.LaboNaturel, 1, 1).toOption.get
+    val researched = Placement.tryResearch(withLab, BuildingKind.LaboNaturel).toOption.get
+    val unresearchedOpponent = richState
+    val result = Placement.tryPlaceBuilding(unresearchedOpponent, BuildingKind.Grove, 5, 5).toOption.get
+    assertEquals(
+      unresearchedOpponent.resources(Resource.Wood) - result.resources(Resource.Wood),
+      Balance.GroveCostWood
+    )
+  }
+
+  test("Naturelles does not reduce upgrade costs any differently — same effectiveCost applies") {
+    val withLab = Placement.tryPlaceBuilding(richState, BuildingKind.LaboNaturel, 1, 1).toOption.get
+    val researched = Placement.tryResearch(withLab, BuildingKind.LaboNaturel).toOption.get
+    val withGrove = Placement.tryPlaceBuilding(researched, BuildingKind.Grove, 5, 5).toOption.get
+    val before = withGrove.resources(Resource.Wood)
+    val result = Placement.tryUpgradeBuilding(withGrove, 5, 5).toOption.get
+    val reduction = Balance.NaturellesCostReductionByLevel.head
+    assertEquals(before - result.resources(Resource.Wood), Balance.ForestUpgradeCostWood * (1.0 - reduction))
   }

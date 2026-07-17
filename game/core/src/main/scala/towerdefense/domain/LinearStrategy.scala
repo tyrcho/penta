@@ -45,6 +45,11 @@ object LinearStrategy extends AiStrategy:
   override def maybeUpgrade(state: MazeState, opponent: MazeState): MazeState =
     AiStrategy.upgradeAnyAffordable(state)
 
+  // Researches the first affordable next level among owned Science labs — see
+  // AiStrategy.researchAnyAffordable, shared with every other strategy.
+  override def maybeResearch(state: MazeState, opponent: MazeState): MazeState =
+    AiStrategy.researchAnyAffordable(state)
+
   private def tryBuildOneOf(state: MazeState, kind: BuildingKind): Option[MazeState] =
     GridConfig.allCells.iterator
       .map(c => Placement.tryPlaceBuilding(state, kind, c._1, c._2))

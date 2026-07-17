@@ -138,3 +138,103 @@ class VictoryConditionsTest extends munit.FunSuite:
     )
     assertEquals(VictoryConditions.evaluate(battle), None)
   }
+
+  // ── Recherches Sombres: inflates the OPPONENT's own victory targets ───────
+
+  test("researching Sombres raises the researcher's opponent's forest target") {
+    val sombresLevel = 3
+    val researcher = MazeState.initial.copy(researchLevels = Map(BuildingKind.LaboSombre -> sombresLevel))
+    val bonus = Balance.SombresOpponentTargetIncreaseByLevel(sombresLevel - 1)
+    // forestTarget(opponent) reads `opponent`'s own Sombres level, since `opponent` here is
+    // the side making it harder for `state` (whoever calls forestTarget) to win.
+    assertEquals(
+      VictoryConditions.forestTarget(researcher),
+      Balance.NatureVictoryForestTarget * (1.0 + bonus)
+    )
+  }
+
+  test("Sombres also inflates the plunder and corruption targets, not just forests") {
+    val sombresLevel = 1
+    val researcher = MazeState.initial.copy(researchLevels = Map(BuildingKind.LaboSombre -> sombresLevel))
+    val bonus = Balance.SombresOpponentTargetIncreaseByLevel(sombresLevel - 1)
+    assertEquals(VictoryConditions.plunderTarget(researcher), Balance.ChaosVictoryPlunderTarget * (1.0 + bonus))
+    assertEquals(
+      VictoryConditions.corruptionTarget(researcher),
+      Balance.MortVictoryCorruptionTarget * (1.0 + bonus)
+    )
+  }
+
+  test("a maze that researched Sombres against itself still needs to beat its own inflated target") {
+    // Researching Sombres makes life harder for whoever's *opponent* you are — from the
+    // researcher's own point of view as `state`, its own target is unaffected (only the
+    // *other* side reads this maze's Sombres level as their opponent).
+    val researcher = MazeState.initial.copy(
+      buildingsCorrupted = Balance.MortVictoryCorruptionTarget,
+      researchLevels = Map(BuildingKind.LaboSombre -> 5)
+    )
+    val battle = BattleState(player = researcher, ai = MazeState.initial)
+    assertEquals(
+      VictoryConditions.evaluate(battle).map(_.isInstanceOf[MatchResult.PlayerWins]),
+      Some(true)
+    )
+  }
+
+  // ── Recherche fondamentale ─────────────────────────────────────────────
+
+  test("fondamentale level 1 requires every other lab at level 5") {
+    val almost = MazeState.initial.copy(
+      researchLevels = Map(
+        BuildingKind.LaboDeRecherche -> 1,
+        BuildingKind.LaboNaturel -> 5,
+        BuildingKind.LaboSombre -> 5,
+        BuildingKind.LaboDeLaLoi -> 5,
+        BuildingKind.LaboDuChaos -> 4 // one short
+      )
+    )
+    assertEquals(VictoryConditions.hasWonViaFondamentale(almost), false)
+
+    val complete = almost.copy(researchLevels = almost.researchLevels.updated(BuildingKind.LaboDuChaos, 5))
+    assertEquals(VictoryConditions.hasWonViaFondamentale(complete), true)
+  }
+
+  test("fondamentale level 5 only requires the other labs at level 1") {
+    val state = MazeState.initial.copy(
+      researchLevels = Map(
+        BuildingKind.LaboDeRecherche -> 5,
+        BuildingKind.LaboNaturel -> 1,
+        BuildingKind.LaboSombre -> 1,
+        BuildingKind.LaboDeLaLoi -> 1,
+        BuildingKind.LaboDuChaos -> 1
+      )
+    )
+    assertEquals(VictoryConditions.hasWonViaFondamentale(state), true)
+  }
+
+  test("fondamentale never researched (level 0) never wins via this condition") {
+    val state = MazeState.initial.copy(
+      researchLevels = Map(
+        BuildingKind.LaboNaturel -> 5,
+        BuildingKind.LaboSombre -> 5,
+        BuildingKind.LaboDeLaLoi -> 5,
+        BuildingKind.LaboDuChaos -> 5
+      )
+    )
+    assertEquals(VictoryConditions.hasWonViaFondamentale(state), false)
+  }
+
+  test("evaluate reports a fondamentale win as a real match outcome") {
+    val winner = MazeState.initial.copy(
+      researchLevels = Map(
+        BuildingKind.LaboDeRecherche -> 5,
+        BuildingKind.LaboNaturel -> 1,
+        BuildingKind.LaboSombre -> 1,
+        BuildingKind.LaboDeLaLoi -> 1,
+        BuildingKind.LaboDuChaos -> 1
+      )
+    )
+    val battle = BattleState(player = MazeState.initial, ai = winner)
+    assertEquals(
+      VictoryConditions.evaluate(battle).map(_.isInstanceOf[MatchResult.AiWins]),
+      Some(true)
+    )
+  }
