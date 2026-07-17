@@ -286,10 +286,34 @@ object CombatEngine:
   // display, tooltips — computes the exact same number tick applies, instead of
   // re-deriving `count * rate` by hand and risking it drift out of sync.
   def productionPerSec(state: MazeState, resource: Resource): Double =
-    state.buildings
+    val base = state.buildings
       .groupBy(_.kind)
       .map { case (kind, bs) => bs.size * BuildingSpecs.all(kind).produces.getOrElse(resource, 0.0) }
       .sum
+    base * (1.0 + engendreBoost(state, resource))
+
+  // Engendre.md's resource-generation cycle, keyed by *target* — the resource whose
+  // producer-buildings boost `resource`'s own production rate (see Balance.
+  // EngendreBoostPerBuilding's doc): Wood's boost comes from Light producers, Fire's from
+  // Wood producers, Shadow's from Fire producers, Crystal's from Shadow producers, Light's
+  // from Crystal producers — the same 5-cycle Engendre.md itself describes.
+  private val engendreSource: Map[Resource, Resource] = Map(
+    Resource.Fire -> Resource.Wood,
+    Resource.Shadow -> Resource.Fire,
+    Resource.Crystal -> Resource.Shadow,
+    Resource.Light -> Resource.Crystal,
+    Resource.Wood -> Resource.Light
+  )
+
+  // Exposed (not private) so any other reader of the live boost — GameApp's per-building
+  // hover tooltip, which shows *this building's* effective rate, not the maze-wide total
+  // productionPerSec already reports — computes the exact same multiplier, instead of
+  // re-deriving "which resource sources this one" and risking it drift.
+  def engendreBoost(state: MazeState, resource: Resource): Double =
+    val source = engendreSource(resource)
+    val sourceBuildingCount =
+      state.buildings.count(b => BuildingSpecs.all(b.kind).produces.getOrElse(source, 0.0) > 0.0)
+    Balance.EngendreBoostPerBuilding * sourceBuildingCount
 
   private def produceResources(state: MazeState, deltaMs: Double): MazeState =
     val produced = Resource.values.map(res => res -> productionPerSec(state, res) * deltaMs / 1000.0)

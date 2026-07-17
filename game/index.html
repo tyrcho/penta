@@ -242,6 +242,24 @@
       opacity: 0.85;
     }
     #tooltip-upgrade-preview.visible { display: block; }
+    #tooltip-research {
+      display: none;
+      margin-top: 0.4rem;
+      margin-left: 0.3rem;
+      padding: 0.2rem 0.5rem;
+      font-size: 0.75rem;
+      font-weight: 600;
+      border: 1px solid var(--color-crystal);
+      border-radius: 4px;
+      background: var(--color-bg);
+      color: var(--color-text);
+      cursor: pointer;
+      pointer-events: auto;
+    }
+    #tooltip-research.visible { display: inline-block; }
+    #tooltip-research:hover { background: var(--color-crystal); color: var(--color-bg); }
+    #tooltip-research.disabled { opacity: 0.35; cursor: not-allowed; }
+    #tooltip-research.disabled:hover { background: var(--color-bg); color: var(--color-text); }
     /* Phones (mostly portrait, mostly narrow): the maze is the whole point of the page,
        so the chrome above it — controlbar + the 3 real concept-rows — needs to stay as
        thin as possible. The 2 placeholder rows and every row's 5 "?" build-slot filler
@@ -390,6 +408,7 @@
       <span id="tooltip-text"></span>
       <span id="tooltip-upgrade-preview"></span>
       <button id="tooltip-upgrade"></button>
+      <button id="tooltip-research"></button>
       <button id="tooltip-destroy"></button>
     </div>
   </main>

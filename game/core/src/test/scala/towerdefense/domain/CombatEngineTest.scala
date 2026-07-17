@@ -132,8 +132,14 @@ class CombatEngineTest extends munit.FunSuite:
     val cave = Building(101, col = 6, row = 6, BuildingKind.Cave, Balance.GoblinSpawnIntervalMs)
     val state = withResources(wood = 0.0, fire = 0.0).copy(buildings = List(forest, cave))
     val result = CombatEngine.tick(state, deltaMs = 2000.0)
+    // Wood has no boost here (its Engendre source is Light, and nothing here produces
+    // Light), but Fire's Engendre source is Wood — the one Forest gives it a +5% boost
+    // (Balance.EngendreBoostPerBuilding) on top of Cave's own base rate.
     assertEquals(result.state.resources(Resource.Wood), Balance.WoodPerSecPerForest * 2.0)
-    assertEquals(result.state.resources(Resource.Fire), Balance.FirePerSecPerCave * 2.0)
+    assertEquals(
+      result.state.resources(Resource.Fire),
+      Balance.FirePerSecPerCave * (1.0 + Balance.EngendreBoostPerBuilding) * 2.0
+    )
   }
 
   test(
@@ -148,9 +154,56 @@ class CombatEngineTest extends munit.FunSuite:
         Building(4, 0, 4, BuildingKind.Church, 0.0)
       )
     )
-    assertEquals(CombatEngine.productionPerSec(state, Resource.Wood), 2 * Balance.WoodPerSecPerForest)
-    assertEquals(CombatEngine.productionPerSec(state, Resource.Fire), 1 * Balance.FirePerSecPerCave)
+    // Wood's Engendre source is Light — the one Church gives it a +5% boost. Fire's
+    // Engendre source is Wood — the two Forests give it a +10% boost. Light's Engendre
+    // source is Crystal, absent here, so Light stays exactly at its base rate.
+    assertEquals(
+      CombatEngine.productionPerSec(state, Resource.Wood),
+      2 * Balance.WoodPerSecPerForest * (1.0 + Balance.EngendreBoostPerBuilding)
+    )
+    assertEquals(
+      CombatEngine.productionPerSec(state, Resource.Fire),
+      1 * Balance.FirePerSecPerCave * (1.0 + 2 * Balance.EngendreBoostPerBuilding)
+    )
     assertEquals(CombatEngine.productionPerSec(state, Resource.Light), 1 * Balance.LightPerSecPerEglise)
+  }
+
+  // ── Engendre production-boost rule ────────────────────────────────────
+
+  test("each Engendre-source building adds a flat +5% to the next resource's production rate") {
+    val caves = List(
+      Building(1, 0, 1, BuildingKind.Cave, 0.0),
+      Building(2, 0, 2, BuildingKind.Cave, 0.0),
+      Building(3, 0, 3, BuildingKind.Cave, 0.0)
+    )
+    // Shadow's Engendre source is Fire — three Fire-producing Caves give it a flat +15%
+    // multiplier, even though nothing here produces Shadow itself yet (base rate 0).
+    val state = withResources().copy(buildings = caves)
+    assertEqualsDouble(
+      CombatEngine.engendreBoost(state, Resource.Shadow),
+      3 * Balance.EngendreBoostPerBuilding,
+      1e-9
+    )
+    assertEquals(CombatEngine.productionPerSec(state, Resource.Shadow), 0.0)
+  }
+
+  test("the Engendre boost only counts buildings that produce the *source* resource, not any building") {
+    // Church produces Light, not Fire — it shouldn't count toward Shadow's boost (whose
+    // source is Fire), even though it's a building "in play".
+    val church = Building(1, 5, 5, BuildingKind.Church, 0.0)
+    val state = withResources().copy(buildings = List(church))
+    assertEquals(CombatEngine.engendreBoost(state, Resource.Shadow), 0.0)
+  }
+
+  test("the Engendre cycle wraps: Light producers boost Wood, closing Wood -> Fire -> Shadow -> Crystal -> Light -> Wood") {
+    val church = Building(1, 5, 5, BuildingKind.Church, 0.0)
+    val grove = Building(2, 6, 6, BuildingKind.Grove, 0.0)
+    val state = withResources().copy(buildings = List(church, grove))
+    val result = CombatEngine.tick(state, deltaMs = 1000.0)
+    assertEquals(
+      result.state.resources(Resource.Wood) - state.resources(Resource.Wood),
+      Balance.WoodPerSecPerGrove * (1.0 + Balance.EngendreBoostPerBuilding)
+    )
   }
 
   test("a forest emits exactly one elf-spawn signal per interval") {

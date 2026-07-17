@@ -290,7 +290,14 @@ def onReady(app: Application, textures: js.Dictionary[Texture]): Unit =
   updateModeUi(mode)
 
   wireBuildingButtons(
-    choice => if mode == Mode.Playing then selectedBuilding = choice,
+    choice =>
+      if mode == Mode.Playing then
+        selectedBuilding = choice
+        // A previously clicked building's tooltip (with its Destroy/Upgrade/Research
+        // buttons) otherwise stays stuck on screen after the player picks a different
+        // building to place next — clearing it here lets the ticker's hover self-heal
+        // fall back to whatever the cursor is actually over (or nothing).
+        selectedTarget = None,
     choice => mode == Mode.Playing && canAfford(battle.player, choice),
     active => hoveringButton = active
   )
@@ -300,6 +307,7 @@ def onReady(app: Application, textures: js.Dictionary[Texture]): Unit =
   wireAiLevelSelect(aiLevelIndex, index => aiLevelIndex = index)
   wireDestroyButton((col, row) => battle = destroyPlayerBuilding(battle, mode, col, row))
   wireUpgradeButton((col, row) => battle = upgradePlayerBuilding(battle, mode, col, row))
+  wireResearchButton((col, row) => battle = researchPlayerBuilding(battle, mode, col, row))
 
   app.stage.eventMode = "static"
   app.stage.on(
@@ -1103,15 +1111,16 @@ private def updateTooltip(
   val destroyBtn = document.getElementById("tooltip-destroy").asInstanceOf[dom.html.Button]
   val upgradeBtn = document.getElementById("tooltip-upgrade").asInstanceOf[dom.html.Button]
   val upgradePreview = document.getElementById("tooltip-upgrade-preview")
+  val researchBtn = document.getElementById("tooltip-research").asInstanceOf[dom.html.Button]
   target.flatMap(t => hoverText(t, battle).map(text => (t, text))) match
     case Some((target, text)) =>
       document.getElementById("tooltip-text").textContent = text
       tooltip.classList.add("visible")
       val maze = if target.isPlayer then battle.player else battle.ai
       // Both mazes are AI-driven while Spectating (see CLAUDE.md's symmetry rule — the
-      // destroy/upgrade affordance is a player action, not a game rule, so it's withheld
-      // here rather than in destroyInfo/upgradeInfo themselves) — hovering still shows
-      // read-only stats, it just can't act on them.
+      // destroy/upgrade/research affordance is a player action, not a game rule, so it's
+      // withheld here rather than in destroyInfo/upgradeInfo/researchInfo themselves) —
+      // hovering still shows read-only stats, it just can't act on them.
       (if mode == Mode.Playing then destroyInfo(target, maze) else None) match
         case Some((col, row, label)) =>
           destroyBtn.textContent = label
@@ -1131,12 +1140,21 @@ private def updateTooltip(
         case None =>
           upgradeBtn.classList.remove("visible")
           upgradePreview.classList.remove("visible")
+      (if mode == Mode.Playing then researchInfo(target, maze) else None) match
+        case Some((col, row, label, affordable)) =>
+          researchBtn.textContent = label
+          researchBtn.setAttribute("data-col", col.toString)
+          researchBtn.setAttribute("data-row", row.toString)
+          researchBtn.classList.add("visible")
+          if affordable then researchBtn.classList.remove("disabled") else researchBtn.classList.add("disabled")
+        case None => researchBtn.classList.remove("visible")
     case None =>
       if !buttonTooltipActive then
         tooltip.classList.remove("visible")
         destroyBtn.classList.remove("visible")
         upgradeBtn.classList.remove("visible")
         upgradePreview.classList.remove("visible")
+        researchBtn.classList.remove("visible")
 
 // Only the player's own buildings are destroyable from the UI (the AI destroying its own
 // is driven by AiStrategy.maybeDestroy instead, not this hover affordance) — see
@@ -1203,7 +1221,8 @@ private def upgradeInfo(target: HoverTarget, maze: MazeState): Option[(Int, Int,
               .map { case (res, amount) => s"${formatDecimal(amount)} ${resourceName(res)}" }
               .mkString(", ")
             val previewCountdown = nextSpec.spawns.map(_._2).getOrElse(0.0)
-            val preview = buildingHoverText(nextKind, b.copy(kind = nextKind, spawnCountdownMs = previewCountdown))
+            val preview =
+              buildingHoverText(nextKind, b.copy(kind = nextKind, spawnCountdownMs = previewCountdown), maze)
             (
               b.col,
               b.row,
@@ -1228,6 +1247,61 @@ private def wireUpgradeButton(onUpgrade: (Int, Int) => Unit): Unit =
 private def upgradePlayerBuilding(battle: BattleState, mode: Mode, col: Int, row: Int): BattleState =
   if mode != Mode.Playing || battle.outcome.isDefined then battle
   else Placement.tryUpgradeBuilding(battle.player, col, row).map(p => battle.copy(player = p)).getOrElse(battle)
+
+// Only the player's own Science lab can be researched from the UI (the AI researches via
+// AiStrategy.maybeResearch instead) — mirrors upgradeInfo's shape/wiring, but keyed by
+// BuildingKind rather than cell/id: ResearchSpecs.all has no entry for non-lab kinds, and
+// Placement.tryResearch itself operates on "the maze's one building of this kind" (labs
+// are capped at 1 — see BuildingSpecs' maxPerMaze), not a specific building instance.
+// None once maxed (Balance.MaxResearchLevel), same as upgradeInfo's None once there's no
+// further tier.
+private def researchInfo(target: HoverTarget, maze: MazeState): Option[(Int, Int, String, Boolean)] =
+  if !target.isPlayer then None
+  else
+    target.kind match
+      case HoverKind.EnemyH => None
+      // b.kind, not the pattern-matched kind — see destroyInfo's comment on the same issue.
+      case HoverKind.BuildingH(_) =>
+        maze.buildings.find(_.id == target.id).flatMap { b =>
+          ResearchSpecs.all.get(b.kind).flatMap { spec =>
+            val currentLevel = maze.researchLevels.getOrElse(b.kind, 0)
+            if currentLevel >= Balance.MaxResearchLevel then None
+            else
+              val nextLevel = currentLevel + 1
+              val cost = spec.costAtLevel(nextLevel)
+              val costText = cost.toList
+                .sortBy(_._1.ordinal)
+                .map { case (res, amount) => s"${formatDecimal(amount)} ${resourceName(res)}" }
+                .mkString(", ")
+              Some(
+                (
+                  b.col,
+                  b.row,
+                  s"Research level $nextLevel/${Balance.MaxResearchLevel} ($costText)",
+                  Placement.canAfford(maze.resources, cost)
+                )
+              )
+          }
+        }
+
+private def wireResearchButton(onResearch: (Int, Int) => Unit): Unit =
+  val btn = document.getElementById("tooltip-research").asInstanceOf[dom.html.Button]
+  btn.addEventListener(
+    "click",
+    (_: dom.Event) => {
+      val col = btn.getAttribute("data-col")
+      val row = btn.getAttribute("data-row")
+      if col != null && row != null && !btn.classList.contains("disabled") then onResearch(col.toInt, row.toInt)
+    }
+  )
+
+private def researchPlayerBuilding(battle: BattleState, mode: Mode, col: Int, row: Int): BattleState =
+  if mode != Mode.Playing || battle.outcome.isDefined then battle
+  else
+    battle.player.buildings.find(b => b.col == col && b.row == row) match
+      case None => battle
+      case Some(b) =>
+        Placement.tryResearch(battle.player, b.kind).map(p => battle.copy(player = p)).getOrElse(battle)
 
 private def hoverText(target: HoverTarget, battle: BattleState): Option[String] =
   val maze = if target.isPlayer then battle.player else battle.ai
@@ -1265,50 +1339,73 @@ private def hoverText(target: HoverTarget, battle: BattleState): Option[String] 
       }
     // b.kind, not the pattern-matched kind — see destroyInfo's comment on the same issue.
     case HoverKind.BuildingH(_) =>
-      maze.buildings.find(_.id == target.id).map(b => buildingHoverText(b.kind, b))
+      maze.buildings.find(_.id == target.id).map(b => buildingHoverText(b.kind, b, maze))
 
 // Kept as hand-written per-kind text (not derived from BuildingSpecs), same as the
 // tooltip constants above — the ability sentences (Forest's aura, Watchtower's ranged
 // damage) describe combat behavior that lives outside BuildingSpec by design (see the
 // refactor's confirmed scope), so there's nothing generic left to derive them from.
-private def buildingHoverText(kind: BuildingKind, b: Building): String = kind match
+// `maze` is needed (not just `b`) so every "+X resource/s" line can show the *live*
+// Engendre-boosted rate (see effectiveRate) rather than the flat Balance constant, which
+// understates production once any Engendre-source building exists on the board.
+// corruptionSuffix is appended after the per-kind text below (see its doc) — every
+// building kind is a fair corruption target (Corruption.md gives no kind restriction),
+// so it isn't part of the per-kind match itself.
+private def buildingHoverText(kind: BuildingKind, b: Building, maze: MazeState): String =
+  perKindHoverText(kind, b, maze) + corruptionSuffix(b)
+
+// Zombie/Vampire corrupt buildings gradually toward Balance.CorruptionMaxPercent (see
+// CombatEngine's corruption mechanic) — shown only once corruption has actually started,
+// so an untouched building's tooltip stays exactly as it read before Death existed.
+private def corruptionSuffix(b: Building): String =
+  if b.corruptionPercent > 0 then f" — corrupted ${b.corruptionPercent}%.0f%%/${Balance.CorruptionMaxPercent.toInt}%%"
+  else ""
+
+// This one kind's live per-second rate, including whatever Engendre boost `maze`'s other
+// buildings currently grant it (CombatEngine.engendreBoost — same multiplier
+// CombatEngine.productionPerSec itself applies, so this can never silently drift from
+// the actual number the top summary panel and the real tick both use).
+private def effectiveRate(maze: MazeState, kind: BuildingKind, resource: Resource): Double =
+  BuildingSpecs.all(kind).produces.getOrElse(resource, 0.0) * (1.0 + CombatEngine.engendreBoost(maze, resource))
+
+private def perKindHoverText(kind: BuildingKind, b: Building, maze: MazeState): String = kind match
   case BuildingKind.Grove =>
     val nextElfS = (b.spawnCountdownMs / 1000).ceil.toInt
-    s"Bosquet — +${formatDecimal(Balance.WoodPerSecPerGrove)} wood/s, next Elf in ${nextElfS}s"
+    s"Bosquet — +${formatDecimal(effectiveRate(maze, kind, Resource.Wood))} wood/s, next Elf in ${nextElfS}s"
   case BuildingKind.Forest =>
     val nextElfS = (b.spawnCountdownMs / 1000).ceil.toInt
-    s"Forêt — ${Balance.AuraDamagePerSec.toInt} dmg/s to adjacent enemies, +${formatDecimal(Balance.WoodPerSecPerForest)} wood/s, next Elf in ${nextElfS}s"
+    s"Forêt — ${Balance.AuraDamagePerSec.toInt} dmg/s to adjacent enemies, +${formatDecimal(effectiveRate(maze, kind, Resource.Wood))} wood/s, next Elf in ${nextElfS}s"
   case BuildingKind.Jungle =>
     val nextWolfS = (b.spawnCountdownMs / 1000).ceil.toInt
-    s"Jungle — ${Balance.AuraDamagePerSec.toInt} dmg/s to adjacent enemies, +${formatDecimal(Balance.WoodPerSecPerJungle)} wood/s, next Wolf in ${nextWolfS}s"
+    s"Jungle — ${Balance.AuraDamagePerSec.toInt} dmg/s to adjacent enemies, +${formatDecimal(effectiveRate(maze, kind, Resource.Wood))} wood/s, next Wolf in ${nextWolfS}s"
   case BuildingKind.Cave =>
     val nextGoblinS = (b.spawnCountdownMs / 1000).ceil.toInt
-    s"Cave — +${formatDecimal(Balance.FirePerSecPerCave)} fire/s, next Goblin in ${nextGoblinS}s"
+    s"Cave — +${formatDecimal(effectiveRate(maze, kind, Resource.Fire))} fire/s, next Goblin in ${nextGoblinS}s"
   case BuildingKind.Labyrinth =>
     val nextMinotaurS = (b.spawnCountdownMs / 1000).ceil.toInt
     s"Labyrinthe — next Minotaur in ${nextMinotaurS}s"
   case BuildingKind.Church =>
     val nextPaladinS = (b.spawnCountdownMs / 1000).ceil.toInt
-    s"Eglise — +${formatDecimal(Balance.LightPerSecPerEglise)} light/s, next Paladin in ${nextPaladinS}s"
+    s"Eglise — +${formatDecimal(effectiveRate(maze, kind, Resource.Light))} light/s, next Paladin in ${nextPaladinS}s"
   case BuildingKind.Watchtower =>
-    s"Tour de guet — +${formatDecimal(Balance.LightPerSecPerWatchtower)} light/s, " +
+    s"Tour de guet — +${formatDecimal(effectiveRate(maze, kind, Resource.Light))} light/s, " +
       s"${Balance.WatchtowerDamagePerSec.toInt} dmg/s to the nearest enemy within ${Balance.WatchtowerRangeCells} cells"
   case BuildingKind.Tomb =>
     val nextZombieS = (b.spawnCountdownMs / 1000).ceil.toInt
-    s"Tombe — +${formatDecimal(Balance.ShadowPerSecPerTomb)} shadow/s, next Zombie in ${nextZombieS}s"
+    s"Tombe — +${formatDecimal(effectiveRate(maze, kind, Resource.Shadow))} shadow/s, next Zombie in ${nextZombieS}s"
   case BuildingKind.BlackCastle =>
     val nextVampireS = (b.spawnCountdownMs / 1000).ceil.toInt
-    s"Château Noir — +${formatDecimal(Balance.ShadowPerSecPerBlackCastle)} shadow/s, next Vampire in ${nextVampireS}s"
+    s"Château Noir — +${formatDecimal(effectiveRate(maze, kind, Resource.Shadow))} shadow/s, next Vampire in ${nextVampireS}s"
   case BuildingKind.LaboNaturel =>
-    s"Labo Naturel — +${formatDecimal(Balance.CrystalPerSecPerLaboNaturel)} crystal/s"
+    s"Labo Naturel — +${formatDecimal(effectiveRate(maze, kind, Resource.Crystal))} crystal/s"
   case BuildingKind.LaboSombre =>
-    s"Labo Sombre — +${formatDecimal(Balance.CrystalPerSecPerLaboSombre)} crystal/s"
+    s"Labo Sombre — +${formatDecimal(effectiveRate(maze, kind, Resource.Crystal))} crystal/s"
   case BuildingKind.LaboDeRecherche =>
-    s"Labo de Recherche — +${formatDecimal(Balance.CrystalPerSecPerLaboDeRecherche)} crystal/s"
+    s"Labo de Recherche — +${formatDecimal(effectiveRate(maze, kind, Resource.Crystal))} crystal/s"
   case BuildingKind.LaboDeLaLoi =>
-    s"Labo de la Loi — +${formatDecimal(Balance.CrystalPerSecPerLaboDeLaLoi)} crystal/s"
+    s"Labo de la Loi — +${formatDecimal(effectiveRate(maze, kind, Resource.Crystal))} crystal/s"
   case BuildingKind.LaboDuChaos =>
-    s"Labo du Chaos — +${formatDecimal(Balance.CrystalPerSecPerLaboDuChaos)} crystal/s"
+    s"Labo du Chaos — +${formatDecimal(effectiveRate(maze, kind, Resource.Crystal))} crystal/s"
 
 // ── HTML overlay ────────────────────────────────────────────────────────
 

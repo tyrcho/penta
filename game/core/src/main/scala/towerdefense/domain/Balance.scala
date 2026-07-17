@@ -210,6 +210,15 @@ object Balance:
 
   val MaxResearchLevel: Int = 5
 
+  // ── Engendre (resource-generation cycle) ────────────────────────────────
+  // Not from the vault's own numbers — added at the project owner's explicit request,
+  // riding on Engendre.md's existing resource cycle (Bois -> Feu -> Ombre -> Cristal ->
+  // Lumiere -> Bois): each building producing resource R gives a +5% boost to the SAME
+  // maze's production rate of Engendre's next resource after R, once per such building
+  // (see CombatEngine.engendreBoost). Applies identically to both mazes — a shared-world
+  // ecosystem effect, not a competitive lever like Recherches Sombres.
+  val EngendreBoostPerBuilding: Double = 0.05
+
   // ── Shared / meta ────────────────────────────────────────────────────────
 
   // POC default, not required to match each other — both mazes still get the identical
