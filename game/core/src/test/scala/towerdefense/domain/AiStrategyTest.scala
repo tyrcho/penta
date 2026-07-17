@@ -102,14 +102,23 @@ class AiStrategyTest extends munit.FunSuite:
   // towerdefense.sim.tournament), re-measured after fixing CompositeStrategy's missing
   // maybeUpgrade override and its Grove-vs-non-upgradeable-kind scoring gap — see
   // AiStrategy.ladder's doc for the full story, including why match count above 1 turned
-  // out not to matter (the simulation has no randomness anywhere). resource-only is now
-  // the outright strongest (a cheap-Watchtower economy that deals real damage with no
-  // upgrade chain needed), not maze-only — pure maze-weighting is a weaker archetype than
-  // a fixed wall template (comb/comb-vertical) or a blend that includes it (balanced).
+  // out not to matter (the simulation has no randomness anywhere). resource-only was the
+  // outright strongest until resource-maze (see below) overtook it — pure maze-weighting
+  // is a weaker archetype than a fixed wall template (comb/comb-vertical) or a blend that
+  // includes it (balanced).
   test("the ladder is ordered weakest to strongest by measured win rate, linear first") {
     assertEquals(
       AiStrategy.ladder.map(_._1),
-      Seq("linear", "counter-only", "balanced", "maze-only", "comb-vertical", "comb", "resource-only")
+      Seq(
+        "linear",
+        "counter-only",
+        "balanced",
+        "maze-only",
+        "comb-vertical",
+        "comb",
+        "resource-only",
+        "resource-maze"
+      )
     )
   }
 

@@ -51,21 +51,40 @@ object AiStrategy:
   // game. Left the CLI's default above 1 anyway (useful once/if any real randomness gets
   // added later), but this ladder didn't need it.
   //
-  // resource-only is now the outright strongest, not maze-only: its affordability-margin
-  // heuristic stumbles into cheap Watchtowers (good margin off abundant Light), and
-  // Watchtower deals real ranged damage every tick with no upgrade chain required, unlike
-  // Forest's aura — see a real transcript via `sim/run resource-only maze-only 1 --log`.
+  // resource-only overtook maze-only earlier in this same round of fixes: its
+  // affordability-margin heuristic stumbles into cheap Watchtowers (good margin off
+  // abundant Light), and Watchtower deals real ranged damage every tick with no upgrade
+  // chain required, unlike Forest's aura — see a real transcript via
+  // `sim/run resource-only maze-only 1 --log`.
   // comb and comb-vertical tie on win rate but comb never lost a single match across
   // either round-robin (0 losses out of 90 games played), while comb-vertical did lose
   // some — comb ranks above it on that tiebreak. maze-only and balanced both improved
   // substantially from the two fixes above but still trail comb/comb-vertical/
   // resource-only — pure maze-weighting (maze-only) or a three-way blend that includes it
   // (balanced) is a genuinely weaker archetype here than a fixed, disciplined
-  // full-width-wall template, not just a bug away from "outright strongest" as this
-  // comment used to claim. counter-only and balanced tie on win rate too; balanced ranks
-  // above it for the same fewer-losses/more-draws tiebreak reason as comb over
-  // comb-vertical. Drives both the simulator's named presets (`all`) and the browser's
-  // difficulty selector / auto-advance-on-win, so both walk this measured order.
+  // full-width-wall template, not just a bug away from "outright strongest" as an earlier
+  // version of this comment claimed. counter-only and balanced tie on win rate too;
+  // balanced ranks above it for the same fewer-losses/more-draws tiebreak reason as comb
+  // over comb-vertical.
+  //
+  // resource-maze is now the outright strongest: found via `sim/runMain
+  // towerdefense.sim.tune resource-only 1 0.25 3000 100` (a full CompositeStrategy weight
+  // sweep against resource-only, the strongest entry at the time — 1 match/point suffices
+  // given the determinism noted above), which turned up 50 of 125 weight combinations
+  // that beat resource-only outright, including several pure resource+maze blends
+  // (counter=0). Weights(resource=0.5, counter=0.0, maze=0.25) — a middling resource
+  // weight plus a lighter maze weight, no counter-play at all — went 6-0-1 against the
+  // rest of this ladder (a draw only against maze-only, a win against everything else,
+  // including resource-only itself), clearing the bar for a new named entry rather than
+  // just a tuning footnote. Resource and maze scoring apparently compound: maze routes the
+  // enemy path past Watchtower/Grove-turned-Forest damage the same way maze-only does,
+  // while the resource component (with its now-diminishing-returns divisor — see
+  // CompositeStrategy.resourceScore) keeps the economy diversified enough to actually
+  // afford building that maze instead of stalling on one currency pair the way pure
+  // resource-only can.
+  //
+  // Drives both the simulator's named presets (`all`) and the browser's difficulty
+  // selector / auto-advance-on-win, so both walk this measured order.
   val ladder: Seq[(String, AiStrategy)] = Seq(
     "linear" -> LinearStrategy,
     "counter-only" -> CompositeStrategy(Weights(resource = 0.0, counter = 1.0, maze = 0.0)),
@@ -73,7 +92,8 @@ object AiStrategy:
     "maze-only" -> CompositeStrategy(Weights(resource = 0.0, counter = 0.0, maze = 1.0)),
     "comb-vertical" -> TemplateStrategy(MazeTemplate.combVertical),
     "comb" -> TemplateStrategy(MazeTemplate.comb),
-    "resource-only" -> CompositeStrategy(Weights(resource = 1.0, counter = 0.0, maze = 0.0))
+    "resource-only" -> CompositeStrategy(Weights(resource = 1.0, counter = 0.0, maze = 0.0)),
+    "resource-maze" -> CompositeStrategy(Weights(resource = 0.5, counter = 0.0, maze = 0.25))
   )
 
   val all: Map[String, AiStrategy] = ladder.toMap
