@@ -32,6 +32,36 @@ class SimulatorTest extends munit.FunSuite:
     assertEquals(standings, standings.sortBy(-_.winRate), "standings must be ranked by win rate descending")
   }
 
+  test("tournament assigns every strategy an Elo rating, zero-sum around the starting rating") {
+    // maxTicks = 300 (30 virtual seconds, this file's other fixtures' shared smoke-test
+    // value) is too short for any strategy to actually reach a victory condition — every
+    // match in that fixture draws, which would leave every rating sitting untouched at
+    // InitialRating and prove nothing about the Elo wiring. Needs the same maxTicks the
+    // `tournament` CLI actually plays with (3_000) to get real decisive results on this
+    // trio — matchesPerPairing = 1 suffices since the simulation is fully deterministic
+    // (see AiStrategy.ladder's doc): repeating an identical match buys no new information.
+    val standings =
+      Simulator.tournamentStandings(Seq("linear", "comb", "maze-only"), matchesPerPairing = 1, maxTicks = 3_000, deltaMs = 100.0)
+    // Every strategy played some non-drawn matches on this trio (a full round-robin
+    // history — see AiStrategy.ladder's doc — confirms comb and linear never draw against
+    // each other here), so nobody should still be sitting exactly at the untouched
+    // starting rating — that would mean Elo silently isn't wired up.
+    standings.foreach(s => assertNotEquals(s.elo, EloRating.InitialRating, s"$s never moved off the starting rating"))
+    // Every individual match's Elo update is zero-sum (EloRatingTest), so summed across every
+    // strategy the total must still equal n times the shared starting rating.
+    assertEqualsDouble(
+      standings.map(_.elo).sum,
+      standings.size * EloRating.InitialRating,
+      1e-6,
+      "Elo ratings across the whole tournament must stay zero-sum"
+    )
+    // The undefeated strategy (comb, per this trio's known 0-losses-across-90-games
+    // history — see AiStrategy.ladder's doc) must outrank whichever strategy lost the most.
+    val best = standings.minBy(_.losses)
+    val worst = standings.maxBy(_.losses)
+    assert(best.elo > worst.elo, s"$best should outrate $worst")
+  }
+
   // CLAUDE.md: "any job running more than a few seconds should report an ETA to stderr" —
   // these prove the batch functions actually invoke their progress callback once per unit
   // of work completed, in order. The stderr-printing/throttling itself lives in

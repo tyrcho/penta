@@ -10,7 +10,7 @@ object Simulator:
   case class MatchOutcome(winner: Option[String], ticks: Int)
   case class Tally(name: String, wins: Int, draws: Int, avgTicks: Double)
   case class WeightResult(weights: Weights, winRate: Double)
-  case class Standing(name: String, wins: Int, draws: Int, losses: Int, matches: Int, winRate: Double)
+  case class Standing(name: String, wins: Int, draws: Int, losses: Int, matches: Int, winRate: Double, elo: Double)
 
   def runMatch(
       strategyA: AiStrategy,
@@ -97,6 +97,14 @@ object Simulator:
   // its pairings. Ranked by win rate, not wins, since every strategy plays the same
   // number of matches here (names.size - 1 pairings) but that stops being true if this
   // is ever called with an uneven subset.
+  //
+  // Also tracks an EloRating per strategy, updated match by match in the same
+  // pairing-by-pairing order the round-robin plays them (all strategies start at
+  // EloRating.InitialRating). Win rate alone can't tell an unbeaten record against weak
+  // opposition apart from one earned against the strongest strategies on the ladder —
+  // Elo is the "who did those wins come against" signal win rate can't give. Standings
+  // still rank by win rate, not Elo, to keep today's ranking behavior unchanged; Elo
+  // rides along as an extra column (see formatStandingsTable) rather than replacing it.
   def tournamentStandings(
       names: Seq[String],
       matchesPerPairing: Int,
@@ -106,9 +114,19 @@ object Simulator:
   ): Seq[Standing] =
     val strategies = names.map(n => n -> AiStrategy.all(n)).toMap
     val records = scala.collection.mutable.Map.empty[String, (Int, Int, Int)].withDefaultValue((0, 0, 0))
+    val ratings = scala.collection.mutable.Map.from(names.map(_ -> EloRating.InitialRating))
     names.combinations(2).zipWithIndex.foreach { case (Seq(nameA, nameB), idx) =>
       val outcomes =
         Seq.fill(matchesPerPairing)(runMatch(strategies(nameA), strategies(nameB), maxTicks, deltaMs))
+      outcomes.foreach { outcome =>
+        val scoreA = outcome.winner match
+          case Some("a") => 1.0
+          case Some("b") => 0.0
+          case _         => 0.5
+        val (newA, newB) = EloRating.updateRatings(ratings(nameA), ratings(nameB), scoreA)
+        ratings(nameA) = newA
+        ratings(nameB) = newB
+      }
       val (winsA, drawsA, lossesA) = record(outcomes, "a")
       val (winsB, drawsB, lossesB) = record(outcomes, "b")
       records(nameA) = addRecord(records(nameA), (winsA, drawsA, lossesA))
@@ -120,7 +138,7 @@ object Simulator:
         val (wins, draws, losses) = records(name)
         val matches = wins + draws + losses
         val winRate = if matches == 0 then 0.0 else wins.toDouble / matches
-        Standing(name, wins, draws, losses, matches, winRate)
+        Standing(name, wins, draws, losses, matches, winRate, ratings(name))
       }
       .sortBy(-_.winRate)
 
@@ -168,9 +186,9 @@ object Simulator:
     (header +: rows).mkString(s"$matches matches\n", "\n", "")
 
   private def formatStandingsTable(standings: Seq[Standing]): String =
-    val header = f"${"strategy"}%-14s ${"wins"}%6s ${"draws"}%6s ${"losses"}%6s ${"winRate"}%8s"
+    val header = f"${"strategy"}%-14s ${"wins"}%6s ${"draws"}%6s ${"losses"}%6s ${"winRate"}%8s ${"elo"}%7s"
     val rows = standings.map(s =>
-      f"${s.name}%-14s ${s.wins}%6d ${s.draws}%6d ${s.losses}%6d ${s.winRate}%8.2f"
+      f"${s.name}%-14s ${s.wins}%6d ${s.draws}%6d ${s.losses}%6d ${s.winRate}%8.2f ${s.elo}%7.0f"
     )
     (header +: rows).mkString("\n")
 
