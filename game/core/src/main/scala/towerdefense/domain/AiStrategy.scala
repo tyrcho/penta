@@ -23,6 +23,18 @@ trait AiStrategy:
   def maybeUpgrade(state: MazeState, opponent: MazeState): MazeState = state
 
 object AiStrategy:
+  // Shared "first that works" maybeUpgrade body: try each of the strategy's own buildings
+  // in order, upgrade the first one that's both eligible (BuildingSpecs.upgradesTo) and
+  // affordable, leave state untouched if none qualify. No attempt to pick the "best" one
+  // to upgrade — matches maybeBuild's own simplicity in the strategies that use this.
+  // Was duplicated verbatim across LinearStrategy, TemplateStrategy, and CompositeStrategy
+  // before being pulled out here.
+  def upgradeAnyAffordable(state: MazeState): MazeState =
+    state.buildings.iterator
+      .flatMap(b => Placement.tryUpgradeBuilding(state, b.col, b.row).toOption)
+      .nextOption()
+      .getOrElse(state)
+
   // Ordered weakest to strongest by measured head-to-head win rate (sim/run round-robin,
   // 15-20 matches per pairing). Re-measured after CompositeStrategy's maze component
   // started weighting aura-damage exposure (dangerScore), not just raw path length:

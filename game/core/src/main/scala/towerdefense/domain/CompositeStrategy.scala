@@ -19,8 +19,7 @@ case class CompositeStrategy(weights: Weights) extends AiStrategy:
     val candidates = allCandidates(state)
     if candidates.isEmpty then state
     else
-      val scores =
-        candidates.map(c => dangerScore(state, (c.col, c.row), CombatEngine.auraBuildingKinds.contains(c.kind)))
+      val scores = candidates.map(c => dangerScore(state, (c.col, c.row), isMazeAuraCandidate(c.kind)))
       val minScore = scores.min
       val maxScore = scores.max
       candidates
@@ -35,20 +34,17 @@ case class CompositeStrategy(weights: Weights) extends AiStrategy:
         .maxBy(_._2)
         ._1
 
-  // Grows any of its own buildings to the next upgrade tier when affordable — same
-  // "first that works" simplicity as LinearStrategy.maybeUpgrade/TemplateStrategy's
-  // override, and just as necessary here: dangerScore's whole premise is routing the
-  // enemy path past an aura-dealing building (CombatEngine.auraBuildingKinds = Forest,
-  // Jungle), but maybeBuild can only ever place a Grove directly (Forest/Jungle are
-  // upgrade-only — see Placement.buildableDirectly). Without this override a
-  // maze-weighted CompositeStrategy builds a wall of harmless Groves and never once
-  // realizes the aura damage its own scoring is optimizing for — caught via `make sim`:
-  // maze-only landed zero kills across two full tournament matches before this fix.
+  // Grows any of its own buildings to the next upgrade tier when affordable — see
+  // AiStrategy.upgradeAnyAffordable. Just as necessary here as it is for
+  // LinearStrategy/TemplateStrategy: dangerScore's whole premise is routing the enemy
+  // path past an aura-dealing building (CombatEngine.auraBuildingKinds = Forest, Jungle),
+  // but maybeBuild can only ever place a Grove directly (Forest/Jungle are upgrade-only —
+  // see Placement.buildableDirectly). Without this override a maze-weighted
+  // CompositeStrategy builds a wall of harmless Groves and never once realizes the aura
+  // damage its own scoring is optimizing for — caught via `make sim`: maze-only landed
+  // zero kills across two full tournament matches before this fix.
   override def maybeUpgrade(state: MazeState, opponent: MazeState): MazeState =
-    state.buildings.iterator
-      .flatMap(b => Placement.tryUpgradeBuilding(state, b.col, b.row).toOption)
-      .nextOption()
-      .getOrElse(state)
+    AiStrategy.upgradeAnyAffordable(state)
 
   private def allCandidates(state: MazeState): Seq[Candidate] =
     for
@@ -57,15 +53,32 @@ case class CompositeStrategy(weights: Weights) extends AiStrategy:
       result <- Placement.tryPlaceBuilding(state, kind, col, row).toOption
     yield Candidate(kind, col, row, result)
 
+  // A *new* candidate counts as an aura source if it already auras (Forest/Jungle) or
+  // will the moment maybeUpgrade above gets to it (Grove — the only directly-buildable
+  // kind on Nature's aura-bound upgrade chain, see BuildingSpecs.upgradesTo). Existing
+  // buildings on the board score via CombatEngine.auraBuildingKinds directly inside
+  // dangerScore, unaffected by this — it's only about how a *new* placement's own kind is
+  // valued. Without crediting Grove here, a Grove candidate ties on raw path length with
+  // a same-cell Cave/Labyrinth/Church/Watchtower candidate that can never aura, so a
+  // strategy briefly short on wood (e.g. right after paying for an earlier upgrade)
+  // happily settles for the Cave, permanently losing that wall cell's damage potential —
+  // seen directly in a `make sim` transcript: maze-only built 9 walls, 6 of them Cave,
+  // because Grove just wasn't affordable in the moment on 6 separate ticks. This fix
+  // narrows that pattern (Grove now wins whenever it's merely tied or close, not just
+  // literally the only affordable option) without fully eliminating it — genuinely
+  // reserving wood for a future Grove instead of spending it the moment something's
+  // affordable would need lookahead this scoring doesn't have.
+  private def isMazeAuraCandidate(kind: BuildingKind): Boolean =
+    kind == BuildingKind.Grove || CombatEngine.auraBuildingKinds.contains(kind)
+
   // How dangerous the resulting path is for an enemy to walk, not just how long it is:
   // path length alone only delays plunder, but CombatEngine.applyDamageSources deals
   // AuraDamagePerSec to any enemy standing adjacent to a Forest/Jungle (see
   // accumulateAuraHits there) — routing the path past them can kill the enemy outright,
-  // which is strictly better than merely making it walk further. `isAuraCandidate` counts
-  // the candidate itself as an aura source for this check, since it auras once it's up
-  // too (existing Forests/Jungles already do) — Grove has no aura, so a Grove candidate
-  // passes false. Exposed at `private[domain]` so tests can verify the scoring directly
-  // instead of reasoning backward from `maybeBuild`'s final pick.
+  // which is strictly better than merely making it walk further. `isAuraCandidate` is
+  // isMazeAuraCandidate at maybeBuild's call site, but dangerScore itself takes a plain
+  // Boolean so tests can drive it directly instead of reasoning backward from
+  // maybeBuild's final pick. Exposed at `private[domain]` for exactly that.
   private[domain] def dangerScore(
       state: MazeState,
       candidate: (Int, Int),

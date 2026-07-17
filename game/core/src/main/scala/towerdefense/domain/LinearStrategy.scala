@@ -29,12 +29,9 @@ object LinearStrategy extends AiStrategy:
     buildOrder.iterator.flatMap(kind => tryBuildOneOf(state, kind)).nextOption().getOrElse(state)
 
   // Upgrades the first (row-major, by building list order) Grove/Forest it can afford —
-  // same "first that works" simplicity as maybeBuild, no attempt to pick the "best" one.
+  // see AiStrategy.upgradeAnyAffordable, shared with every other strategy that upgrades.
   override def maybeUpgrade(state: MazeState, opponent: MazeState): MazeState =
-    state.buildings.iterator
-      .flatMap(b => Placement.tryUpgradeBuilding(state, b.col, b.row).toOption)
-      .nextOption()
-      .getOrElse(state)
+    AiStrategy.upgradeAnyAffordable(state)
 
   private def tryBuildOneOf(state: MazeState, kind: BuildingKind): Option[MazeState] =
     GridConfig.allCells.iterator

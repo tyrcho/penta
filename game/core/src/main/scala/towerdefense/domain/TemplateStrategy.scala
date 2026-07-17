@@ -44,12 +44,8 @@ case class TemplateStrategy(template: (Int, Int) => List[(Int, Int)]) extends Ai
       .getOrElse(state)
 
   // Grows an existing Grove into a Forest (and a Forest into a Jungle) once affordable —
-  // same "first that works" simplicity as maybeBuild, no attempt to pick the "best" one.
-  // Every building this strategy has is already on a template cell (maybeBuild never
-  // places elsewhere), so upgrading any of them is always upgrading the maze wall, no
-  // extra filtering needed — same pattern as LinearStrategy.maybeUpgrade.
+  // see AiStrategy.upgradeAnyAffordable. Every building this strategy has is already on a
+  // template cell (maybeBuild never places elsewhere), so upgrading any of them is always
+  // upgrading the maze wall, no extra filtering needed.
   override def maybeUpgrade(state: MazeState, opponent: MazeState): MazeState =
-    state.buildings.iterator
-      .flatMap(b => Placement.tryUpgradeBuilding(state, b.col, b.row).toOption)
-      .nextOption()
-      .getOrElse(state)
+    AiStrategy.upgradeAnyAffordable(state)

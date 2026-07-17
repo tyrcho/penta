@@ -166,9 +166,10 @@ class CompositeStrategyTest extends munit.FunSuite:
   test(
     "maze-only picks the new Grove candidate maximizing length + an existing forest's exposure together"
   ) {
-    // Grove itself has no aura (only Forest/Jungle do — see CombatEngine.auraBuildingKinds),
-    // so isAuraCandidate is always false for it; the existing Forest fixture is what gives
-    // the maze score something to differentiate cells by.
+    // A new Grove candidate is scored isAuraCandidate = true (see isMazeAuraCandidate's
+    // doc: it will aura the moment maybeUpgrade grows it into a Forest), same as the
+    // existing Forest fixture already contributes — that's what gives the maze score
+    // something to differentiate cells by beyond raw path length.
     val state = withResources(wood = 100.0, fire = 0.0, light = 0.0).copy(
       buildings = List(building(1, 6, 5, BuildingKind.Forest)),
       nextId = 2L
@@ -178,9 +179,28 @@ class CompositeStrategyTest extends munit.FunSuite:
     val built = result.buildings.find(_.kind == BuildingKind.Grove).get
     val bestPossibleScore = GridConfig.allCells
       .filterNot(Set(GridConfig.spawnCell, GridConfig.goalCell, (6, 5)).contains)
-      .map(c => strategy.dangerScore(state, c, isAuraCandidate = false))
+      .map(c => strategy.dangerScore(state, c, isAuraCandidate = true))
       .max
-    assertEquals(strategy.dangerScore(state, (built.col, built.row), isAuraCandidate = false), bestPossibleScore)
+    assertEquals(strategy.dangerScore(state, (built.col, built.row), isAuraCandidate = true), bestPossibleScore)
+  }
+
+  // Regression test for the "wasted Cave" pattern found via `make sim` (see
+  // isMazeAuraCandidate's doc): a Grove and a Cave tied on raw path length at the same
+  // cell used to tie outright (neither auras), so maze-only's pick depended on incidental
+  // affordability rather than long-term value. Now Grove's own future-aura credit must
+  // make it win outright, not just tie.
+  test("maze-only prefers a Grove over an equally-well-placed Cave, since only the Grove can ever aura") {
+    val state = withResources(wood = 100.0, fire = 100.0, light = 0.0)
+    val strategy = CompositeStrategy(Weights(resource = 0.0, counter = 0.0, maze = 1.0))
+    val (col, row) = GridConfig.allCells
+      .filterNot(Set(GridConfig.spawnCell, GridConfig.goalCell).contains)
+      .maxBy(c => strategy.dangerScore(state, c, isAuraCandidate = false))
+    val groveScore = strategy.dangerScore(state, (col, row), isAuraCandidate = true)
+    val caveScore = strategy.dangerScore(state, (col, row), isAuraCandidate = false)
+    assert(groveScore > caveScore, s"expected Grove's own future-aura credit to score higher at the same cell")
+    val result = strategy.maybeBuild(state, noOpponent)
+    assertEquals(count(result, BuildingKind.Grove), 1)
+    assertEquals(count(result, BuildingKind.Cave), 0)
   }
 
   test(
