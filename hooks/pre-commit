@@ -1,0 +1,52 @@
+#!/usr/bin/env bash
+# Repo-level pre-commit hook, picked up automatically by Datadog's global
+# git hooks (run-local-hooks looks for <repo-root>/hooks/pre-commit).
+#
+# Formats staged Scala files with scalafmt (game/.scalafmt.conf) and lints
+# staged Markdown files with markdownlint-cli2, both scoped to game/ — the
+# rest of this repo is an Obsidian vault, not the Scala project. A formatter
+# fix re-stages the file; a lint failure blocks the commit.
+set -euo pipefail
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+cd "$REPO_ROOT" # git invokes hooks from the repo root already; this just makes
+                # the relative paths below correct if run manually from elsewhere.
+GAME_DIR="$REPO_ROOT/game"
+
+staged() { git diff --cached --name-only --diff-filter=ACM -- "$GAME_DIR"; }
+
+scala_files=$(staged | grep -E '\.(scala|sc)$' || true)
+md_files=$(staged | grep -E '\.mdx?$' || true)
+
+fail=0
+
+if [ -n "$scala_files" ]; then
+  scalafmt_bin="$(command -v scalafmt || true)"
+  if [ -z "$scalafmt_bin" ] && [ -x "$HOME/Library/Application Support/Coursier/bin/scalafmt" ]; then
+    scalafmt_bin="$HOME/Library/Application Support/Coursier/bin/scalafmt"
+  fi
+  if [ -n "$scalafmt_bin" ]; then
+    echo "pre-commit: formatting staged Scala files..."
+    relative_files=$(echo "$scala_files" | sed "s|^game/||")
+    (cd "$GAME_DIR" && "$scalafmt_bin" $relative_files)
+    echo "$scala_files" | xargs git add
+  else
+    echo "pre-commit: scalafmt not found (cs install scalafmt) — skipping Scala formatting" >&2
+  fi
+fi
+
+if [ -n "$md_files" ]; then
+  if command -v markdownlint-cli2 >/dev/null 2>&1; then
+    echo "pre-commit: linting staged Markdown files..."
+    config_flag=""
+    [ -f "$GAME_DIR/.markdownlint.json" ] && config_flag="--config $GAME_DIR/.markdownlint.json"
+    if ! markdownlint-cli2 $config_flag $md_files; then
+      echo "pre-commit: markdownlint found issues in staged Markdown files (see above)." >&2
+      fail=1
+    fi
+  else
+    echo "pre-commit: markdownlint-cli2 not found (brew install markdownlint-cli2) — skipping Markdown lint" >&2
+  fi
+fi
+
+exit $fail
