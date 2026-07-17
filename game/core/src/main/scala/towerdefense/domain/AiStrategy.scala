@@ -35,65 +35,77 @@ object AiStrategy:
       .nextOption()
       .getOrElse(state)
 
-  // Ordered weakest to strongest by measured head-to-head win rate: a full round-robin
-  // across every entry below (`sim/runMain towerdefense.sim.tournament`). Re-measured
-  // here after two CompositeStrategy fixes (a missing maybeUpgrade override, then Grove
-  // being undervalued against non-upgradeable kinds — see CompositeStrategy's doc) landed
-  // in the same session, since both directly change how the maze-weighted entries
-  // (maze-only, balanced) actually play.
+  // Every entry is now a ComposedStrategy: a LayoutPolicy ("where" — NoLayoutPreference,
+  // FreeformLayout's danger-maximizing scan, or a fixed MazeTemplate wall) combined with a
+  // SpendingPolicy ("what" — WeightedSpending's resource/counter blend, PlunderSpending's
+  // Chaos rush, or GrovePriority's Grove-first/margin-fallback), replacing the old
+  // CompositeStrategy(weights)/TemplateStrategy(template) split where only "maze" was ever
+  // pluggable independently of "resource"/"counter". See docs/adr/0010 for the full
+  // before/after.
   //
-  // Match count turned out not to matter: there is no randomness anywhere in `core`/`sim`
-  // (no `scala.util.Random`, nothing seeded) — every match between the same two
-  // strategies at the same maxTicks/deltaMs has exactly one deterministic outcome. A
-  // 3-matches-per-pairing run and a 15-matches-per-pairing run produced numbers that were
-  // exact 5x multiples of each other across every strategy, confirming this — "matches
-  // per pairing" beyond 1 buys no statistical confidence today, it just repeats the same
-  // game. Left the CLI's default above 1 anyway (useful once/if any real randomness gets
-  // added later), but this ladder didn't need it.
+  // ComposedStrategy now breaks ties between equally-scored candidates at random (see its
+  // doc) instead of always taking the first in generation order, so — unlike the old,
+  // fully deterministic ladder — repeated matches between the same two entries can now
+  // produce different outcomes. Ordered weakest to strongest by win rate averaged over a
+  // 3-matches-per-pairing round-robin (`sim/runMain towerdefense.sim.tournament 3`), not a
+  // single deterministic game per pairing.
   //
-  // resource-only overtook maze-only earlier in this same round of fixes: its
-  // affordability-margin heuristic stumbles into cheap Watchtowers (good margin off
-  // abundant Light), and Watchtower deals real ranged damage every tick with no upgrade
-  // chain required, unlike Forest's aura — see a real transcript via
-  // `sim/run resource-only maze-only 1 --log`.
-  // comb and comb-vertical tie on win rate but comb never lost a single match across
-  // either round-robin (0 losses out of 90 games played), while comb-vertical did lose
-  // some — comb ranks above it on that tiebreak. maze-only and balanced both improved
-  // substantially from the two fixes above but still trail comb/comb-vertical/
-  // resource-only — pure maze-weighting (maze-only) or a three-way blend that includes it
-  // (balanced) is a genuinely weaker archetype here than a fixed, disciplined
-  // full-width-wall template, not just a bug away from "outright strongest" as an earlier
-  // version of this comment claimed. counter-only and balanced tie on win rate too;
-  // balanced ranks above it for the same fewer-losses/more-draws tiebreak reason as comb
-  // over comb-vertical.
+  // maze-only is the one entry with 0 wins that still ranks above linear: it has 0 losses
+  // too (39 draws out of 39 matches) — a genuine, reproducible defensive lockout, not
+  // matchmaking luck. Its SpendingPolicy weight is (resource=0, counter=0), so it never
+  // once considers whether a spend is sustainable — it builds Watchtowers as long as
+  // FreeformLayout's ranged-damage credit outscores everything else, drains Wood to
+  // exactly 0 with no Grove ever built to replenish it, and then freezes permanently with
+  // a small, apparently-effective Watchtower cluster that denies every opponent a win
+  // within 3000 ticks without ever mounting a real offense of its own.
   //
-  // resource-maze is now the outright strongest: found via `sim/runMain
-  // towerdefense.sim.tune resource-only 1 0.25 3000 100` (a full CompositeStrategy weight
-  // sweep against resource-only, the strongest entry at the time — 1 match/point suffices
-  // given the determinism noted above), which turned up 50 of 125 weight combinations
-  // that beat resource-only outright, including several pure resource+maze blends
-  // (counter=0). Weights(resource=0.5, counter=0.0, maze=0.25) — a middling resource
-  // weight plus a lighter maze weight, no counter-play at all — went 6-0-1 against the
-  // rest of this ladder (a draw only against maze-only, a win against everything else,
-  // including resource-only itself), clearing the bar for a new named entry rather than
-  // just a tuning footnote. Resource and maze scoring apparently compound: maze routes the
-  // enemy path past Watchtower/Grove-turned-Forest damage the same way maze-only does,
-  // while the resource component (with its now-diminishing-returns divisor — see
-  // CompositeStrategy.resourceScore) keeps the economy diversified enough to actually
-  // afford building that maze instead of stalling on one currency pair the way pure
-  // resource-only can.
+  // That same freeze was originally hitting maze-only AND resource-maze, which is what
+  // motivated growthBonus (see SpendingPolicy): a spend-margin penalty alone discourages
+  // draining a resource with no producer, but doesn't credit *fixing* the shortage —
+  // Watchtower (Wood+Light) kept outscoring Grove (Wood only, Wood's only producer)
+  // because Watchtower's margin got pulled up by averaging in Light, which Grove has
+  // nothing to average against. `sim/run resource-maze linear 1 --log` showed the exact
+  // same 5-Watchtowers-then-freeze pattern before the fix; resource-maze (whose weight
+  // does include resource=1.0) now wins normally, since growthBonus flips Grove ahead of
+  // Watchtower once Wood's production has actually hit zero. maze-only keeps the freeze,
+  // since its own weight zeroes growthBonus out along with everything else resource-aware
+  // — an accurate reflection of "pure maze scoring, zero resource-awareness" as an
+  // archetype, not a leftover bug.
   //
-  // Drives both the simulator's named presets (`all`) and the browser's difficulty
-  // selector / auto-advance-on-win, so both walk this measured order.
+  // The `-plunder` family (maze-plunder, comb-plunder, comb-vertical-plunder) and
+  // resource-maze form a tight top tier, all 27-12-0 — no losses at all across the whole
+  // ladder — differing only by Elo (resource-maze 1736 > maze-plunder 1721 >
+  // comb-vertical-plunder 1712 > comb-plunder 1703), used as the tiebreak among otherwise
+  // identical win/draw/loss records. Racing Chaos buildings (PlunderSpending) or a
+  // diversified, growth-aware resource economy (WeightedSpending with growthBonus) both
+  // beat every fixed-Grove-first wall (comb/comb-vertical) and every non-plunder blend
+  // (balanced, the comb-resource pair) outright.
   val ladder: Seq[(String, AiStrategy)] = Seq(
     "linear" -> LinearStrategy,
-    "counter-only" -> CompositeStrategy(Weights(resource = 0.0, counter = 1.0, maze = 0.0)),
-    "balanced" -> CompositeStrategy(Weights(resource = 1.0, counter = 1.0, maze = 1.0)),
-    "maze-only" -> CompositeStrategy(Weights(resource = 0.0, counter = 0.0, maze = 1.0)),
-    "comb-vertical" -> TemplateStrategy(MazeTemplate.combVertical),
-    "comb" -> TemplateStrategy(MazeTemplate.comb),
-    "resource-only" -> CompositeStrategy(Weights(resource = 1.0, counter = 0.0, maze = 0.0)),
-    "resource-maze" -> CompositeStrategy(Weights(resource = 0.5, counter = 0.0, maze = 0.25))
+    "maze-only" -> ComposedStrategy(FreeformLayout, WeightedSpending(resourceWeight = 0.0, counterWeight = 0.0)),
+    "comb" -> ComposedStrategy(TemplateLayout(MazeTemplate.comb), GrovePriority),
+    "comb-vertical" -> ComposedStrategy(TemplateLayout(MazeTemplate.combVertical), GrovePriority),
+    "counter-only" -> ComposedStrategy(NoLayoutPreference, WeightedSpending(resourceWeight = 0.0, counterWeight = 1.0)),
+    "resource-only" -> ComposedStrategy(NoLayoutPreference, WeightedSpending(resourceWeight = 1.0, counterWeight = 0.0)),
+    "maze-counter" -> ComposedStrategy(FreeformLayout, WeightedSpending(resourceWeight = 0.0, counterWeight = 1.0)),
+    "comb-vertical-resource" -> ComposedStrategy(
+      TemplateLayout(MazeTemplate.combVertical),
+      WeightedSpending(resourceWeight = 1.0, counterWeight = 0.0)
+    ),
+    "comb-resource" -> ComposedStrategy(
+      TemplateLayout(MazeTemplate.comb),
+      WeightedSpending(resourceWeight = 1.0, counterWeight = 0.0)
+    ),
+    "balanced" -> ComposedStrategy(FreeformLayout, WeightedSpending(resourceWeight = 1.0, counterWeight = 1.0)),
+    "comb-plunder" -> ComposedStrategy(TemplateLayout(MazeTemplate.comb), PlunderSpending),
+    "comb-vertical-plunder" -> ComposedStrategy(TemplateLayout(MazeTemplate.combVertical), PlunderSpending),
+    "maze-plunder" -> ComposedStrategy(FreeformLayout, PlunderSpending),
+    "resource-maze" -> ComposedStrategy(
+      FreeformLayout,
+      WeightedSpending(resourceWeight = 1.0, counterWeight = 0.0),
+      layoutWeight = 0.25,
+      spendingWeight = 0.5
+    )
   )
 
   val all: Map[String, AiStrategy] = ladder.toMap

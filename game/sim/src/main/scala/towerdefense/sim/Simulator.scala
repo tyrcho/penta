@@ -9,7 +9,8 @@ object Simulator:
 
   case class MatchOutcome(winner: Option[String], ticks: Int)
   case class Tally(name: String, wins: Int, draws: Int, avgTicks: Double)
-  case class WeightResult(weights: Weights, winRate: Double)
+  case class SpendingWeights(resourceWeight: Double, counterWeight: Double, layoutWeight: Double)
+  case class WeightResult(weights: SpendingWeights, winRate: Double)
   case class Standing(name: String, wins: Int, draws: Int, losses: Int, matches: Int, winRate: Double, elo: Double)
 
   def runMatch(
@@ -151,9 +152,14 @@ object Simulator:
   private def addRecord(a: (Int, Int, Int), b: (Int, Int, Int)): (Int, Int, Int) =
     (a._1 + b._1, a._2 + b._2, a._3 + b._3)
 
-  // A deterministic sweep, not a training loop: every Weights combination on the grid is
-  // run head-to-head against `baseline` and ranked by win rate — the "tunable variables
-  // validated via simulation" mechanism from the plan.
+  // A sweep, not a training loop: every SpendingWeights combination on the grid is run
+  // head-to-head against `baseline` and ranked by win rate — the "tunable variables
+  // validated via simulation" mechanism from the plan. Each grid point builds a
+  // ComposedStrategy(FreeformLayout, WeightedSpending(resourceWeight, counterWeight),
+  // layoutWeight), i.e. it only sweeps FreeformLayout-based combinations — TemplateLayout
+  // combinations (comb/comb-vertical + a SpendingPolicy) are explored by hand via
+  // `sim/run` head-to-head matches instead, since there's no continuous "wall shape"
+  // parameter to grid-search over.
   def searchWeights(
       baseline: String,
       matchesPerPoint: Int,
@@ -164,7 +170,11 @@ object Simulator:
   ): Seq[WeightResult] =
     val baselineStrategy = AiStrategy.all(baseline)
     weightGrid(step).zipWithIndex.map { case (weights, idx) =>
-      val candidate = CompositeStrategy(weights)
+      val candidate = ComposedStrategy(
+        FreeformLayout,
+        WeightedSpending(weights.resourceWeight, weights.counterWeight),
+        layoutWeight = weights.layoutWeight
+      )
       val outcomes =
         Seq.fill(matchesPerPoint)(runMatch(candidate, baselineStrategy, maxTicks, deltaMs))
       val wins = outcomes.count(_.winner.contains("a"))
@@ -172,13 +182,13 @@ object Simulator:
       WeightResult(weights, wins.toDouble / matchesPerPoint)
     }.sortBy(-_.winRate)
 
-  private def weightGrid(step: Double): Seq[Weights] =
+  private def weightGrid(step: Double): Seq[SpendingWeights] =
     val values = Iterator.iterate(0.0)(_ + step).takeWhile(_ <= 1.0 + 1e-9).toSeq
     for
       resource <- values
       counter <- values
-      maze <- values
-    yield Weights(resource, counter, maze)
+      layout <- values
+    yield SpendingWeights(resource, counter, layout)
 
   private def formatTallyTable(tallies: Seq[Tally], matches: Int): String =
     val header = f"${"strategy"}%-14s ${"wins"}%6s ${"draws"}%6s ${"avgTicks"}%10s"
@@ -193,9 +203,9 @@ object Simulator:
     (header +: rows).mkString("\n")
 
   private def formatWeightTable(results: Seq[WeightResult], top: Int): String =
-    val header = f"${"resource"}%9s ${"counter"}%9s ${"maze"}%9s ${"winRate"}%9s"
+    val header = f"${"resource"}%9s ${"counter"}%9s ${"layout"}%9s ${"winRate"}%9s"
     val rows = results.take(top).map(r =>
-      f"${r.weights.resource}%9.2f ${r.weights.counter}%9.2f ${r.weights.maze}%9.2f ${r.winRate}%9.2f"
+      f"${r.weights.resourceWeight}%9.2f ${r.weights.counterWeight}%9.2f ${r.weights.layoutWeight}%9.2f ${r.winRate}%9.2f"
     )
     (header +: rows).mkString("\n")
 
@@ -265,5 +275,5 @@ object Simulator:
     val deltaMs = args.lift(4).map(_.toDouble).getOrElse(100.0)
     val reporter = new ProgressReporter(s"tune vs $baseline", weightGrid(step).size)
     val results = searchWeights(baseline, matchesPerPoint, step, maxTicks, deltaMs, reporter.tick)
-    println(s"CompositeStrategy weight sweep vs '$baseline' ($matchesPerPoint matches/point, step $step):")
+    println(s"FreeformLayout+WeightedSpending weight sweep vs '$baseline' ($matchesPerPoint matches/point, step $step):")
     println(formatWeightTable(results, top = 10))
