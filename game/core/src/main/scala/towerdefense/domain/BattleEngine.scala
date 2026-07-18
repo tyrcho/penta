@@ -2,7 +2,8 @@ package towerdefense.domain
 
 // Two mazes, same rules — symmetric: either side can build any BuildingKind (see
 // CLAUDE.md). Each building spawns its unit (per BuildingSpecs) into the *opponent's*
-// maze — that's the whole game.
+// maze — that's the whole game — except Stonehenge's Tree (Stonehenge.md), which stays
+// in its OWNER's own maze instead (see stayHomeUnitKinds below).
 // aiBuildCooldownMs/playerBuildCooldownMs pace each side's own building rate (see
 // Balance.AiBuildCooldownMs) — mirrored fields, not an AI-only concept, so a headless
 // AI-vs-AI battle can throttle both sides identically to how the UI throttles `ai` today.
@@ -87,8 +88,10 @@ object BattleEngine:
 
       val aiCredited = creditCorruption(creditPlunder(aiBuilt, playerResult.stolen), playerResult.corrupted)
       val playerCredited = creditCorruption(creditPlunder(playerBuilt, aiResult.stolen), aiResult.corrupted)
-      val aiFinal = deliverUnits(aiCredited, playerResult.spawned)
-      val playerFinal = deliverUnits(playerCredited, aiResult.spawned)
+      val (playerSpawnedHome, playerSpawnedAway) = playerResult.spawned.partition((k, _) => stayHomeUnitKinds(k))
+      val (aiSpawnedHome, aiSpawnedAway) = aiResult.spawned.partition((k, _) => stayHomeUnitKinds(k))
+      val aiFinal = deliverUnits(deliverUnits(aiCredited, playerSpawnedAway), aiSpawnedHome)
+      val playerFinal = deliverUnits(deliverUnits(playerCredited, aiSpawnedAway), playerSpawnedHome)
 
       val next = BattleState(playerFinal, aiFinal, aiNextCooldown, playerNextCooldown)
       val events = TickEvents(
@@ -148,6 +151,13 @@ object BattleEngine:
         }
       }
       state.copy(resources = credited, buildingsCorrupted = state.buildingsCorrupted + corrupted.size)
+
+  // Stonehenge.md/Arbre Anime.md: the one unit kind whose *building*-level spawn (as
+  // opposed to a creature's own self-summon, e.g. the Tree's later clones — see
+  // CombatEngine.advanceCreatureSummons, which already stays in whatever maze the
+  // creature is currently in) delivers into the SAME maze as the building that produced
+  // it, instead of crossing to the opponent's like every other spawner.
+  private val stayHomeUnitKinds: Set[UnitKind] = Set(UnitKind.Tree)
 
   private def deliverUnits(state: MazeState, spawned: Map[UnitKind, Int]): MazeState =
     spawned.foldLeft(state) { case (s, (kind, count)) =>

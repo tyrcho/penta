@@ -55,6 +55,13 @@ object BuildingSpecs:
       spawns = Some(UnitKind.Wolf -> Balance.WolfSpawnIntervalMs),
       buildableDirectly = false
     ),
+    // Stonehenge.md: unlike Grove/Forest/Jungle's Elf/Wolf (sent to raid the opponent —
+    // see BattleEngine.stayHomeUnitKinds), the Tree it spawns stays in this SAME maze.
+    BuildingKind.Stonehenge -> BuildingSpec(
+      cost = Map(Resource.Wood -> Balance.StonehengeCostWood),
+      produces = Map.empty,
+      spawns = Some(UnitKind.Tree -> Balance.StonehengeSpawnIntervalMs)
+    ),
     BuildingKind.Cave -> BuildingSpec(
       cost = Map(Resource.Wood -> Balance.CaveCostWood, Resource.Fire -> Balance.CaveCostFire),
       produces = Map(Resource.Fire -> Balance.FirePerSecPerCave),

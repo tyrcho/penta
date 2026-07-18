@@ -109,6 +109,35 @@ class VictoryConditionsTest extends munit.FunSuite:
     assertEquals(VictoryConditions.evaluate(battle), None)
   }
 
+  // Arbre Anime.md/Stonehenge.md: unlike every other creature, a living Tree counts
+  // toward its OWN maze's forest tally (VictoryConditions.forestCount) alongside real
+  // Forest/Jungle buildings — Stonehenge's whole point is growing this count without
+  // building more Forests.
+  test("a living Tree counts toward the forest target, same as a real Forest building") {
+    val trees = List.fill(Balance.NatureVictoryForestTarget)(
+      Creature(1, GridConfig.cellCenter(2, 2), Balance.TreeMaxHp, Balance.TreeMaxHp, 0.0, UnitKind.Tree)
+    )
+    val battle = BattleState(player = MazeState.initial.copy(creatures = trees), ai = MazeState.initial)
+    assertEquals(
+      VictoryConditions.evaluate(battle).map(_.isInstanceOf[MatchResult.PlayerWins]),
+      Some(true)
+    )
+  }
+
+  test("Trees and real Forest buildings add up together toward the same forest target") {
+    val trees = List.fill(Balance.NatureVictoryForestTarget - 1)(
+      Creature(1, GridConfig.cellCenter(2, 2), Balance.TreeMaxHp, Balance.TreeMaxHp, 0.0, UnitKind.Tree)
+    )
+    val battle = BattleState(
+      player = MazeState.initial.copy(creatures = trees, buildings = List(forestBuilding(5, 5))),
+      ai = MazeState.initial
+    )
+    assertEquals(
+      VictoryConditions.evaluate(battle).map(_.isInstanceOf[MatchResult.PlayerWins]),
+      Some(true)
+    )
+  }
+
   test("ai wins once it has corrupted enough enemy buildings (Mort)") {
     val battle = BattleState(
       player = MazeState.initial,

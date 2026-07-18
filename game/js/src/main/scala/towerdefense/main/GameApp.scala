@@ -126,6 +126,9 @@ private object AssetPaths:
   // Maison de la Mort.md's own reference image, supplied directly by the project owner —
   // see LICENSE-death-house.txt.
   val DeathHouseIcon = "./assets/death-house.png"
+  // Stonehenge.md's own reference image, supplied directly by the project owner — see
+  // LICENSE-stonehenge.txt.
+  val StonehengeIcon = "./assets/stonehenge.png"
   val Flames =
     List("./assets/flame1.png", "./assets/flame2.png", "./assets/flame3.png", "./assets/flame4.png")
   val Wolf = List("./assets/wolf/run-0.png", "./assets/wolf/run-1.png", "./assets/wolf/run-2.png")
@@ -141,6 +144,10 @@ private object AssetPaths:
   // The sheet's "Summon" row — shown instead of NecromancerFrames while
   // Creature.frozenMs > 0 (Necromancien.md: rooted in place for 1s while it invokes an Ame).
   val NecromancerSummonFrames: List[String] = (0 until 8).map(i => f"./assets/necromancer/summon-$i%02d.png").toList
+  // Arbre Anime.md: cropped from a labeled "WALK" reference sheet supplied directly by
+  // the project owner (see LICENSE-tree.txt) — single-facing walk cycle, same
+  // rotate-to-face treatment as Wolf/Zombie/Necromancer/Soul.
+  val TreeFrames: List[String] = (0 until 6).map(i => f"./assets/tree/walk-$i%02d.png").toList
   private val Directions = List("front", "back", "left", "right")
   // 4-direction walk-cycle frame sets, keyed by direction — shared shape for any
   // creature animated this way (see newDirectionalFrames/syncCreatures' facing logic).
@@ -154,9 +161,9 @@ private object AssetPaths:
     List(
       Grove, Forest, Jungle, CaveRock, LabyrintheIcon, EgliseIcon, WatchtowerIcon, AngelIcon, Minotaur, Paladin,
       TombIcon, BlackCastleIcon, Vampire, LaboNaturelIcon, LaboSombreIcon, LaboDeRechercheIcon,
-      LaboDeLaLoiIcon, LaboDuChaosIcon, DeathHouseIcon
+      LaboDeLaLoiIcon, LaboDuChaosIcon, DeathHouseIcon, StonehengeIcon
     ) ++ GoblinFrames.values.flatten ++ ElfFrames.values.flatten ++ Flames ++ Wolf ++ ZombieFrames ++
-      NecromancerFrames ++ SoulFrames ++ NecromancerSummonFrames
+      NecromancerFrames ++ SoulFrames ++ NecromancerSummonFrames ++ TreeFrames
 
 private val CaveTint = 0xff7a45 // warm/fiery recolor for an otherwise cool-gray rock tile
 
@@ -183,7 +190,8 @@ private object BuildingVisuals:
     BuildingKind.LaboDeRecherche -> BuildingVisual(AssetPaths.LaboDeRechercheIcon, GridConfig.cellSize * 0.8, None),
     BuildingKind.LaboDeLaLoi -> BuildingVisual(AssetPaths.LaboDeLaLoiIcon, GridConfig.cellSize * 0.8, None),
     BuildingKind.LaboDuChaos -> BuildingVisual(AssetPaths.LaboDuChaosIcon, GridConfig.cellSize * 0.8, None),
-    BuildingKind.DeathHouse -> BuildingVisual(AssetPaths.DeathHouseIcon, GridConfig.cellSize * 1.1, None)
+    BuildingKind.DeathHouse -> BuildingVisual(AssetPaths.DeathHouseIcon, GridConfig.cellSize * 1.1, None),
+    BuildingKind.Stonehenge -> BuildingVisual(AssetPaths.StonehengeIcon, GridConfig.cellSize * 1.1, None)
   )
 
 // DOM id suffix per kind (index.html's #build-<slug> buttons and #<prefix>-<slug>
@@ -202,6 +210,7 @@ private def domSlug(kind: BuildingKind): String = kind match
   case BuildingKind.Tomb            => "tomb"
   case BuildingKind.BlackCastle     => "chateau-noir"
   case BuildingKind.DeathHouse      => "death-house"
+  case BuildingKind.Stonehenge      => "stonehenge"
   case BuildingKind.LaboNaturel     => "labo-naturel"
   case BuildingKind.LaboSombre      => "labo-sombre"
   case BuildingKind.LaboDeRecherche => "labo-de-recherche"
@@ -274,6 +283,7 @@ def onReady(app: Application, textures: js.Dictionary[Texture]): Unit =
   val necromancerFrames = js.Array(AssetPaths.NecromancerFrames.map(textures(_))*)
   val soulFrames = js.Array(AssetPaths.SoulFrames.map(textures(_))*)
   val necromancerSummonFrames = js.Array(AssetPaths.NecromancerSummonFrames.map(textures(_))*)
+  val treeFrames = js.Array(AssetPaths.TreeFrames.map(textures(_))*)
   val goblinFrames: Map[String, js.Array[Texture]] =
     AssetPaths.GoblinFrames.map { case (dir, paths) => dir -> js.Array(paths.map(textures(_))*) }
   val elfFrames: Map[String, js.Array[Texture]] =
@@ -435,6 +445,7 @@ def onReady(app: Application, textures: js.Dictionary[Texture]): Unit =
       necromancerFrames,
       soulFrames,
       necromancerSummonFrames,
+      treeFrames,
       flameFrames,
       isPlayer = true,
       h => hovered = h
@@ -451,6 +462,7 @@ def onReady(app: Application, textures: js.Dictionary[Texture]): Unit =
       necromancerFrames,
       soulFrames,
       necromancerSummonFrames,
+      treeFrames,
       flameFrames,
       isPlayer = false,
       h => hovered = h
@@ -571,6 +583,11 @@ private val LaboDuChaosTooltip =
   s"Labo du Chaos — cost ${Balance.LaboDuChaosCostFire.toInt} fire + ${Balance.LaboDuChaosCostCrystal.toInt} crystal. " +
     s"+${formatDecimal(Balance.CrystalPerSecPerLaboDuChaos)} crystal/s"
 
+private val StonehengeTooltip =
+  s"Stonehenge — cost ${Balance.StonehengeCostWood.toInt} wood. Spawns an Arbre Anime every " +
+    s"${(Balance.StonehengeSpawnIntervalMs / 1000).toInt}s — it stays in this maze and counts " +
+    s"toward the forest victory, instead of raiding the opponent"
+
 private val BuildingTooltips: Map[BuildingKind, String] = Map(
   BuildingKind.Grove -> GroveTooltip,
   BuildingKind.Cave -> CaveTooltip,
@@ -585,7 +602,8 @@ private val BuildingTooltips: Map[BuildingKind, String] = Map(
   BuildingKind.LaboSombre -> LaboSombreTooltip,
   BuildingKind.LaboDeRecherche -> LaboDeRechercheTooltip,
   BuildingKind.LaboDeLaLoi -> LaboDeLaLoiTooltip,
-  BuildingKind.LaboDuChaos -> LaboDuChaosTooltip
+  BuildingKind.LaboDuChaos -> LaboDuChaosTooltip,
+  BuildingKind.Stonehenge -> StonehengeTooltip
 )
 
 // canAfford is read at click time (not baked into the closure) since the player's
@@ -862,6 +880,7 @@ private def syncMaze(
     necromancerFrames: js.Array[Texture],
     soulFrames: js.Array[Texture],
     necromancerSummonFrames: js.Array[Texture],
+    treeFrames: js.Array[Texture],
     flames: js.Array[Texture],
     isPlayer: Boolean,
     setHovered: Option[HoverTarget] => Unit
@@ -879,6 +898,7 @@ private def syncMaze(
     necromancerFrames,
     soulFrames,
     necromancerSummonFrames,
+    treeFrames,
     flames,
     blocked,
     isPlayer,
@@ -895,6 +915,7 @@ private def syncMaze(
     zombieFrames,
     necromancerFrames,
     soulFrames,
+    treeFrames,
     flames,
     isPlayer,
     setHovered
@@ -912,6 +933,7 @@ private def syncCreatures(
     necromancerFrames: js.Array[Texture],
     soulFrames: js.Array[Texture],
     necromancerSummonFrames: js.Array[Texture],
+    treeFrames: js.Array[Texture],
     flames: js.Array[Texture],
     blocked: Set[(Int, Int)],
     isPlayer: Boolean,
@@ -934,6 +956,7 @@ private def syncCreatures(
         zombieFrames,
         necromancerFrames,
         soulFrames,
+        treeFrames,
         HoverTarget(isPlayer, HoverKind.EnemyH, c.id),
         setHovered
       )
@@ -944,7 +967,8 @@ private def syncCreatures(
       case UnitKind.Necromancer =>
         angle.foreach(a => g.rotation = a)
         applyNecromancerAnimation(sprites, c.id, g, isSummoning = c.frozenMs > 0, necromancerFrames, necromancerSummonFrames)
-      case UnitKind.Minotaur | UnitKind.Paladin | UnitKind.Wolf | UnitKind.Vampire | UnitKind.Zombie | UnitKind.Soul =>
+      case UnitKind.Minotaur | UnitKind.Paladin | UnitKind.Wolf | UnitKind.Vampire | UnitKind.Zombie | UnitKind.Soul |
+          UnitKind.Tree =>
         angle.foreach(a => g.rotation = a)
       case UnitKind.Goblin =>
         applyFacing(sprites, c.id, g, angle, goblinFrames)
@@ -1000,6 +1024,7 @@ private def newCreatureSprite(
     zombieFrames: js.Array[Texture],
     necromancerFrames: js.Array[Texture],
     soulFrames: js.Array[Texture],
+    treeFrames: js.Array[Texture],
     target: HoverTarget,
     setHovered: Option[HoverTarget] => Unit
 ): Container = kind match
@@ -1052,6 +1077,13 @@ private def newCreatureSprite(
     val s = newAnimatedSprite(soulFrames, GridConfig.cellSize * 0.55)
     wireHover(s, target, setHovered)
     addTo(world, s)
+  case UnitKind.Tree =>
+    // Single-facing 6-frame walk cycle (see AssetPaths.TreeFrames) — same rotate-to-face
+    // treatment as Wolf/Zombie/Necromancer/Soul. Bulkier than most (Arbre Anime.md: 100
+    // HP, the toughest non-raider unit).
+    val s = newAnimatedSprite(treeFrames, GridConfig.cellSize * 1.0)
+    wireHover(s, target, setHovered)
+    addTo(world, s)
 
 // Which of the 4 walk-cycle frame sets to show, from the enemy's facing angle
 // (Pixi's y-axis points down, so "front" = walking toward the viewer, i.e. down).
@@ -1073,6 +1105,7 @@ private def syncBuildings(
     zombieFrames: js.Array[Texture],
     necromancerFrames: js.Array[Texture],
     soulFrames: js.Array[Texture],
+    treeFrames: js.Array[Texture],
     flames: js.Array[Texture],
     isPlayer: Boolean,
     setHovered: Option[HoverTarget] => Unit
@@ -1117,7 +1150,8 @@ private def syncBuildings(
           wolfFrames,
           zombieFrames,
           necromancerFrames,
-          soulFrames
+          soulFrames,
+          treeFrames
         )
     }
   }
@@ -1226,7 +1260,8 @@ private def unitPreviewContainer(
     wolfFrames: js.Array[Texture],
     zombieFrames: js.Array[Texture],
     necromancerFrames: js.Array[Texture],
-    soulFrames: js.Array[Texture]
+    soulFrames: js.Array[Texture],
+    treeFrames: js.Array[Texture]
 ): Container = kind match
   case UnitKind.Elf         => newAnimatedSprite(elfFrames("front"), GridConfig.cellSize * 0.8)
   case UnitKind.Minotaur    => newSprite(textures(AssetPaths.Minotaur), GridConfig.cellSize * 1.1)
@@ -1237,6 +1272,7 @@ private def unitPreviewContainer(
   case UnitKind.Zombie      => newAnimatedSprite(zombieFrames, GridConfig.cellSize * 0.8)
   case UnitKind.Necromancer => newAnimatedSprite(necromancerFrames, GridConfig.cellSize * 0.9)
   case UnitKind.Soul        => newAnimatedSprite(soulFrames, GridConfig.cellSize * 0.55)
+  case UnitKind.Tree        => newAnimatedSprite(treeFrames, GridConfig.cellSize * 1.0)
 
 private def spawnUnitPreview(
     world: Container,
@@ -1248,7 +1284,8 @@ private def spawnUnitPreview(
     wolfFrames: js.Array[Texture],
     zombieFrames: js.Array[Texture],
     necromancerFrames: js.Array[Texture],
-    soulFrames: js.Array[Texture]
+    soulFrames: js.Array[Texture],
+    treeFrames: js.Array[Texture]
 ): Unit =
   val ghost = unitPreviewContainer(
     kind,
@@ -1258,7 +1295,8 @@ private def spawnUnitPreview(
     wolfFrames,
     zombieFrames,
     necromancerFrames,
-    soulFrames
+    soulFrames,
+    treeFrames
   )
   ghost.x = pos.x
   ghost.y = pos.y
@@ -1516,6 +1554,10 @@ private def hoverText(target: HoverTarget, battle: BattleState): Option[String] 
             s"Ame — HP ${c.hp.toInt}/${c.maxHp.toInt}, doesn't plunder; corrupts adjacent enemy buildings " +
               s"by ${Balance.SoulCorruptionPercentPerSec.toInt}%/s, healing its Necromancien " +
               s"${Balance.SoulHealPerSecPerBuilding.toInt} HP/s per building corrupted"
+          case UnitKind.Tree =>
+            s"Arbre Anime — HP ${c.hp.toInt}/${c.maxHp.toInt}, doesn't plunder; every " +
+              s"${(Balance.TreeCloneIntervalMs / 1000).toInt}s stops for ${(Balance.TreeCloneFreezeMs / 1000).toInt}s " +
+              s"and clones itself, counts toward the forest victory while alive"
           case _ =>
             val (name, plunders) = c.kind match
               case UnitKind.Elf => ("Elf", s"${Balance.PlunderPerUnit.toInt} wood")
@@ -1609,6 +1651,9 @@ private def perKindHoverText(kind: BuildingKind, b: Building, maze: MazeState): 
     s"Labo de la Loi — +${formatDecimal(effectiveRate(maze, kind, Resource.Crystal))} crystal/s"
   case BuildingKind.LaboDuChaos =>
     s"Labo du Chaos — +${formatDecimal(effectiveRate(maze, kind, Resource.Crystal))} crystal/s"
+  case BuildingKind.Stonehenge =>
+    val nextTreeS = (b.spawnCountdownMs / 1000).ceil.toInt
+    s"Stonehenge — spawns no resource, next Arbre Anime in ${nextTreeS}s (stays in this maze)"
 
 // ── HTML overlay ────────────────────────────────────────────────────────
 

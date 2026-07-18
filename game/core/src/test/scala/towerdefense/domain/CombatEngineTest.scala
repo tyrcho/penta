@@ -888,6 +888,87 @@ class CombatEngineTest extends munit.FunSuite:
     assertNotEquals(moved.pos, necromancer.pos)
   }
 
+  // ── Tree self-cloning (Stonehenge/Arbre Anime) ─────────────────────────
+  // Unlike the Necromancer/Soul (child appears on the summoner's own position), a Tree's
+  // clone appears one cell further along the summoner's own path — see CreatureSpec.
+  // spawnAtNextCell / CombatEngine.advanceCreatureSummons's nextPathCellCenter.
+
+  test("a tree clones itself onto the next path cell, not its own position, when its clone timer elapses") {
+    val tree = Creature(
+      1,
+      GridConfig.cellCenter(0, 0),
+      Balance.TreeMaxHp,
+      Balance.TreeMaxHp,
+      speedPerMs = 0.0,
+      UnitKind.Tree,
+      spawnCountdownMs = Balance.TreeCloneIntervalMs
+    )
+    val state = withResources().copy(creatures = List(tree), nextId = 2L)
+    val result = CombatEngine.tick(state, deltaMs = Balance.TreeCloneIntervalMs)
+    assertEquals(result.state.creatures.size, 2)
+    val clone = result.state.creatures.find(_.id != tree.id).get
+    val expectedNextCell = Pathfinding.shortestPath((0, 0), GridConfig.goalCell, Set.empty).get(1)
+    assertEquals(clone.pos, GridConfig.cellCenter(expectedNextCell._1, expectedNextCell._2))
+    assertNotEquals(clone.pos, tree.pos)
+  }
+
+  test("a tree's clone has full HP, the same kind, and its own fresh clone countdown") {
+    val tree = Creature(
+      1,
+      GridConfig.cellCenter(0, 0),
+      Balance.TreeMaxHp,
+      Balance.TreeMaxHp,
+      speedPerMs = 0.0,
+      UnitKind.Tree,
+      spawnCountdownMs = Balance.TreeCloneIntervalMs
+    )
+    val state = withResources().copy(creatures = List(tree), nextId = 2L)
+    val result = CombatEngine.tick(state, deltaMs = Balance.TreeCloneIntervalMs)
+    val clone = result.state.creatures.find(_.id != tree.id).get
+    assertEquals(clone.kind, UnitKind.Tree)
+    assertEquals(clone.hp, Balance.TreeMaxHp)
+    assertEquals(clone.maxHp, Balance.TreeMaxHp)
+    assertEquals(clone.spawnCountdownMs, Balance.TreeCloneIntervalMs)
+  }
+
+  test("a tree freezes for TreeCloneFreezeMs the instant it clones itself") {
+    val tree = Creature(
+      1,
+      GridConfig.cellCenter(0, 0),
+      Balance.TreeMaxHp,
+      Balance.TreeMaxHp,
+      // 0.0 speed, same as the equivalent Necromancer freeze test — isolates the freeze
+      // flag from the fact that movement (moveCreatures) runs *before* this tick's own
+      // freeze gets set (advanceCreatureSummons), so a nonzero-speed tree still takes one
+      // step on the very tick it clones.
+      speedPerMs = 0.0,
+      UnitKind.Tree,
+      spawnCountdownMs = Balance.TreeCloneIntervalMs
+    )
+    val state = withResources().copy(creatures = List(tree), nextId = 2L)
+    val result = CombatEngine.tick(state, deltaMs = Balance.TreeCloneIntervalMs)
+    val parent = result.state.creatures.find(_.id == tree.id).get
+    assertEquals(parent.frozenMs, Balance.TreeCloneFreezeMs)
+  }
+
+  test("a frozen tree does not advance, even with nonzero speed, until its freeze reaches zero") {
+    val tree = Creature(
+      1,
+      GridConfig.cellCenter(0, 0),
+      Balance.TreeMaxHp,
+      Balance.TreeMaxHp,
+      speedPerMs = Balance.TreeSpeedPerMs,
+      UnitKind.Tree,
+      spawnCountdownMs = Balance.TreeCloneIntervalMs,
+      frozenMs = Balance.TreeCloneFreezeMs
+    )
+    val state = withResources().copy(creatures = List(tree))
+    val result = CombatEngine.tick(state, deltaMs = 100.0)
+    val stillFrozen = result.state.creatures.find(_.id == tree.id).get
+    assertEquals(stillFrozen.pos, tree.pos)
+    assertEquals(stillFrozen.frozenMs, Balance.TreeCloneFreezeMs - 100.0)
+  }
+
   test("a soul's corruption heals its summoning necromancer by SoulHealPerSecPerBuilding, capped at max HP") {
     val grove = Building(100, col = 5, row = 5, BuildingKind.Grove, 0.0)
     val necromancer = Creature(

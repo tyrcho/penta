@@ -1,0 +1,8 @@
+Tree walk-cycle frames (assets/tree/walk-*.png) were cropped from a labeled "WALK"
+reference sheet (4 tree-ent variants x 6 frames each) supplied directly by the project
+owner via chat upload — no source page attached, so licensing/provenance isn't known.
+Uses the sheet's first (top) row, its most detailed variant.
+
+Per CLAUDE.md ("Art asset licensing is not a current concern"): used as-is on a
+best-effort basis for this local hobby project. Replace with properly licensed or
+commissioned assets before using it beyond that.

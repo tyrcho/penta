@@ -12,12 +12,17 @@ package towerdefense.domain
 // md: "pendant 1 seconde, il reste immobile" — see CombatEngine.advanceCreatureSummons/
 // stepCreature). Meaningless without `spawns` set, but kept as its own field rather than
 // folded into the pair so a future summoner without a freeze doesn't need a fake 0.0 there.
+// spawnAtNextCell: where the spawned creature appears — false (the summoner's own
+// position, e.g. a Soul appearing on top of its Necromancer) for every kind except Tree,
+// which clones itself one cell further along its own path instead (Arbre Anime.md — see
+// CombatEngine.advanceCreatureSummons's nextPathCellCenter).
 case class CreatureSpec(
     maxHp: Double,
     speedPerMs: Double,
     plunder: Map[Resource, Double],
     spawns: Option[(UnitKind, Double)] = None,
-    spawnFreezeMs: Double = 0.0
+    spawnFreezeMs: Double = 0.0,
+    spawnAtNextCell: Boolean = false
 )
 
 object CreatureSpecs:
@@ -64,5 +69,16 @@ object CreatureSpecs:
     // Ame.md gives it no plunder ability either — its value is corrupting adjacent enemy
     // buildings and healing its summoning Necromancer, a combat ability that stays outside
     // this spec (see CombatEngine's corruption/healSummoners handling).
-    UnitKind.Soul -> CreatureSpec(Balance.SoulMaxHp, Balance.SoulSpeedPerMs, plunder = Map.empty)
+    UnitKind.Soul -> CreatureSpec(Balance.SoulMaxHp, Balance.SoulSpeedPerMs, plunder = Map.empty),
+    // Arbre Anime.md gives it no plunder ability either — its value is the self-cloning
+    // that grows this maze's own forest tally (VictoryConditions.forestCount), a combat
+    // ability that stays outside this spec (see CombatEngine's advanceCreatureSummons).
+    UnitKind.Tree -> CreatureSpec(
+      Balance.TreeMaxHp,
+      Balance.TreeSpeedPerMs,
+      plunder = Map.empty,
+      spawns = Some(UnitKind.Tree -> Balance.TreeCloneIntervalMs),
+      spawnFreezeMs = Balance.TreeCloneFreezeMs,
+      spawnAtNextCell = true
+    )
   )

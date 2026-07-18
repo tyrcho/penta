@@ -47,6 +47,25 @@ object Balance:
   val ForestCorruptionHealPercentPerSec: Double = 0.3
   val JungleCorruptionHealPercentPerSec: Double = 0.5
 
+  // Stonehenge.md: Nature's fourth building, wood-only like Grove/Forest/Jungle but at a
+  // much steeper cost — spawns a self-cloning Arbre Anime (Tree) that stays in its OWN
+  // maze (unlike every other building's spawn, which crosses into the opponent's — see
+  // BattleEngine.stayHomeUnitKinds) and counts toward this maze's own forest-victory tally
+  // while alive (VictoryConditions.forestCount).
+  val StonehengeCostWood: Double = 150.0
+  val StonehengeSpawnIntervalMs: Double = 10_000.0
+  val TreeMaxHp: Double = 100.0
+  // "lent comme un Zombie" — same formula as Balance.ZombieSpeedPerMs (defined later, in
+  // the Mort section — inlined here to avoid a forward reference within this object).
+  val TreeSpeedPerMs: Double = ElfSpeedPerMs * 0.5
+  // Every TreeCloneIntervalMs a Tree freezes for TreeCloneFreezeMs and spawns a full-HP
+  // clone of itself one cell further along its own path, then resumes walking — same
+  // freeze+spawn shape as the Necromancer (CreatureSpec.spawnFreezeMs), except the clone
+  // appears at the *next* path cell rather than the summoner's own position (see
+  // CreatureSpec.spawnAtNextCell / CombatEngine.advanceCreatureSummons).
+  val TreeCloneIntervalMs: Double = 10_000.0
+  val TreeCloneFreezeMs: Double = 3_000.0
+
   // ── Chaos (AI) ───────────────────────────────────────────────────────────
   val CaveCostWood: Double = 0.0 // Cave.md: "cout en wood: 5"
   val CaveCostFire: Double = 10.0 // Cave.md: "cout en fire: 10"

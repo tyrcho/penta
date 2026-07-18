@@ -60,7 +60,7 @@ object SpendingPolicy:
   // VictoryConditions target (Science's research-tree victory condition is a deliberately
   // deferred gap — see BuildingSpecs' doc).
   private val natureBuildingKinds: Set[BuildingKind] =
-    Set(BuildingKind.Grove, BuildingKind.Forest, BuildingKind.Jungle)
+    Set(BuildingKind.Grove, BuildingKind.Forest, BuildingKind.Jungle, BuildingKind.Stonehenge)
   private val chaosBuildingKinds: Set[BuildingKind] =
     Set(BuildingKind.Cave, BuildingKind.Labyrinth)
   private val mortBuildingKinds: Set[BuildingKind] =

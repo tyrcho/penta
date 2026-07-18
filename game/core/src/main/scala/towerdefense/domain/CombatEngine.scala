@@ -381,6 +381,7 @@ object CombatEngine:
     val summoners = state.creatures.filter(c => CreatureSpecs.all(c.kind).spawns.isDefined)
     if summoners.isEmpty then state
     else
+      val blocked = state.buildingCells
       val (updatedSummoners, newCreatures, nextId) =
         summoners.foldLeft((List.empty[Creature], List.empty[Creature], state.nextId)) {
           case ((accUpdated, accNew, id), summoner) =>
@@ -390,9 +391,11 @@ object CombatEngine:
             if remaining > 0 then (summoner.copy(spawnCountdownMs = remaining) :: accUpdated, accNew, id)
             else
               val spec = CreatureSpecs.all(summonedKind)
+              val spawnPos =
+                if summonerSpec.spawnAtNextCell then nextPathCellCenter(summoner, blocked) else summoner.pos
               val summoned = Creature(
                 id,
-                summoner.pos,
+                spawnPos,
                 spec.maxHp,
                 spec.maxHp,
                 spec.speedPerMs,
@@ -412,6 +415,18 @@ object CombatEngine:
       val summonerIds = summoners.map(_.id).toSet
       val untouched = state.creatures.filterNot(c => summonerIds.contains(c.id))
       state.copy(creatures = untouched ++ updatedSummoners ++ newCreatures, nextId = nextId)
+
+  // Arbre Anime.md: a self-cloning Tree's copy appears one cell further along its own path
+  // (not on top of it, like the Necromancer/Soul's same-position summon — see
+  // CreatureSpec.spawnAtNextCell) — falls back to the summoner's own position if it's
+  // already at the goal or (shouldn't happen, placement guards this) has no route at all.
+  private def nextPathCellCenter(summoner: Creature, blocked: Set[(Int, Int)]): Vec2 =
+    val currentCell = GridConfig.cellOf(summoner.pos)
+    if currentCell == GridConfig.goalCell then summoner.pos
+    else
+      Pathfinding.shortestPath(currentCell, GridConfig.goalCell, blocked) match
+        case Some(path) if path.size > 1 => GridConfig.cellCenter(path(1)._1, path(1)._2)
+        case _                           => summoner.pos
 
   // Exposed (not private) so any other reader of live production rates — the UI's stock
   // display, tooltips — computes the exact same number tick applies, instead of

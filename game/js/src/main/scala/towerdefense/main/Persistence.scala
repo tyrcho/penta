@@ -97,7 +97,8 @@ private object Persistence:
         case UnitKind.Zombie      => "Zombie"
         case UnitKind.Vampire     => "Vampire"
         case UnitKind.Necromancer => "Necromancer"
-        case UnitKind.Soul        => "Soul",
+        case UnitKind.Soul        => "Soul"
+        case UnitKind.Tree        => "Tree",
       // Only Necromancer ever has a nonzero countdown/frozenMs (see CreatureSpec.spawns/
       // spawnFreezeMs) and only Soul ever has a summonedBy — inert (0.0/null) for every
       // other kind, same "cheap to carry" choice as Building's own spawnCountdownMs.
@@ -230,6 +231,7 @@ private object Persistence:
         case "Vampire"     => UnitKind.Vampire
         case "Necromancer" => UnitKind.Necromancer
         case "Soul"        => UnitKind.Soul
+        case "Tree"        => UnitKind.Tree
         case _             => UnitKind.Goblin,
       // Pre-Necromancer saves have none of these fields — default to 0.0/None, same
       // fallback shape as buildingsCorrupted/researchLevels' migration elsewhere in this file.
@@ -262,6 +264,7 @@ private object Persistence:
         case "LaboDeLaLoi"     => BuildingKind.LaboDeLaLoi
         case "LaboDuChaos"     => BuildingKind.LaboDuChaos
         case "Angel"           => BuildingKind.Angel
+        case "Stonehenge"      => BuildingKind.Stonehenge
         case _                 => BuildingKind.Watchtower,
       spawnCountdownMs = if js.isUndefined(d.spawnCountdownMs) then 0.0 else asDouble(d.spawnCountdownMs),
       corruptionPercent = if js.isUndefined(d.corruptionPercent) then 0.0 else asDouble(d.corruptionPercent)

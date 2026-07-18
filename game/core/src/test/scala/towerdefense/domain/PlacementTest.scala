@@ -195,6 +195,21 @@ class PlacementTest extends munit.FunSuite:
     assertEquals(result.resources(Resource.Wood), richState.resources(Resource.Wood))
   }
 
+  test("rejects a stonehenge without enough wood") {
+    val (col, row) = emptyCell
+    assertEquals(
+      Placement.tryPlaceBuilding(withResources(wood = Balance.StonehengeCostWood - 1.0), BuildingKind.Stonehenge, col, row).isLeft,
+      true
+    )
+  }
+
+  test("places a stonehenge and deducts its wood cost") {
+    val (col, row) = emptyCell
+    val result = Placement.tryPlaceBuilding(richState, BuildingKind.Stonehenge, col, row).toOption.get
+    assertEquals(result.buildings.count(_.kind == BuildingKind.Stonehenge), 1)
+    assertEquals(result.resources(Resource.Wood), richState.resources(Resource.Wood) - Balance.StonehengeCostWood)
+  }
+
   test("rejects placement that would seal off the only route to the goal") {
     val corridor = for row <- 0 until GridConfig.rows yield (1, row)
     val withWall = corridor.init.foldLeft(richState) { (state, cell) =>
