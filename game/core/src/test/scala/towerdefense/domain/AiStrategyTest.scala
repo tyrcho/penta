@@ -135,39 +135,53 @@ class AiStrategyTest extends munit.FunSuite:
     assertEquals(count(result, BuildingKind.Grove), 0)
   }
 
-  // Order measured via a full round-robin tournament (sim/runMain
-  // towerdefense.sim.tournament 3) after splitting AiStrategy into LayoutPolicy x
-  // SpendingPolicy combinations — see AiStrategy.ladder's doc and docs/adr/0010. Linear
-  // (the deterministic, non-reactive baseline) is always first.
-  test("the ladder is ordered weakest to strongest by measured win rate") {
-    // Re-measured after the manual Balance.scala rebalance (commit "balance") — see
-    // AiStrategy.ladder's doc for the full tournament run and why the order reshuffled far
-    // more violently than the earlier Death/Science re-measurement did.
+  // Order measured via `sim/runMain towerdefense.sim.rateTournament` (5 base catalog
+  // strategies x 5 build-speed periods, 1 match/pairing, 300 pairings total) — see
+  // AiStrategy.ladder's doc. Ranked by Elo rating, weakest to strongest, ascending.
+  test("the ladder is ordered weakest to strongest by measured Elo rating") {
     assertEquals(
       AiStrategy.ladder.map(_._1),
       Seq(
-        "comb-vertical",
-        "comb",
-        "linear",
-        "counter-only",
-        "resource-only",
-        "maze-counter",
-        "resource-maze",
-        "balanced",
-        "maze-plunder",
-        "comb-plunder",
-        "comb-vertical-plunder",
-        "maze-only",
-        "comb-resource",
-        "comb-vertical-resource",
-        "comb-corruption",
-        "maze-corruption"
+        "comb-corruption@8s",
+        "balanced@8s",
+        "linear@8s",
+        "maze-corruption@8s",
+        "resource-maze@8s",
+        "comb-corruption@5s",
+        "balanced@5s",
+        "linear@5s",
+        "linear@3s",
+        "comb-corruption@3s",
+        "maze-corruption@5s",
+        "balanced@3s",
+        "linear@2s",
+        "resource-maze@5s",
+        "linear@1s",
+        "maze-corruption@3s",
+        "balanced@2s",
+        "maze-corruption@2s",
+        "resource-maze@3s",
+        "maze-corruption@1s",
+        "resource-maze@2s",
+        "balanced@1s",
+        "resource-maze@1s",
+        "comb-corruption@2s",
+        "comb-corruption@1s"
       )
     )
   }
 
-  test("all is exactly the ladder's entries, so both stay in sync") {
-    assertEquals(AiStrategy.all, AiStrategy.ladder.toMap)
+  test("all contains both the catalog's plain names and the ladder's speed-suffixed names") {
+    assertEquals(AiStrategy.all, (AiStrategy.catalog ++ AiStrategy.ladder).toMap)
+    assertEquals(AiStrategy.all("linear"), AiStrategy.catalog.toMap.apply("linear"))
+    assert(AiStrategy.all.contains("linear@1s"))
+  }
+
+  test("every ladder entry's buildCooldownMs matches its name's speed suffix") {
+    AiStrategy.ladder.foreach { case (name, strategy) =>
+      val periodSec = name.split("@")(1).stripSuffix("s").toInt
+      assertEqualsDouble(strategy.buildCooldownMs, periodSec * 1_000.0, 1e-9, name)
+    }
   }
 
   // buildCooldownMs (see AiStrategy's doc): a trait-level default so every existing
