@@ -24,12 +24,12 @@ object Balance:
 
   val JungleUpgradeCostWood: Double = 50.0 // Jungle.md: "cout en bois: 60"
   val WoodPerSecPerJungle: Double = 1.0 // Jungle.md: "produit 1 bois / sec"
-  val WolfSpawnIntervalMs: Double = 5_000.0 // Jungle.md: "toutes les 5 sec"
+  val WolfSpawnIntervalMs: Double = 10_000.0 // Jungle.md: "toutes les 5 sec"
 
   val ElfMaxHp: Double = 5.0
   val ElfSpeedPerMs: Double = 0.05 // POC default: 50 px/s
 
-  val WolfMaxHp: Double = 40.0 // Loup.md: "PV: 40"
+  val WolfMaxHp: Double = 30.0 // Loup.md: "PV: 40"
   val WolfSpeedPerMs: Double = ElfSpeedPerMs * 1.5 // Loup.md: "1.5x plus vite que les unites standard"
   // Loup.md: "augmente la vitesse de deplacement des unites a 2 cases de 50%" — a
   // multiplier (1.5x), not a flat addition, applied to any other creature within range.
@@ -43,9 +43,9 @@ object Balance:
   // its own tier. Multiple nearby healers stack, same "summed, not just present/absent" as
   // multiple corrupting creatures on the same building — see
   // CombatEngine.healBuildingCorruption.
-  val GroveCorruptionHealPercentPerSec: Double = 1.0
-  val ForestCorruptionHealPercentPerSec: Double = 2.0
-  val JungleCorruptionHealPercentPerSec: Double = 3.0
+  val GroveCorruptionHealPercentPerSec: Double = 0.1
+  val ForestCorruptionHealPercentPerSec: Double = 0.3
+  val JungleCorruptionHealPercentPerSec: Double = 0.5
 
   // ── Chaos (AI) ───────────────────────────────────────────────────────────
   val CaveCostWood: Double = 0.0 // Cave.md: "cout en wood: 5"
@@ -93,7 +93,7 @@ object Balance:
   // and deals direct single-target damage instead of a passive adjacency aura.
   val WatchtowerCostWood: Double = 10.0 // "cout en bois: 10"
   val WatchtowerCostLight: Double = 20.0 // "cout en lumiere: 5"
-  val LightPerSecPerWatchtower: Double = 0.2 // POC tuning: raised from Tour de guet.md's 0.1/sec
+  val LightPerSecPerWatchtower: Double = 0.3 // POC tuning: raised from Tour de guet.md's 0.1/sec
   val WatchtowerDamagePerSec: Double = 10.0 // "Inflige 10 degats chaque seconde a une cible"
   // "jusqu'a 2 cases de distance" — Chebyshev (king-move) distance in cells, the usual
   // reading of tower range on a grid: any cell within a 5x5 block centered on the tower.
@@ -289,7 +289,7 @@ object Balance:
   // labs (Naturel/Sombre/de la Loi/du Chaos), not the pricier 15-crystal Labo de Recherche,
   // mirroring how Cave (cheaper) is buildable from StartingFire while Labyrinth (pricier)
   // isn't yet.
-  val StartingCrystal: Double = 20.0
+  val StartingCrystal: Double = 40.0
 
   val StartingResources: Map[Resource, Double] = Map(
     Resource.Wood -> StartingWood,
