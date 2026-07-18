@@ -95,10 +95,11 @@
        faction's resource+rate, victory progress, and building slots (real ones filled,
        the rest left as explicit placeholders when a faction has fewer than 5 buildings) —
        replaces the old build-button bar + stats row, which grouped by kind of info
-       (all resources together, all buttons together) rather than by faction. Science has
-       no victory condition wired yet (see BuildingSpecs' doc — its leveled research tree
-       is a deliberately deferred follow-up), so its row shows "Victory: —" the same way
-       Loi's row already does. */
+       (all resources together, all buttons together) rather than by faction. Science's
+       progress shows readyLabCount/4 other labs at the depth its own current fondamentale
+       level demands (see VictoryConditions.fondamentaleReadyLabCount) — Loi's "Paix
+       Eternelle" (win by building count at a turn-count deadline) has no such deadline
+       concept in this real-time game yet, so its row still shows "Victory: —". */
     #concept-rows {
       display: flex;
       flex-direction: column;
@@ -383,7 +384,7 @@
         <button class="build-btn" id="build-tomb"><img src="./assets/tomb.png" alt="Tombe"></button>
         <button class="build-btn" id="build-chateau-noir"><img src="./assets/chateau-noir.png" alt="Chateau Noir"></button>
         <button class="build-btn" id="build-death-house"><img src="./assets/death-house.png" alt="Maison de la Mort"></button>
-        <span class="build-slot-placeholder">?</span>
+        <button class="build-btn" id="build-passing-gate"><img src="./assets/passing-gate.png" alt="Portail"></button>
         <span class="build-slot-placeholder">?</span>
       </div>
       <div class="concept-side ai-side">
@@ -395,9 +396,7 @@
       <span class="concept-name science">Science</span>
       <div class="concept-side player-side">
         <span class="stat crystal">Crystal: <span id="player-crystal">0</span><span class="rate" id="player-crystal-rate"></span></span>
-        <!-- Science's leveled research tree/victory condition is a deliberately deferred
-             follow-up (see BuildingSpecs' doc) — placeholder until one exists, same as Loi's. -->
-        <span class="stat unknown">Victory: —</span>
+        <span class="stat progress">Fondamentale: <span id="player-fondamentale">0/0</span><span class="progress-bar"><span class="progress-bar-fill" id="player-fondamentale-bar"></span></span></span>
       </div>
       <div class="concept-buildings">
         <button class="build-btn" id="build-labo-naturel"><img src="./assets/labo-naturel.png" alt="Labo Naturel"></button>
@@ -407,7 +406,7 @@
         <button class="build-btn" id="build-labo-du-chaos"><img src="./assets/labo-du-chaos.png" alt="Labo du Chaos"></button>
       </div>
       <div class="concept-side ai-side">
-        <span class="stat unknown">Victory: —</span>
+        <span class="stat progress">Fondamentale: <span id="ai-fondamentale">0/0</span><span class="progress-bar"><span class="progress-bar-fill" id="ai-fondamentale-bar"></span></span></span>
         <span class="stat crystal">Crystal: <span id="ai-crystal">0</span><span class="rate" id="ai-crystal-rate"></span></span>
       </div>
     </div>

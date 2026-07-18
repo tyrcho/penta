@@ -168,10 +168,13 @@ object CombatEngine:
   // assumes a single flat Balance.AuraDamagePerSec per aura cell, so it currently
   // underrates how dangerous a path past an Angel specifically is; only the real per-tick
   // damage below (applyDamageSources) needs to be exact.
-  private[domain] val auraBuildingKinds: Set[BuildingKind] = Set(BuildingKind.Forest, BuildingKind.Jungle, BuildingKind.Angel)
+  private[domain] val auraBuildingKinds: Set[BuildingKind] =
+    Set(BuildingKind.Forest, BuildingKind.Jungle, BuildingKind.Angel, BuildingKind.PassingGate)
 
-  private def auraDamagePerSecFor(kind: BuildingKind): Double =
-    if kind == BuildingKind.Angel then Balance.AngelDamagePerSec else Balance.AuraDamagePerSec
+  private def auraDamagePerSecFor(kind: BuildingKind): Double = kind match
+    case BuildingKind.Angel       => Balance.AngelDamagePerSec
+    case BuildingKind.PassingGate => Balance.PassingGateDamagePerSec
+    case _                        => Balance.AuraDamagePerSec
 
   // Two independent damage sources, combined before Paladin shielding is applied once to
   // the total (not once per source) — Forest/Jungle deal passive damage-over-time to
@@ -218,10 +221,40 @@ object CombatEngine:
     }
     val dead = damaged.filter(_.hp <= 0)
     val deaths = dead.map(c => Death(c.id, c.kind, deathCause(c.id, fromForests, fromTowers)))
-    (state.copy(creatures = damaged.filter(_.hp > 0)), deaths)
+    val withoutDead = state.copy(creatures = damaged.filter(_.hp > 0))
+    (applyPassingGateHarvest(withoutDead, dead, deltaMs), deaths)
 
   private def mergeSum(a: Map[Long, Double], b: Map[Long, Double]): Map[Long, Double] =
     b.foldLeft(a) { case (acc, (id, amount)) => acc.updated(id, acc.getOrElse(id, 0.0) + amount) }
+
+  // Portail.md: any creature dying on one of a PassingGate's 4 orthogonally-adjacent cells
+  // this tick — regardless of what actually killed it (its own aura, a Watchtower, even a
+  // Forest/Angel aura elsewhere reaching the same cell) — earns the owning maze a Shadow
+  // reward equal to PassingGateDeathShadowFraction of `state`'s OWN current total resource
+  // stockpile (summed across all 5 Resource kinds, snapshotted once before any reward is
+  // added, so multiple qualifying deaths this tick don't compound off each other's reward).
+  // Two gates both adjacent to the same death each independently harvest it, and each also
+  // sets its own flashMs (Building.flashMs's doc) to the UI's kill-flash duration; a gate
+  // with no qualifying death nearby this tick just counts flashMs down toward 0 instead,
+  // same shape as spawnCountdownMs/frozenMs elsewhere in the domain.
+  private def applyPassingGateHarvest(state: MazeState, dead: List[Creature], deltaMs: Double): MazeState =
+    val deadCells = dead.map(c => GridConfig.cellOf(c.pos))
+    val totalResourcesSnapshot = state.resources.values.sum
+    val (buildings, shadowReward) =
+      state.buildings.foldLeft((List.empty[Building], 0.0)) { case ((acc, reward), b) =>
+        if b.kind != BuildingKind.PassingGate then (b :: acc, reward)
+        else
+          val adjacent = Pathfinding.neighbors((b.col, b.row)).toSet
+          val harvestedCount = deadCells.count(adjacent.contains)
+          if harvestedCount > 0 then
+            val gateReward = harvestedCount * Balance.PassingGateDeathShadowFraction * totalResourcesSnapshot
+            (b.copy(flashMs = Balance.PassingGateFlashMs) :: acc, reward + gateReward)
+          else (b.copy(flashMs = math.max(0.0, b.flashMs - deltaMs)) :: acc, reward)
+      }
+    val resources =
+      if shadowReward > 0 then state.resources.updated(Resource.Shadow, state.resources.getOrElse(Resource.Shadow, 0.0) + shadowReward)
+      else state.resources
+    state.copy(buildings = buildings.reverse, resources = resources)
 
   // A creature only dies from a source it actually took damage from this tick — Paladin
   // shielding can zero out one source's contribution to `damaged` without it being absent

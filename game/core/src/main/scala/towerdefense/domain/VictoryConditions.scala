@@ -93,6 +93,20 @@ object VictoryConditions:
         state.researchLevels.getOrElse(lab, 0) >= Balance.FondamentaleRequiredOtherLabLevel(fondamentaleLevel - 1)
       }
 
+  // Exposed for the UI's own progress display (Science's "Recherche fondamentale" row),
+  // mirroring forestCount/plunderTarget/corruptionTarget's "external reader needs the
+  // exact number" reasoning.
+  def fondamentaleLevel(state: MazeState): Int =
+    state.researchLevels.getOrElse(BuildingKind.LaboDeRecherche, 0)
+
+  def fondamentaleReadyLabCount(state: MazeState): Int =
+    val level = fondamentaleLevel(state)
+    if level <= 0 then 0
+    else
+      ResearchSpecs.otherLabKinds.count(lab =>
+        state.researchLevels.getOrElse(lab, 0) >= Balance.FondamentaleRequiredOtherLabLevel(level - 1)
+      )
+
   private def winReason(state: MazeState, opponent: MazeState): String =
     if forestCount(state, opponent) >= forestTarget(state, opponent) then
       s"Nature's unstoppable expansion: ${forestCount(state, opponent)} Forests built " +

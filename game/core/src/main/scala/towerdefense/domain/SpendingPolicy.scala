@@ -56,9 +56,11 @@ object SpendingPolicy:
   // (Tomb/BlackCastle) the opponent invests in more — moved verbatim from
   // CompositeStrategy.counterScore, now with Mort added alongside the original two once
   // its own victory condition (buildingsCorrupted) existed to counter. Loi (Church/
-  // Watchtower) and Science (the five Labo* kinds) never score: neither feeds a
-  // VictoryConditions target (Science's research-tree victory condition is a deliberately
-  // deferred gap — see BuildingSpecs' doc).
+  // Watchtower) never scores here: it feeds no VictoryConditions target (still a genuinely
+  // unwired gap — see BuildingSpecs' doc). Science (the five Labo* kinds) is also excluded,
+  // even though Recherche fondamentale IS a real victory condition now: countering it means
+  // researching your OWN labs' levels, not building more copies of a maxPerMaze: Some(1)
+  // building, so it doesn't fit this "build more of what they're building" heuristic.
   private val natureBuildingKinds: Set[BuildingKind] =
     Set(BuildingKind.Grove, BuildingKind.Forest, BuildingKind.Jungle, BuildingKind.Stonehenge)
   private val chaosBuildingKinds: Set[BuildingKind] =

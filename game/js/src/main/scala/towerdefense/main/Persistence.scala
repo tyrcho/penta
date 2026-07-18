@@ -116,7 +116,8 @@ private object Persistence:
       row = b.row,
       kind = b.kind.toString,
       spawnCountdownMs = b.spawnCountdownMs,
-      corruptionPercent = b.corruptionPercent
+      corruptionPercent = b.corruptionPercent,
+      flashMs = b.flashMs
     )
 
   private def encodeOutcome(m: MatchResult): js.Dynamic = m match
@@ -270,9 +271,13 @@ private object Persistence:
         case "LaboDuChaos"     => BuildingKind.LaboDuChaos
         case "Angel"           => BuildingKind.Angel
         case "Stonehenge"      => BuildingKind.Stonehenge
+        case "PassingGate"     => BuildingKind.PassingGate
         case _                 => BuildingKind.Watchtower,
       spawnCountdownMs = if js.isUndefined(d.spawnCountdownMs) then 0.0 else asDouble(d.spawnCountdownMs),
-      corruptionPercent = if js.isUndefined(d.corruptionPercent) then 0.0 else asDouble(d.corruptionPercent)
+      corruptionPercent = if js.isUndefined(d.corruptionPercent) then 0.0 else asDouble(d.corruptionPercent),
+      // Pre-PassingGate saves have no flashMs at all — default to 0.0 (no flash), same
+      // fallback shape as sizeFraction above.
+      flashMs = if js.isUndefined(d.flashMs) then 0.0 else asDouble(d.flashMs)
     )
 
   private def decodeOutcome(d: js.Dynamic): Option[MatchResult] =

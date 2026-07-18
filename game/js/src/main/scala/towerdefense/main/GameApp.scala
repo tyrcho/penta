@@ -129,6 +129,9 @@ private object AssetPaths:
   // Stonehenge.md's own reference image, supplied directly by the project owner — see
   // LICENSE-stonehenge.txt.
   val StonehengeIcon = "./assets/stonehenge.png"
+  // Portail.md: an original placeholder graphic (no external asset pack) — see
+  // LICENSE-passing-gate.txt.
+  val PassingGateIcon = "./assets/passing-gate.png"
   val Flames =
     List("./assets/flame1.png", "./assets/flame2.png", "./assets/flame3.png", "./assets/flame4.png")
   val Wolf = List("./assets/wolf/run-0.png", "./assets/wolf/run-1.png", "./assets/wolf/run-2.png")
@@ -162,11 +165,15 @@ private object AssetPaths:
     List(
       Grove, Forest, Jungle, CaveRock, LabyrintheIcon, EgliseIcon, WatchtowerIcon, AngelIcon, Minotaur, Paladin,
       TombIcon, BlackCastleIcon, Vampire, LaboNaturelIcon, LaboSombreIcon, LaboDeRechercheIcon,
-      LaboDeLaLoiIcon, LaboDuChaosIcon, DeathHouseIcon, StonehengeIcon
+      LaboDeLaLoiIcon, LaboDuChaosIcon, DeathHouseIcon, StonehengeIcon, PassingGateIcon
     ) ++ GoblinFrames.values.flatten ++ ElfFrames.values.flatten ++ Flames ++ Wolf ++ ZombieFrames ++
       NecromancerFrames ++ SoulFrames ++ NecromancerSummonFrames ++ TreeFrames.values.flatten
 
 private val CaveTint = 0xff7a45 // warm/fiery recolor for an otherwise cool-gray rock tile
+// Bright purple kill-flash for a PassingGate while Building.flashMs > 0 (see syncBuildings) —
+// the user asked for the flash to show only on an actual nearby death, not continuously like
+// an idle-animation glow would.
+private val PassingGateFlashTint = 0xd9a3ff
 
 // Per-BuildingKind rendering data — the JS-side mirror of BuildingSpecs, driving the one
 // generic syncBuildings instead of what used to be 5 near-identical sync functions.
@@ -192,7 +199,8 @@ private object BuildingVisuals:
     BuildingKind.LaboDeLaLoi -> BuildingVisual(AssetPaths.LaboDeLaLoiIcon, GridConfig.cellSize * 0.8, None),
     BuildingKind.LaboDuChaos -> BuildingVisual(AssetPaths.LaboDuChaosIcon, GridConfig.cellSize * 0.8, None),
     BuildingKind.DeathHouse -> BuildingVisual(AssetPaths.DeathHouseIcon, GridConfig.cellSize * 1.1, None),
-    BuildingKind.Stonehenge -> BuildingVisual(AssetPaths.StonehengeIcon, GridConfig.cellSize * 1.1, None)
+    BuildingKind.Stonehenge -> BuildingVisual(AssetPaths.StonehengeIcon, GridConfig.cellSize * 1.1, None),
+    BuildingKind.PassingGate -> BuildingVisual(AssetPaths.PassingGateIcon, GridConfig.cellSize * 1.0, None)
   )
 
 // DOM id suffix per kind (index.html's #build-<slug> buttons and #<prefix>-<slug>
@@ -211,6 +219,7 @@ private def domSlug(kind: BuildingKind): String = kind match
   case BuildingKind.Tomb            => "tomb"
   case BuildingKind.BlackCastle     => "chateau-noir"
   case BuildingKind.DeathHouse      => "death-house"
+  case BuildingKind.PassingGate     => "passing-gate"
   case BuildingKind.Stonehenge      => "stonehenge"
   case BuildingKind.LaboNaturel     => "labo-naturel"
   case BuildingKind.LaboSombre      => "labo-sombre"
@@ -591,6 +600,12 @@ private val StonehengeTooltip =
     s"other unit, keeps cloning smaller copies of itself along the way, and counts toward " +
     s"your own forest victory the whole time"
 
+private val PassingGateTooltip =
+  s"Portail — cost ${Balance.PassingGateCostShadow.toInt} shadow + ${Balance.PassingGateCostLight.toInt} light. " +
+    s"Spawns no unit — inflicts ${Balance.PassingGateDamagePerSec.toInt} dmg/s to enemies on its 4 adjacent " +
+    s"cells, and harvests ${(Balance.PassingGateDeathShadowFraction * 100).toInt}% of your own total " +
+    s"resources as bonus shadow whenever any creature dies on one of those cells"
+
 private val BuildingTooltips: Map[BuildingKind, String] = Map(
   BuildingKind.Grove -> GroveTooltip,
   BuildingKind.Cave -> CaveTooltip,
@@ -606,7 +621,8 @@ private val BuildingTooltips: Map[BuildingKind, String] = Map(
   BuildingKind.LaboDeRecherche -> LaboDeRechercheTooltip,
   BuildingKind.LaboDeLaLoi -> LaboDeLaLoiTooltip,
   BuildingKind.LaboDuChaos -> LaboDuChaosTooltip,
-  BuildingKind.Stonehenge -> StonehengeTooltip
+  BuildingKind.Stonehenge -> StonehengeTooltip,
+  BuildingKind.PassingGate -> PassingGateTooltip
 )
 
 // canAfford is read at click time (not baked into the closure) since the player's
@@ -1143,6 +1159,11 @@ private def syncBuildings(
       g.height = visual.renderSize
       g.tint = visual.tint.getOrElse(0xffffff)
     setPos(g, GridConfig.cellCenter(b.col, b.row))
+    // Only a PassingGate ever has a nonzero flashMs (Building.flashMs's doc) — tint it while
+    // a nearby death is still being "harvested", and fall back to its normal (untinted)
+    // look the rest of the time, instead of a continuous idle glow.
+    if b.kind == BuildingKind.PassingGate then
+      g.tint = if b.flashMs > 0 then PassingGateFlashTint else visual.tint.getOrElse(0xffffff)
     BuildingSpecs.all(b.kind).spawns.foreach { (unitKind, _) =>
       val previousCountdown = sprites.buildingTimers.getOrElse(b.id, b.spawnCountdownMs)
       sprites.buildingTimers(b.id) = b.spawnCountdownMs
@@ -1665,6 +1686,10 @@ private def perKindHoverText(kind: BuildingKind, b: Building, maze: MazeState): 
   case BuildingKind.Stonehenge =>
     val nextTreeS = (b.spawnCountdownMs / 1000).ceil.toInt
     s"Stonehenge — spawns no resource, next Arbre Anime in ${nextTreeS}s"
+  case BuildingKind.PassingGate =>
+    s"Portail — spawns no unit, ${Balance.PassingGateDamagePerSec.toInt} dmg/s to enemies on its 4 " +
+      s"adjacent cells; harvests ${(Balance.PassingGateDeathShadowFraction * 100).toInt}% of your own " +
+      s"total resources as shadow on every nearby death"
 
 // ── HTML overlay ────────────────────────────────────────────────────────
 
@@ -1711,6 +1736,15 @@ private def updateMazePanel(prefix: String, maze: MazeState, opponent: MazeState
   updateProgressBar(s"$prefix-forests-bar", forestCount, forestTarget)
   updateProgressBar(s"$prefix-plundered-bar", maze.resourcesPlundered, plunderTarget)
   updateProgressBar(s"$prefix-corrupted-bar", maze.buildingsCorrupted, corruptionTarget)
+  // Recherche fondamentale.md: no opponent-relative target here (see VictoryConditions'
+  // doc on hasWonViaFondamentale) — the "target" is just the 4 other labs, at whatever
+  // depth this maze's OWN current fondamentale level currently demands of them.
+  val fondamentaleLevel = VictoryConditions.fondamentaleLevel(maze)
+  val fondamentaleReady = VictoryConditions.fondamentaleReadyLabCount(maze)
+  val fondamentaleTotal = ResearchSpecs.otherLabKinds.size
+  document.getElementById(s"$prefix-fondamentale").textContent =
+    s"$fondamentaleReady/$fondamentaleTotal (Lv$fondamentaleLevel)"
+  updateProgressBar(s"$prefix-fondamentale-bar", fondamentaleReady, fondamentaleTotal)
 
 // Visual companion to the "current/target" text above — lets you compare at a glance
 // how close each maze is to winning via the same (opponent-relative) condition.

@@ -17,15 +17,19 @@ enum UnitKind derives CanEqual:
 // Grove/Forest in place (see BuildingSpecs.upgradesTo, Placement.tryUpgradeBuilding).
 //
 // Tomb/BlackCastle (Tombe.md/Chateau Noir.md) are Mort's pair, mirroring Cave/Labyrinth's
-// shape (two independently-buildable tiers, not an upgrade chain).
+// shape (two independently-buildable tiers, not an upgrade chain). PassingGate (Portail.md)
+// is a third, independently-costed Mort building — a Loi/Mort-flavored hybrid cost (see
+// BuildingSpecs), dealing its own aura damage like Forest/Jungle/Angel and, uniquely,
+// harvesting Shadow from any nearby death regardless of what killed it (see CombatEngine's
+// applyPassingGateHarvest and Building.flashMs).
 //
 // The five Labo* kinds are Science's buildings (Labo Naturel/Sombre/de Recherche/de la
-// Loi/du Chaos) — Crystal producers only in this pass; see BuildingSpecs' doc for what's
-// deliberately not implemented yet (the leveled research tree, its global modifiers, and
-// Science's victory condition).
+// Loi/du Chaos) — Crystal producers here; the leveled research tree, its global modifiers,
+// and its victory condition (Recherche fondamentale) all live on MazeState.researchLevels/
+// VictoryConditions instead, see BuildingSpecs' doc.
 enum BuildingKind derives CanEqual:
   case Grove, Forest, Jungle, Stonehenge, Cave, Labyrinth, Church, Watchtower, Angel, Tomb, BlackCastle,
-    DeathHouse, LaboNaturel, LaboSombre, LaboDeRecherche, LaboDeLaLoi, LaboDuChaos
+    DeathHouse, PassingGate, LaboNaturel, LaboSombre, LaboDeRecherche, LaboDeLaLoi, LaboDuChaos
 
 // A unit currently walking this maze. From this maze owner's point of view it's
 // always hostile — sent by one of the opponent's buildings. See CreatureSpecs for
@@ -68,13 +72,19 @@ case class Creature(
 // Zombie/Vampire standing adjacent has corrupted this building; defaults to 0.0 so every
 // existing call site (none of which involves Mort) is unaffected. Inert for any maze this
 // faction never touches, same reasoning as spawnCountdownMs above.
+// flashMs (Portail.md's PassingGate only): counts down from Balance.PassingGateFlashMs
+// whenever a creature dies adjacent to this gate (see CombatEngine.applyPassingGateHarvest)
+// — purely a UI cue (GameApp.scala tints the sprite while it's positive), read by nothing
+// else in the domain. Inert (0.0, never set) for every other kind, same reasoning as
+// spawnCountdownMs/corruptionPercent above.
 case class Building(
     id: Long,
     col: Int,
     row: Int,
     kind: BuildingKind,
     spawnCountdownMs: Double,
-    corruptionPercent: Double = 0.0
+    corruptionPercent: Double = 0.0,
+    flashMs: Double = 0.0
 )
 
 // One player's maze: grid, economy and units currently walking it. A battle is two of these.

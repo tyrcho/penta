@@ -366,6 +366,29 @@ class PlacementTest extends munit.FunSuite:
     )
   }
 
+  test("rejects a passing gate without enough shadow or light") {
+    val (col, row) = emptyCell
+    assertEquals(
+      Placement.tryPlaceBuilding(withResources(shadow = 0.0, light = 1_000.0), BuildingKind.PassingGate, col, row).isLeft,
+      true
+    )
+    assertEquals(
+      Placement.tryPlaceBuilding(withResources(shadow = 1_000.0, light = 0.0), BuildingKind.PassingGate, col, row).isLeft,
+      true
+    )
+  }
+
+  test("places a passing gate and deducts both shadow and light") {
+    val (col, row) = emptyCell
+    val result = Placement.tryPlaceBuilding(richState, BuildingKind.PassingGate, col, row).toOption.get
+    assertEquals(result.buildings.count(_.kind == BuildingKind.PassingGate), 1)
+    assertEquals(
+      result.resources(Resource.Shadow),
+      richState.resources(Resource.Shadow) - Balance.PassingGateCostShadow
+    )
+    assertEquals(result.resources(Resource.Light), richState.resources(Resource.Light) - Balance.PassingGateCostLight)
+  }
+
   test("places a black castle and deducts both wood and shadow") {
     val (col, row) = emptyCell
     val result = Placement.tryPlaceBuilding(richState, BuildingKind.BlackCastle, col, row).toOption.get

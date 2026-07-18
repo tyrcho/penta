@@ -173,6 +173,22 @@ object Balance:
   val ShadowPerSecPerDeathHouse: Double = 0.5 // "Produit 0.5 ombre / sec"
   val NecromancerSpawnIntervalMs: Double = 10_000.0 // "Envoie un Necromancien toutes les 10 secondes"
 
+  // Portail.md: Mort's fourth building — no unit spawn at all, unlike Tomb/BlackCastle/
+  // DeathHouse. A hybrid Loi/Mort cost (Light + Shadow, no Wood), dealing passive aura
+  // damage to the 4 orthogonally-adjacent cells (same adjacency rule/auraBuildingKinds
+  // treatment as Forest/Jungle/Angel — see CombatEngine.auraDamagePerSecFor), and uniquely
+  // harvesting Shadow whenever ANY creature (not just ones it damaged itself) dies on one of
+  // those 4 cells (see CombatEngine.applyPassingGateHarvest) — a percentage of the owning
+  // maze's OWN current total resource stockpile (summed across all 5 Resource kinds), not a
+  // steal from the opponent like Goblin/Minotaur's plunder.
+  val PassingGateCostShadow: Double = 60.0
+  val PassingGateCostLight: Double = 30.0
+  val PassingGateDamagePerSec: Double = 3.0
+  val PassingGateDeathShadowFraction: Double = 0.03
+  // How long the sprite's kill-flash tint stays visible (GameApp.scala) after a harvest —
+  // a UI-only cue, see Building.flashMs's doc.
+  val PassingGateFlashMs: Double = 500.0
+
   val NecromancerMaxHp: Double = 40.0 // Necromancien.md: "PV: 40"
   // Necromancien.md: "Se deplace lentement... comme un Zombie" — same pace, not just the
   // same wording, so it stays derived rather than a second copy of the same number.

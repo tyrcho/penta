@@ -2,9 +2,9 @@ package towerdefense.domain
 
 // What a building costs, what it produces (per second), and what unit it spawns (and
 // how often) — the data-driven replacement for the old per-faction case classes. Combat
-// abilities (Forest/Jungle's aura, Watchtower's ranged damage, Wolf's speed buff) are NOT
-// modeled here — they stay as kind-based special cases in CombatEngine, reading Balance's
-// constants directly.
+// abilities (Forest/Jungle/Angel/PassingGate's aura, Watchtower's ranged damage, Wolf's
+// speed buff) are NOT modeled here — they stay as kind-based special cases in CombatEngine,
+// reading Balance's constants directly.
 // buildableDirectly: false for Forest/Jungle — Nature's upgrade chain (Bosquet.md/
 // Foret.md/Jungle.md) only lets Grove be placed from scratch; Forest and Jungle are
 // reached by upgrading an existing Grove/Forest via Placement.tryUpgradeBuilding, using
@@ -13,21 +13,16 @@ package towerdefense.domain
 // possible de controler qu'un seul laboratoire de chaque type") — every other kind is
 // unlimited (None), see Placement.checkMaxCount.
 //
-// Deliberately NOT modeled here yet: Science's leveled research tree (5 levels/lab,
-// doubling cost per level — Recherches*.md/Recherche fondamentale.md) and its global
-// modifiers (building cost reduction, building damage boost, plunder efficiency boost,
-// opponent victory-target increase) or Science's own victory condition. Those touch
-// every other faction's numbers (a genuine architecture change — new per-maze research-
-// level state, cross-cutting modifiers threaded through Balance/CombatEngine/Placement/
-// VictoryConditions) rather than being new data rows like a building/unit is. The vault's
-// spec for the fundamental-research victory condition is well-defined once read as its
-// own 5-level research (Recherche fondamentale.md's numbered list is per-level, not per-
-// lab): level N requires all 4 other labs at level (6-N) or higher — level 1 needs every
-// other lab at 5, level 5 needs them only at 1+, trading fondamentale's own doubling cost
-// against the other labs'. This is a scope decision, not an ambiguity: deferred by choice
-// to a follow-up rather than built alongside Death this session. Labs are wired up here
-// only as Crystal producers, same deliberate-gap treatment CLAUDE.md/README already give
-// Loi's unwired victory condition.
+// Science's leveled research tree (5 levels/lab, doubling cost per level — Recherches*.md/
+// Recherche fondamentale.md), its global modifiers (building cost reduction, building
+// damage boost, plunder efficiency boost, opponent victory-target increase), and its own
+// victory condition are all implemented — see Placement.tryResearch, ResearchSpecs, and
+// VictoryConditions.hasWonViaFondamentale/fondamentaleLevel/fondamentaleReadyLabCount.
+// Labs are wired up here only as Crystal producers; the research-level state itself lives
+// on MazeState.researchLevels, not in this per-building-kind spec table. Loi's own victory
+// condition ("Paix Eternelle" — win by building count at a turn-count deadline) remains
+// genuinely unwired, since it needs a "number of turns"/time-limit concept this real-time
+// game doesn't have anywhere yet (see CLAUDE.md/README's note on that gap).
 case class BuildingSpec(
     cost: Map[Resource, Double],
     produces: Map[Resource, Double], // rate per second
@@ -107,6 +102,15 @@ object BuildingSpecs:
       cost = Map(Resource.Wood -> Balance.DeathHouseCostWood, Resource.Shadow -> Balance.DeathHouseCostShadow),
       produces = Map(Resource.Shadow -> Balance.ShadowPerSecPerDeathHouse),
       spawns = Some(UnitKind.Necromancer -> Balance.NecromancerSpawnIntervalMs)
+    ),
+    // Portail.md: no unit spawn, no passive production either — its value is entirely the
+    // aura damage + death-harvest combat ability in CombatEngine (see auraBuildingKinds/
+    // applyPassingGateHarvest), same "combat abilities stay out of this data table" split
+    // as Forest/Jungle/Angel's aura and Watchtower's ranged damage.
+    BuildingKind.PassingGate -> BuildingSpec(
+      cost = Map(Resource.Shadow -> Balance.PassingGateCostShadow, Resource.Light -> Balance.PassingGateCostLight),
+      produces = Map.empty,
+      spawns = None
     ),
     BuildingKind.LaboNaturel -> BuildingSpec(
       cost = Map(Resource.Wood -> Balance.LaboNaturelCostWood, Resource.Crystal -> Balance.LaboNaturelCostCrystal),

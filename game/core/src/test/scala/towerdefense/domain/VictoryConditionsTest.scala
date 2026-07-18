@@ -285,3 +285,52 @@ class VictoryConditionsTest extends munit.FunSuite:
       Some(true)
     )
   }
+
+  // ── Fondamentale progress (exposed for the UI's Science row) ────────────
+
+  test("fondamentaleLevel reads LaboDeRecherche's own research level, 0 if never researched") {
+    assertEquals(VictoryConditions.fondamentaleLevel(MazeState.initial), 0)
+    val state = MazeState.initial.copy(researchLevels = Map(BuildingKind.LaboDeRecherche -> 3))
+    assertEquals(VictoryConditions.fondamentaleLevel(state), 3)
+  }
+
+  test("fondamentaleReadyLabCount is 0 before Recherche fondamentale has ever been researched") {
+    // Every lab starts at level 0, which is >= the level-0 "required depth" of nothing in
+    // particular — without gating on fondamentaleLevel > 0 this would misleadingly read
+    // as "all labs ready" the instant a match starts.
+    val state = MazeState.initial.copy(
+      researchLevels = Map(
+        BuildingKind.LaboNaturel -> 5,
+        BuildingKind.LaboSombre -> 5,
+        BuildingKind.LaboDeLaLoi -> 5,
+        BuildingKind.LaboDuChaos -> 5
+      )
+    )
+    assertEquals(VictoryConditions.fondamentaleReadyLabCount(state), 0)
+  }
+
+  test("fondamentaleReadyLabCount counts exactly how many of the other 4 labs meet the CURRENT level's required depth") {
+    val state = MazeState.initial.copy(
+      researchLevels = Map(
+        BuildingKind.LaboDeRecherche -> 1, // requires every other lab at level 5
+        BuildingKind.LaboNaturel -> 5,
+        BuildingKind.LaboSombre -> 5,
+        BuildingKind.LaboDeLaLoi -> 4, // one short
+        BuildingKind.LaboDuChaos -> 0
+      )
+    )
+    assertEquals(VictoryConditions.fondamentaleReadyLabCount(state), 2)
+  }
+
+  test("fondamentaleReadyLabCount reflects a higher fondamentale level's easier requirement") {
+    val state = MazeState.initial.copy(
+      researchLevels = Map(
+        BuildingKind.LaboDeRecherche -> 5, // requires every other lab at only level 1
+        BuildingKind.LaboNaturel -> 1,
+        BuildingKind.LaboSombre -> 1,
+        BuildingKind.LaboDeLaLoi -> 1,
+        BuildingKind.LaboDuChaos -> 0 // one short
+      )
+    )
+    assertEquals(VictoryConditions.fondamentaleReadyLabCount(state), 3)
+  }

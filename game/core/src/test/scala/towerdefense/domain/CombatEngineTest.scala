@@ -455,6 +455,65 @@ class CombatEngineTest extends munit.FunSuite:
     )
   }
 
+  test("a passing gate damages an adjacent enemy at its own rate, not Forest's/Angel's") {
+    val gate = Building(100, col = 5, row = 5, BuildingKind.PassingGate, 0.0)
+    val adjacent =
+      Creature(1, GridConfig.cellCenter(6, 5), hp = 100.0, maxHp = 100.0, speedPerMs = 0.0, UnitKind.Elf)
+    val distant =
+      Creature(2, GridConfig.cellCenter(0, 0), hp = 100.0, maxHp = 100.0, speedPerMs = 0.0, UnitKind.Elf)
+    val state = withResources().copy(creatures = List(adjacent, distant), buildings = List(gate))
+    val result = CombatEngine.tick(state, deltaMs = 1000.0)
+    val byId = result.state.creatures.map(c => c.id -> c).toMap
+    assertEquals(byId(1).hp, adjacent.hp - Balance.PassingGateDamagePerSec)
+    assertEquals(byId(2).hp, distant.hp)
+  }
+
+  test(
+    "a passing gate harvests PassingGateDeathShadowFraction of the maze's own total resources " +
+      "when a creature dies on one of its 4 adjacent cells, and flashes"
+  ) {
+    val gate = Building(100, col = 5, row = 5, BuildingKind.PassingGate, 0.0)
+    // hp set to die from exactly one tick of the gate's own aura damage.
+    val dying =
+      Creature(1, GridConfig.cellCenter(6, 5), hp = Balance.PassingGateDamagePerSec, maxHp = 100.0, speedPerMs = 0.0, UnitKind.Elf)
+    val resources =
+      Map(Resource.Wood -> 100.0, Resource.Fire -> 0.0, Resource.Light -> 0.0, Resource.Shadow -> 20.0, Resource.Crystal -> 0.0)
+    val state = MazeState.initial.copy(resources = resources, creatures = List(dying), buildings = List(gate))
+    val result = CombatEngine.tick(state, deltaMs = 1000.0)
+    assertEquals(result.state.creatures, Nil)
+    val expectedShadow = resources(Resource.Shadow) + Balance.PassingGateDeathShadowFraction * resources.values.sum
+    assertEqualsDouble(result.state.resources(Resource.Shadow), expectedShadow, 1e-9)
+    assertEquals(result.state.buildings.head.flashMs, Balance.PassingGateFlashMs)
+  }
+
+  test("a passing gate does not harvest shadow (or flash) for a death far from it") {
+    val gate = Building(100, col = 0, row = 0, BuildingKind.PassingGate, 0.0)
+    val watchtower = Building(101, col = 10, row = 10, BuildingKind.Watchtower, 0.0)
+    val farDying =
+      Creature(1, GridConfig.cellCenter(9, 10), hp = Balance.WatchtowerDamagePerSec, maxHp = 100.0, speedPerMs = 0.0, UnitKind.Elf)
+    val resources =
+      Map(Resource.Wood -> 100.0, Resource.Fire -> 0.0, Resource.Light -> 0.0, Resource.Shadow -> 20.0, Resource.Crystal -> 0.0)
+    val state = MazeState.initial.copy(resources = resources, creatures = List(farDying), buildings = List(gate, watchtower))
+    val result = CombatEngine.tick(state, deltaMs = 1000.0)
+    assertEquals(result.state.creatures, Nil)
+    assertEqualsDouble(result.state.resources(Resource.Shadow), resources(Resource.Shadow), 1e-9)
+    assertEquals(result.state.buildings.find(_.kind == BuildingKind.PassingGate).get.flashMs, 0.0)
+  }
+
+  test("a passing gate's flash fades over time (deltaMs per tick) when no death is nearby") {
+    val gate = Building(100, col = 5, row = 5, BuildingKind.PassingGate, 0.0, flashMs = Balance.PassingGateFlashMs)
+    val state = withResources().copy(buildings = List(gate))
+    val result = CombatEngine.tick(state, deltaMs = 200.0)
+    assertEqualsDouble(result.state.buildings.head.flashMs, Balance.PassingGateFlashMs - 200.0, 1e-9)
+  }
+
+  test("a passing gate's flash never goes negative, even ticked past its full duration") {
+    val gate = Building(100, col = 5, row = 5, BuildingKind.PassingGate, 0.0, flashMs = 50.0)
+    val state = withResources().copy(buildings = List(gate))
+    val result = CombatEngine.tick(state, deltaMs = 200.0)
+    assertEquals(result.state.buildings.head.flashMs, 0.0)
+  }
+
   test("a paladin shields its target from watchtower damage too, not just forest aura") {
     val watchtower = Building(100, col = 5, row = 5, BuildingKind.Watchtower, 0.0)
     val shieldedPos = GridConfig.cellCenter(6, 5)
