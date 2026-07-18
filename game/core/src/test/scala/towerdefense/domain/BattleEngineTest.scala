@@ -40,16 +40,16 @@ class BattleEngineTest extends munit.FunSuite:
   // Stonehenge.md/Arbre Anime.md: unlike every other spawner (Elf/Necromancer above), a
   // Tree stays in its OWNER's maze instead of crossing into the opponent's — Stonehenge's
   // whole point is growing this maze's own forest tally through units, not raiders.
-  test("a stonehenge's Tree arrives in its OWN maze, not the opponent's") {
+  test("a stonehenge's Tree arrives in the opponent's maze, same as every other spawner") {
     val stonehenge = Building(100, col = 5, row = 5, BuildingKind.Stonehenge, Balance.StonehengeSpawnIntervalMs)
     val battle = BattleState(
       player = withResources().copy(buildings = List(stonehenge)),
       ai = withResources()
     )
     val result = BattleEngine.tick(battle, deltaMs = Balance.StonehengeSpawnIntervalMs)
-    assertEquals(result.ai.creatures, Nil)
-    assertEquals(result.player.creatures.size, 1)
-    val tree = result.player.creatures.head
+    assertEquals(result.player.creatures, Nil)
+    assertEquals(result.ai.creatures.size, 1)
+    val tree = result.ai.creatures.head
     assertEquals(tree.kind, UnitKind.Tree)
     // Starts with the full clone interval, like the Necromancer's first Soul countdown
     // above — its first clone shouldn't appear instantly.

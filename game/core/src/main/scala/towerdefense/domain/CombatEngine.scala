@@ -393,15 +393,24 @@ object CombatEngine:
               val spec = CreatureSpecs.all(summonedKind)
               val spawnPos =
                 if summonerSpec.spawnAtNextCell then nextPathCellCenter(summoner, blocked) else summoner.pos
+              // Arbre Anime.md: a self-clone (summonedKind == summoner.kind, i.e. a Tree
+              // cloning a Tree) is smaller than whatever made it, not just the original —
+              // any creature reachable through this chain can keep cloning. A different-
+              // kind summon (e.g. Necromancer -> Soul) is unaffected, full size as always.
+              val childSizeFraction =
+                if summonedKind == summoner.kind then
+                  math.max(Balance.TreeMinCloneSizeFraction, summoner.sizeFraction - Balance.TreeCloneSizeStepFraction)
+                else 1.0
               val summoned = Creature(
                 id,
                 spawnPos,
-                spec.maxHp,
-                spec.maxHp,
+                spec.maxHp * childSizeFraction,
+                spec.maxHp * childSizeFraction,
                 spec.speedPerMs,
                 summonedKind,
                 spawnCountdownMs = spec.spawns.map(_._2).getOrElse(0.0),
-                summonedBy = Some(summoner.id)
+                summonedBy = Some(summoner.id),
+                sizeFraction = childSizeFraction
               )
               (
                 summoner.copy(

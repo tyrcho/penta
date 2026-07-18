@@ -48,23 +48,29 @@ object Balance:
   val JungleCorruptionHealPercentPerSec: Double = 0.5
 
   // Stonehenge.md: Nature's fourth building, wood-only like Grove/Forest/Jungle but at a
-  // much steeper cost — spawns a self-cloning Arbre Anime (Tree) that stays in its OWN
-  // maze (unlike every other building's spawn, which crosses into the opponent's — see
-  // BattleEngine.stayHomeUnitKinds) and counts toward this maze's own forest-victory tally
-  // while alive (VictoryConditions.forestCount).
+  // much steeper cost — spawns a self-cloning Arbre Anime (Tree) like every other
+  // building's spawn (crosses into the opponent's maze, same as Forest's Elf/Jungle's Wolf).
   val StonehengeCostWood: Double = 150.0
   val StonehengeSpawnIntervalMs: Double = 10_000.0
   val TreeMaxHp: Double = 100.0
   // "lent comme un Zombie" — same formula as Balance.ZombieSpeedPerMs (defined later, in
   // the Mort section — inlined here to avoid a forward reference within this object).
   val TreeSpeedPerMs: Double = ElfSpeedPerMs * 0.5
-  // Every TreeCloneIntervalMs a Tree freezes for TreeCloneFreezeMs and spawns a full-HP
-  // clone of itself one cell further along its own path, then resumes walking — same
-  // freeze+spawn shape as the Necromancer (CreatureSpec.spawnFreezeMs), except the clone
-  // appears at the *next* path cell rather than the summoner's own position (see
-  // CreatureSpec.spawnAtNextCell / CombatEngine.advanceCreatureSummons).
+  // Every TreeCloneIntervalMs a Tree freezes for TreeCloneFreezeMs and spawns a clone of
+  // itself one cell further along its own path, then resumes walking — same freeze+spawn
+  // shape as the Necromancer (CreatureSpec.spawnFreezeMs), except the clone appears at the
+  // *next* path cell rather than the summoner's own position (see CreatureSpec.
+  // spawnAtNextCell / CombatEngine.advanceCreatureSummons).
   val TreeCloneIntervalMs: Double = 10_000.0
   val TreeCloneFreezeMs: Double = 3_000.0
+  // Each clone is TreeCloneSizeStepFraction smaller (size AND HP, both scaled together)
+  // than the parent that made it — e.g. the original (100%) makes an 80% clone, which in
+  // turn makes a 60% clone, and so on — floored at TreeMinCloneSizeFraction so the chain
+  // eventually stops shrinking (the smallest clones just keep making same-size clones)
+  // instead of shrinking toward zero forever. Any creature can clone, not just the
+  // original — see CombatEngine.advanceCreatureSummons.
+  val TreeCloneSizeStepFraction: Double = 0.2
+  val TreeMinCloneSizeFraction: Double = 0.2
 
   // ── Chaos (AI) ───────────────────────────────────────────────────────────
   val CaveCostWood: Double = 0.0 // Cave.md: "cout en wood: 5"

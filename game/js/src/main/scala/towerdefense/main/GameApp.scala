@@ -144,10 +144,6 @@ private object AssetPaths:
   // The sheet's "Summon" row — shown instead of NecromancerFrames while
   // Creature.frozenMs > 0 (Necromancien.md: rooted in place for 1s while it invokes an Ame).
   val NecromancerSummonFrames: List[String] = (0 until 8).map(i => f"./assets/necromancer/summon-$i%02d.png").toList
-  // Arbre Anime.md: cropped from a labeled "WALK" reference sheet supplied directly by
-  // the project owner (see LICENSE-tree.txt) — single-facing walk cycle, same
-  // rotate-to-face treatment as Wolf/Zombie/Necromancer/Soul.
-  val TreeFrames: List[String] = (0 until 6).map(i => f"./assets/tree/walk-$i%02d.png").toList
   private val Directions = List("front", "back", "left", "right")
   // 4-direction walk-cycle frame sets, keyed by direction — shared shape for any
   // creature animated this way (see newDirectionalFrames/syncCreatures' facing logic).
@@ -157,13 +153,18 @@ private object AssetPaths:
   // See LICENSE-elf.txt: cropped from CraftPix's Free Base 4-Direction Male Character
   // Pixel Art pack's unarmed walk-cycle sheet (6 frames per direction).
   val ElfFrames: Map[String, List[String]] = directionalFrames("elf", frameCount = 6)
+  // Arbre Anime.md: cropped from a labeled "WALK" reference sheet supplied directly by
+  // the project owner (see LICENSE-tree.txt) — the sheet's 4 rows are 4 distinct facings
+  // of the same tree-ent (row 1 has a visible face = front, row 2 = back, rows 3/4 = the
+  // two side angles), direction-swapped same as Goblin/Elf rather than rotate-to-face.
+  val TreeFrames: Map[String, List[String]] = directionalFrames("tree", frameCount = 6)
   val All: List[String] =
     List(
       Grove, Forest, Jungle, CaveRock, LabyrintheIcon, EgliseIcon, WatchtowerIcon, AngelIcon, Minotaur, Paladin,
       TombIcon, BlackCastleIcon, Vampire, LaboNaturelIcon, LaboSombreIcon, LaboDeRechercheIcon,
       LaboDeLaLoiIcon, LaboDuChaosIcon, DeathHouseIcon, StonehengeIcon
     ) ++ GoblinFrames.values.flatten ++ ElfFrames.values.flatten ++ Flames ++ Wolf ++ ZombieFrames ++
-      NecromancerFrames ++ SoulFrames ++ NecromancerSummonFrames ++ TreeFrames
+      NecromancerFrames ++ SoulFrames ++ NecromancerSummonFrames ++ TreeFrames.values.flatten
 
 private val CaveTint = 0xff7a45 // warm/fiery recolor for an otherwise cool-gray rock tile
 
@@ -283,11 +284,12 @@ def onReady(app: Application, textures: js.Dictionary[Texture]): Unit =
   val necromancerFrames = js.Array(AssetPaths.NecromancerFrames.map(textures(_))*)
   val soulFrames = js.Array(AssetPaths.SoulFrames.map(textures(_))*)
   val necromancerSummonFrames = js.Array(AssetPaths.NecromancerSummonFrames.map(textures(_))*)
-  val treeFrames = js.Array(AssetPaths.TreeFrames.map(textures(_))*)
   val goblinFrames: Map[String, js.Array[Texture]] =
     AssetPaths.GoblinFrames.map { case (dir, paths) => dir -> js.Array(paths.map(textures(_))*) }
   val elfFrames: Map[String, js.Array[Texture]] =
     AssetPaths.ElfFrames.map { case (dir, paths) => dir -> js.Array(paths.map(textures(_))*) }
+  val treeFrames: Map[String, js.Array[Texture]] =
+    AssetPaths.TreeFrames.map { case (dir, paths) => dir -> js.Array(paths.map(textures(_))*) }
   // No saved game (first-ever visit, or a cleared one) means there's nothing to resume
   // the player into — default to the attract-mode AI duel instead of an empty player-
   // controlled maze. A saved game always resumes straight into Playing.
@@ -585,8 +587,8 @@ private val LaboDuChaosTooltip =
 
 private val StonehengeTooltip =
   s"Stonehenge — cost ${Balance.StonehengeCostWood.toInt} wood. Spawns an Arbre Anime every " +
-    s"${(Balance.StonehengeSpawnIntervalMs / 1000).toInt}s — it stays in this maze and counts " +
-    s"toward the forest victory, instead of raiding the opponent"
+    s"${(Balance.StonehengeSpawnIntervalMs / 1000).toInt}s — it raids the opponent like any " +
+    s"other unit, and can keep cloning smaller copies of itself along the way"
 
 private val BuildingTooltips: Map[BuildingKind, String] = Map(
   BuildingKind.Grove -> GroveTooltip,
@@ -880,7 +882,7 @@ private def syncMaze(
     necromancerFrames: js.Array[Texture],
     soulFrames: js.Array[Texture],
     necromancerSummonFrames: js.Array[Texture],
-    treeFrames: js.Array[Texture],
+    treeFrames: Map[String, js.Array[Texture]],
     flames: js.Array[Texture],
     isPlayer: Boolean,
     setHovered: Option[HoverTarget] => Unit
@@ -933,7 +935,7 @@ private def syncCreatures(
     necromancerFrames: js.Array[Texture],
     soulFrames: js.Array[Texture],
     necromancerSummonFrames: js.Array[Texture],
-    treeFrames: js.Array[Texture],
+    treeFrames: Map[String, js.Array[Texture]],
     flames: js.Array[Texture],
     blocked: Set[(Int, Int)],
     isPlayer: Boolean,
@@ -949,6 +951,7 @@ private def syncCreatures(
       newCreatureSprite(
         world,
         c.kind,
+        c.sizeFraction,
         textures,
         goblinFrames,
         elfFrames,
@@ -967,13 +970,14 @@ private def syncCreatures(
       case UnitKind.Necromancer =>
         angle.foreach(a => g.rotation = a)
         applyNecromancerAnimation(sprites, c.id, g, isSummoning = c.frozenMs > 0, necromancerFrames, necromancerSummonFrames)
-      case UnitKind.Minotaur | UnitKind.Paladin | UnitKind.Wolf | UnitKind.Vampire | UnitKind.Zombie | UnitKind.Soul |
-          UnitKind.Tree =>
+      case UnitKind.Minotaur | UnitKind.Paladin | UnitKind.Wolf | UnitKind.Vampire | UnitKind.Zombie | UnitKind.Soul =>
         angle.foreach(a => g.rotation = a)
       case UnitKind.Goblin =>
         applyFacing(sprites, c.id, g, angle, goblinFrames)
       case UnitKind.Elf =>
         applyFacing(sprites, c.id, g, angle, elfFrames)
+      case UnitKind.Tree =>
+        applyFacing(sprites, c.id, g, angle, treeFrames)
   }
 
 // Swaps the Necromancer's AnimatedSprite between its normal walk cycle and the sheet's
@@ -1017,6 +1021,7 @@ private def applyFacing(
 private def newCreatureSprite(
     world: Container,
     kind: UnitKind,
+    sizeFraction: Double,
     textures: js.Dictionary[Texture],
     goblinFrames: Map[String, js.Array[Texture]],
     elfFrames: Map[String, js.Array[Texture]],
@@ -1024,7 +1029,7 @@ private def newCreatureSprite(
     zombieFrames: js.Array[Texture],
     necromancerFrames: js.Array[Texture],
     soulFrames: js.Array[Texture],
-    treeFrames: js.Array[Texture],
+    treeFrames: Map[String, js.Array[Texture]],
     target: HoverTarget,
     setHovered: Option[HoverTarget] => Unit
 ): Container = kind match
@@ -1078,10 +1083,11 @@ private def newCreatureSprite(
     wireHover(s, target, setHovered)
     addTo(world, s)
   case UnitKind.Tree =>
-    // Single-facing 6-frame walk cycle (see AssetPaths.TreeFrames) — same rotate-to-face
-    // treatment as Wolf/Zombie/Necromancer/Soul. Bulkier than most (Arbre Anime.md: 100
-    // HP, the toughest non-raider unit).
-    val s = newAnimatedSprite(treeFrames, GridConfig.cellSize * 1.0)
+    // 4-direction walk cycle (see AssetPaths.TreeFrames — the sheet's 4 rows are 4
+    // facings of the same tree-ent), same direction-swapped treatment as Goblin/Elf.
+    // A self-cloned Tree renders smaller (Arbre Anime.md: each clone is
+    // Balance.TreeCloneSizeStepFraction smaller than its parent) — see Creature.sizeFraction.
+    val s = newAnimatedSprite(treeFrames("front"), GridConfig.cellSize * 1.0 * sizeFraction)
     wireHover(s, target, setHovered)
     addTo(world, s)
 
@@ -1105,7 +1111,7 @@ private def syncBuildings(
     zombieFrames: js.Array[Texture],
     necromancerFrames: js.Array[Texture],
     soulFrames: js.Array[Texture],
-    treeFrames: js.Array[Texture],
+    treeFrames: Map[String, js.Array[Texture]],
     flames: js.Array[Texture],
     isPlayer: Boolean,
     setHovered: Option[HoverTarget] => Unit
@@ -1261,7 +1267,7 @@ private def unitPreviewContainer(
     zombieFrames: js.Array[Texture],
     necromancerFrames: js.Array[Texture],
     soulFrames: js.Array[Texture],
-    treeFrames: js.Array[Texture]
+    treeFrames: Map[String, js.Array[Texture]]
 ): Container = kind match
   case UnitKind.Elf         => newAnimatedSprite(elfFrames("front"), GridConfig.cellSize * 0.8)
   case UnitKind.Minotaur    => newSprite(textures(AssetPaths.Minotaur), GridConfig.cellSize * 1.1)
@@ -1272,7 +1278,9 @@ private def unitPreviewContainer(
   case UnitKind.Zombie      => newAnimatedSprite(zombieFrames, GridConfig.cellSize * 0.8)
   case UnitKind.Necromancer => newAnimatedSprite(necromancerFrames, GridConfig.cellSize * 0.9)
   case UnitKind.Soul        => newAnimatedSprite(soulFrames, GridConfig.cellSize * 0.55)
-  case UnitKind.Tree        => newAnimatedSprite(treeFrames, GridConfig.cellSize * 1.0)
+  // Always the full-size original — only Stonehenge (a building) ever triggers this
+  // preview, and the original Tree it spawns always starts at sizeFraction 1.0.
+  case UnitKind.Tree => newAnimatedSprite(treeFrames("front"), GridConfig.cellSize * 1.0)
 
 private def spawnUnitPreview(
     world: Container,
@@ -1285,7 +1293,7 @@ private def spawnUnitPreview(
     zombieFrames: js.Array[Texture],
     necromancerFrames: js.Array[Texture],
     soulFrames: js.Array[Texture],
-    treeFrames: js.Array[Texture]
+    treeFrames: Map[String, js.Array[Texture]]
 ): Unit =
   val ghost = unitPreviewContainer(
     kind,
@@ -1555,9 +1563,10 @@ private def hoverText(target: HoverTarget, battle: BattleState): Option[String] 
               s"by ${Balance.SoulCorruptionPercentPerSec.toInt}%/s, healing its Necromancien " +
               s"${Balance.SoulHealPerSecPerBuilding.toInt} HP/s per building corrupted"
           case UnitKind.Tree =>
-            s"Arbre Anime — HP ${c.hp.toInt}/${c.maxHp.toInt}, doesn't plunder; every " +
+            val sizeNote = if c.sizeFraction < 1.0 then s" (${(c.sizeFraction * 100).toInt}% size)" else ""
+            s"Arbre Anime$sizeNote — HP ${c.hp.toInt}/${c.maxHp.toInt}, doesn't plunder; every " +
               s"${(Balance.TreeCloneIntervalMs / 1000).toInt}s stops for ${(Balance.TreeCloneFreezeMs / 1000).toInt}s " +
-              s"and clones itself, counts toward the forest victory while alive"
+              s"and clones a smaller copy of itself (down to ${(Balance.TreeMinCloneSizeFraction * 100).toInt}% size)"
           case _ =>
             val (name, plunders) = c.kind match
               case UnitKind.Elf => ("Elf", s"${Balance.PlunderPerUnit.toInt} wood")
@@ -1653,7 +1662,7 @@ private def perKindHoverText(kind: BuildingKind, b: Building, maze: MazeState): 
     s"Labo du Chaos — +${formatDecimal(effectiveRate(maze, kind, Resource.Crystal))} crystal/s"
   case BuildingKind.Stonehenge =>
     val nextTreeS = (b.spawnCountdownMs / 1000).ceil.toInt
-    s"Stonehenge — spawns no resource, next Arbre Anime in ${nextTreeS}s (stays in this maze)"
+    s"Stonehenge — spawns no resource, next Arbre Anime in ${nextTreeS}s"
 
 // ── HTML overlay ────────────────────────────────────────────────────────
 

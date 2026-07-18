@@ -99,12 +99,14 @@ private object Persistence:
         case UnitKind.Necromancer => "Necromancer"
         case UnitKind.Soul        => "Soul"
         case UnitKind.Tree        => "Tree",
-      // Only Necromancer ever has a nonzero countdown/frozenMs (see CreatureSpec.spawns/
-      // spawnFreezeMs) and only Soul ever has a summonedBy — inert (0.0/null) for every
-      // other kind, same "cheap to carry" choice as Building's own spawnCountdownMs.
+      // Only Necromancer/Tree ever have a nonzero countdown/frozenMs (see CreatureSpec.
+      // spawns/spawnFreezeMs), and only a Soul or a cloned Tree has a summonedBy — inert
+      // (0.0/null/1.0) for every other kind, same "cheap to carry" choice as Building's
+      // own spawnCountdownMs.
       spawnCountdownMs = c.spawnCountdownMs,
       summonedBy = c.summonedBy.map(_.toDouble).getOrElse(null).asInstanceOf[js.Any],
-      frozenMs = c.frozenMs
+      frozenMs = c.frozenMs,
+      sizeFraction = c.sizeFraction
     )
 
   private def encodeBuilding(b: Building): js.Dynamic =
@@ -239,7 +241,10 @@ private object Persistence:
       summonedBy =
         if js.isUndefined(d.summonedBy) || d.summonedBy == null then None
         else Some(asDouble(d.summonedBy).toLong),
-      frozenMs = if js.isUndefined(d.frozenMs) then 0.0 else asDouble(d.frozenMs)
+      frozenMs = if js.isUndefined(d.frozenMs) then 0.0 else asDouble(d.frozenMs),
+      // Pre-Stonehenge saves have no sizeFraction at all — default to 1.0 (full size),
+      // same fallback shape as spawnCountdownMs/frozenMs above.
+      sizeFraction = if js.isUndefined(d.sizeFraction) then 1.0 else asDouble(d.sizeFraction)
     )
 
   private def decodeBuilding(d: js.Dynamic): Building =

@@ -912,7 +912,7 @@ class CombatEngineTest extends munit.FunSuite:
     assertNotEquals(clone.pos, tree.pos)
   }
 
-  test("a tree's clone has full HP, the same kind, and its own fresh clone countdown") {
+  test("the original tree's clone is TreeCloneSizeStepFraction smaller (size and HP), same kind and fresh countdown") {
     val tree = Creature(
       1,
       GridConfig.cellCenter(0, 0),
@@ -921,14 +921,55 @@ class CombatEngineTest extends munit.FunSuite:
       speedPerMs = 0.0,
       UnitKind.Tree,
       spawnCountdownMs = Balance.TreeCloneIntervalMs
+      // sizeFraction defaults to 1.0 — this is the original, full-size tree.
     )
     val state = withResources().copy(creatures = List(tree), nextId = 2L)
     val result = CombatEngine.tick(state, deltaMs = Balance.TreeCloneIntervalMs)
     val clone = result.state.creatures.find(_.id != tree.id).get
+    val expectedFraction = 1.0 - Balance.TreeCloneSizeStepFraction
     assertEquals(clone.kind, UnitKind.Tree)
-    assertEquals(clone.hp, Balance.TreeMaxHp)
-    assertEquals(clone.maxHp, Balance.TreeMaxHp)
+    assertEqualsDouble(clone.sizeFraction, expectedFraction, 1e-9)
+    assertEqualsDouble(clone.hp, Balance.TreeMaxHp * expectedFraction, 1e-9)
+    assertEqualsDouble(clone.maxHp, Balance.TreeMaxHp * expectedFraction, 1e-9)
     assertEquals(clone.spawnCountdownMs, Balance.TreeCloneIntervalMs)
+  }
+
+  test("a clone can clone itself too, shrinking another TreeCloneSizeStepFraction from ITS OWN size") {
+    val cloneTree = Creature(
+      1,
+      GridConfig.cellCenter(0, 0),
+      hp = 80.0,
+      maxHp = 80.0,
+      speedPerMs = 0.0,
+      UnitKind.Tree,
+      spawnCountdownMs = Balance.TreeCloneIntervalMs,
+      summonedBy = Some(99L),
+      sizeFraction = 0.8
+    )
+    val state = withResources().copy(creatures = List(cloneTree), nextId = 2L)
+    val result = CombatEngine.tick(state, deltaMs = Balance.TreeCloneIntervalMs)
+    assertEquals(result.state.creatures.size, 2)
+    val grandchild = result.state.creatures.find(_.id != cloneTree.id).get
+    assertEqualsDouble(grandchild.sizeFraction, 0.6, 1e-9)
+    assertEqualsDouble(grandchild.maxHp, Balance.TreeMaxHp * 0.6, 1e-9)
+  }
+
+  test("cloning never shrinks below TreeMinCloneSizeFraction — a clone at the floor makes another at the floor") {
+    val tinyTree = Creature(
+      1,
+      GridConfig.cellCenter(0, 0),
+      hp = 20.0,
+      maxHp = 20.0,
+      speedPerMs = 0.0,
+      UnitKind.Tree,
+      spawnCountdownMs = Balance.TreeCloneIntervalMs,
+      summonedBy = Some(99L),
+      sizeFraction = Balance.TreeMinCloneSizeFraction
+    )
+    val state = withResources().copy(creatures = List(tinyTree), nextId = 2L)
+    val result = CombatEngine.tick(state, deltaMs = Balance.TreeCloneIntervalMs)
+    val clone = result.state.creatures.find(_.id != tinyTree.id).get
+    assertEqualsDouble(clone.sizeFraction, Balance.TreeMinCloneSizeFraction, 1e-9)
   }
 
   test("a tree freezes for TreeCloneFreezeMs the instant it clones itself") {

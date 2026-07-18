@@ -31,16 +31,21 @@ enum BuildingKind derives CanEqual:
 // always hostile — sent by one of the opponent's buildings. See CreatureSpecs for
 // per-kind stats/plunder, and CombatEngine for combat abilities (Paladin's shield,
 // Forest's aura, Watchtower's ranged damage), which stay kind-based special cases.
-// spawnCountdownMs: inert (0.0) for every kind except Necromancer (see CreatureSpec.spawns
-// and CombatEngine.advanceCreatureSummons) — same "inert field, cheap to carry" choice as
+// spawnCountdownMs: inert (0.0) for every kind whose CreatureSpec has no `spawns` (see
+// CombatEngine.advanceCreatureSummons) — same "inert field, cheap to carry" choice as
 // Building.spawnCountdownMs.
-// summonedBy: the id of the Necromancer that invoked this creature (only ever set for a
-// Soul — see Ame.md) — None for every other kind, including Necromancer itself (it's
-// spawned by a building, not another creature). Used solely to credit Ame.md's heal to
-// the *specific* Necromancer that summoned this Soul, not any Necromancer present.
+// summonedBy: the id of the creature that invoked this one via CreatureSpec.spawns (a
+// Soul's Necromancer — see Ame.md — or a Tree's parent clone — see Arbre Anime.md) — None
+// for a creature that arrived via a building's own spawn instead (every other kind, and
+// an "original" Tree). Used to credit Ame.md's heal to the *specific* Necromancer that
+// summoned a given Soul, not any Necromancer present.
 // frozenMs: how much longer this creature is rooted in place, not advancing toward the
 // goal — set by CombatEngine.advanceCreatureSummons the instant a summon triggers (see
 // CreatureSpec.spawnFreezeMs), inert (0.0) for every kind whose spec has no freeze.
+// sizeFraction: what fraction of its kind's base maxHp/render size this particular
+// creature has — 1.0 (full size) for every kind except a self-cloned Tree (Arbre Anime.md:
+// each clone is TreeCloneSizeStepFraction smaller than the parent that made it, floored at
+// TreeMinCloneSizeFraction — see CombatEngine.advanceCreatureSummons).
 case class Creature(
     id: Long,
     pos: Vec2,
@@ -50,7 +55,8 @@ case class Creature(
     kind: UnitKind,
     spawnCountdownMs: Double = 0.0,
     summonedBy: Option[Long] = None,
-    frozenMs: Double = 0.0
+    frozenMs: Double = 0.0,
+    sizeFraction: Double = 1.0
 )
 
 // Replaces the old per-faction Forest/Cave/Labyrinth/Eglise/Watchtower case classes —

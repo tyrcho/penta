@@ -38,14 +38,8 @@ object VictoryConditions:
   // reason: any external reader (the UI, the sim module's match logger) that wants to
   // display live progress needs the exact number `hasWon` itself compares against,
   // instead of re-deriving "which kinds count as a forest" and risking it drift.
-  // Also counts every living Tree creature in `state` (Arbre Anime.md/Stonehenge.md) —
-  // Stonehenge's whole point is growing this tally through self-cloning units instead of
-  // more Forest/Jungle buildings, so a Tree contributes exactly like a real forest while
-  // it's alive (walked off the goal, or killed, and it stops counting like anything else
-  // that leaves `state.creatures`).
   def forestCount(state: MazeState): Int =
-    state.buildings.count(b => realForestKinds.contains(b.kind)) +
-      state.creatures.count(_.kind == UnitKind.Tree)
+    state.buildings.count(b => realForestKinds.contains(b.kind))
 
   // Exposed (not just private) so the UI can display the live target, which moves
   // with the opponent's own count — see the module doc above.
