@@ -169,3 +169,27 @@ class AiStrategyTest extends munit.FunSuite:
   test("all is exactly the ladder's entries, so both stay in sync") {
     assertEquals(AiStrategy.all, AiStrategy.ladder.toMap)
   }
+
+  // buildCooldownMs (see AiStrategy's doc): a trait-level default so every existing
+  // strategy keeps today's exact pacing with zero code changes, overridable per-instance
+  // via RateLimited for anything that wants to tune "how fast" independently of "what".
+  test("buildCooldownMs defaults to Balance.AiBuildCooldownMs for any strategy that doesn't override it") {
+    assertEquals(LinearStrategy.buildCooldownMs, Balance.AiBuildCooldownMs)
+    assertEquals(ComposedStrategy(NoLayoutPreference, GrovePriority).buildCooldownMs, Balance.AiBuildCooldownMs)
+  }
+
+  test("RateLimited overrides buildCooldownMs but delegates every decision to the wrapped strategy") {
+    val fast = RateLimited(LinearStrategy, buildCooldownMs = 500.0)
+    assertEquals(fast.buildCooldownMs, 500.0)
+    val state = withResources(wood = Balance.GroveCostWood)
+    assertEquals(fast.maybeBuild(state, noOpponent), LinearStrategy.maybeBuild(state, noOpponent))
+  }
+
+  test("RateLimited forwards maybeUpgrade/maybeResearch/maybeDestroy to the wrapped strategy too") {
+    val rich = withResources(wood = 1_000.0)
+    val withGrove = Placement.tryPlaceBuilding(rich, BuildingKind.Grove, 5, 5).toOption.get
+    val fast = RateLimited(LinearStrategy, buildCooldownMs = 500.0)
+    assertEquals(fast.maybeUpgrade(withGrove, noOpponent), LinearStrategy.maybeUpgrade(withGrove, noOpponent))
+    assertEquals(fast.maybeResearch(withGrove, noOpponent), LinearStrategy.maybeResearch(withGrove, noOpponent))
+    assertEquals(fast.maybeDestroy(withGrove, noOpponent), LinearStrategy.maybeDestroy(withGrove, noOpponent))
+  }

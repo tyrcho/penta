@@ -142,6 +142,24 @@ class BattleEngineTest extends munit.FunSuite:
     assertEquals(buildingCount(cooldownElapsed.ai), 2)
   }
 
+  // RateLimited (see AiStrategy.buildCooldownMs's doc) lets a strategy's own build/upgrade/
+  // research pace be tuned independently of what/where it builds — BattleEngine must
+  // actually read the *strategy's* cooldown, not always fall back to the shared constant.
+  test("a RateLimited strategy resets its cooldown to its own buildCooldownMs, not the shared default") {
+    val fast = RateLimited(LinearStrategy, buildCooldownMs = 10.0)
+    val battle = BattleState.initial.copy(ai = withResources(wood = 10_000.0, fire = 10_000.0))
+    val afterFirstBuild = BattleEngine.tick(battle, deltaMs = 1.0, aiStrategy = fast)
+    assertEquals(buildingCount(afterFirstBuild.ai), 1)
+    assertEquals(afterFirstBuild.aiBuildCooldownMs, 10.0)
+
+    // Its short 10ms cooldown clears well before Balance.AiBuildCooldownMs (3000ms) would —
+    // a second building appears almost immediately, unlike the default-cooldown test above.
+    val secondBuild = BattleEngine.tick(afterFirstBuild, deltaMs = 9.0, aiStrategy = fast)
+    assertEquals(buildingCount(secondBuild.ai), 1) // 9ms < 10ms, still cooling down
+    val thirdTick = BattleEngine.tick(secondBuild, deltaMs = 1.0, aiStrategy = fast)
+    assertEquals(buildingCount(thirdTick.ai), 2)
+  }
+
   test("a goblin pillaging the player credits the stolen resources and tally to the AI") {
     val goalPos = GridConfig.cellCenter(GridConfig.goalCell._1, GridConfig.goalCell._2)
     val incomingGoblin =

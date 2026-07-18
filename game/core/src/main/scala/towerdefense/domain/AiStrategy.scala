@@ -28,6 +28,25 @@ trait AiStrategy:
   // (research compounds a maze's economy/defense the same way building/upgrading does).
   def maybeResearch(state: MazeState, opponent: MazeState): MazeState = state
 
+  // How long (ms) this strategy waits between build/upgrade/research attempts — see
+  // BattleEngine.maybeActThrottled, which resets its cooldown to this value after every
+  // attempt (successful or not). Defaults to the shared Balance.AiBuildCooldownMs so every
+  // existing strategy keeps today's exact pacing with no code changes; wrap any strategy in
+  // RateLimited to tune "how fast can this one build" independently of what/where it builds
+  // (see the sim tournament's own use of it for comparing build speed across strategies).
+  def buildCooldownMs: Double = Balance.AiBuildCooldownMs
+
+// Wraps any AiStrategy to override only how fast it may act (buildCooldownMs), delegating
+// every actual decision — what to build, where, whether to upgrade/research/destroy — to
+// `inner` unchanged. Lets "how fast" be tuned independently of "what"/"where" for any
+// existing strategy without giving each one (ComposedStrategy, LinearStrategy, ...) its own
+// cooldown constructor parameter — see AiStrategy.buildCooldownMs's doc.
+case class RateLimited(inner: AiStrategy, override val buildCooldownMs: Double) extends AiStrategy:
+  def maybeBuild(state: MazeState, opponent: MazeState): MazeState = inner.maybeBuild(state, opponent)
+  override def maybeDestroy(state: MazeState, opponent: MazeState): MazeState = inner.maybeDestroy(state, opponent)
+  override def maybeUpgrade(state: MazeState, opponent: MazeState): MazeState = inner.maybeUpgrade(state, opponent)
+  override def maybeResearch(state: MazeState, opponent: MazeState): MazeState = inner.maybeResearch(state, opponent)
+
 object AiStrategy:
   // Shared "first that works" maybeUpgrade body: try each of the strategy's own buildings
   // in order, and for each, try each of its upgradeOptions in listed order (Grove has just

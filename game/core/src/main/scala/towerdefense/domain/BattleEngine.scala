@@ -103,15 +103,16 @@ object BattleEngine:
 
   // Wood/fire production compounds with building count, so without a pace limit a side
   // can tile its whole maze within seconds — capping it to at most one *attempt* per
-  // Balance.AiBuildCooldownMs keeps it roughly as fast as a human tapping. The cooldown
-  // resets whether or not the attempt actually did anything: a strategy's scan is a
-  // Placement.tryPlace*/tryUpgradeBuilding call (with its own checks) per candidate cell,
-  // and retrying that scan every tick while broke — rather than once per cooldown
-  // window — is wasted work with no gameplay benefit, since resources barely move tick
-  // to tick. Upgrade and research share this same cooldown/slot with build (tried in that
-  // order) rather than getting their own: each compounds a maze's economy/defense just as
-  // building does, so pacing them separately would just let a side do all three every tick
-  // instead of one.
+  // strategy.buildCooldownMs (Balance.AiBuildCooldownMs by default — see AiStrategy's doc,
+  // and RateLimited for overriding it per-strategy) keeps it roughly as fast as a human
+  // tapping. The cooldown resets whether or not the attempt actually did anything: a
+  // strategy's scan is a Placement.tryPlace*/tryUpgradeBuilding call (with its own checks)
+  // per candidate cell, and retrying that scan every tick while broke — rather than once
+  // per cooldown window — is wasted work with no gameplay benefit, since resources barely
+  // move tick to tick. Upgrade and research share this same cooldown/slot with build (tried
+  // in that order) rather than getting their own: each compounds a maze's economy/defense
+  // just as building does, so pacing them separately would just let a side do all three
+  // every tick instead of one.
   private def maybeActThrottled(
       state: MazeState,
       opponent: MazeState,
@@ -122,7 +123,7 @@ object BattleEngine:
     else
       val upgraded = strategy.maybeUpgrade(state, opponent)
       val researched = strategy.maybeResearch(upgraded, opponent)
-      (strategy.maybeBuild(researched, opponent), Balance.AiBuildCooldownMs)
+      (strategy.maybeBuild(researched, opponent), strategy.buildCooldownMs)
 
   // Resources a Goblin plundered from the opponent land in the attacker's own economy
   // (Chaos.md: "arracher ses ressources"), and count toward the Chaos victory tally.
