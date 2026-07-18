@@ -744,16 +744,28 @@ class CombatEngineTest extends munit.FunSuite:
   }
 
   test("corruption healing never goes below 0%") {
-    val grove = Building(100, col = 5, row = 5, BuildingKind.Grove, 0.0, corruptionPercent = 0.5)
+    // Below the heal amount a full-second tick would apply, so it floors at 0 rather
+    // than going negative.
+    val grove = Building(
+      100,
+      col = 5,
+      row = 5,
+      BuildingKind.Grove,
+      0.0,
+      corruptionPercent = Balance.GroveCorruptionHealPercentPerSec / 2.0
+    )
     val state = withResources().copy(buildings = List(grove))
     val result = CombatEngine.tick(state, deltaMs = 1000.0)
     assertEquals(result.state.buildings.head.corruptionPercent, 0.0)
   }
 
   test("a nature building's own healing partially offsets an adjacent zombie's corruption in the same tick") {
+    // Grove and zombie flank the Cave from opposite sides (west/east) — both adjacent to
+    // it, neither on its own cell (corruption/healing only reach a building's neighbors,
+    // never the cell the corruptor/healer itself occupies).
     val grove = Building(100, col = 5, row = 5, BuildingKind.Grove, 0.0)
     val cave = Building(101, col = 6, row = 5, BuildingKind.Cave, 0.0)
-    val zombie = Creature(1, GridConfig.cellCenter(6, 5), Balance.ZombieMaxHp, Balance.ZombieMaxHp, 0.0, UnitKind.Zombie)
+    val zombie = Creature(1, GridConfig.cellCenter(7, 5), Balance.ZombieMaxHp, Balance.ZombieMaxHp, 0.0, UnitKind.Zombie)
     val state = withResources().copy(creatures = List(zombie), buildings = List(grove, cave))
     val result = CombatEngine.tick(state, deltaMs = 1000.0)
     // The zombie corrupts the Cave (adjacent to it) by ZombieCorruptionPercentPerSec, then
