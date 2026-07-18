@@ -38,6 +38,9 @@ enum BuildingKind derives CanEqual:
 // Soul — see Ame.md) — None for every other kind, including Necromancer itself (it's
 // spawned by a building, not another creature). Used solely to credit Ame.md's heal to
 // the *specific* Necromancer that summoned this Soul, not any Necromancer present.
+// frozenMs: how much longer this creature is rooted in place, not advancing toward the
+// goal — set by CombatEngine.advanceCreatureSummons the instant a summon triggers (see
+// CreatureSpec.spawnFreezeMs), inert (0.0) for every kind whose spec has no freeze.
 case class Creature(
     id: Long,
     pos: Vec2,
@@ -46,7 +49,8 @@ case class Creature(
     speedPerMs: Double,
     kind: UnitKind,
     spawnCountdownMs: Double = 0.0,
-    summonedBy: Option[Long] = None
+    summonedBy: Option[Long] = None,
+    frozenMs: Double = 0.0
 )
 
 // Replaces the old per-faction Forest/Cave/Labyrinth/Eglise/Watchtower case classes —

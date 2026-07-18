@@ -98,11 +98,12 @@ private object Persistence:
         case UnitKind.Vampire     => "Vampire"
         case UnitKind.Necromancer => "Necromancer"
         case UnitKind.Soul        => "Soul",
-      // Only Necromancer ever has a nonzero countdown (see CreatureSpec.spawns) and only
-      // Soul ever has a summonedBy — inert (0.0/null) for every other kind, same "cheap to
-      // carry" choice as Building's own spawnCountdownMs.
+      // Only Necromancer ever has a nonzero countdown/frozenMs (see CreatureSpec.spawns/
+      // spawnFreezeMs) and only Soul ever has a summonedBy — inert (0.0/null) for every
+      // other kind, same "cheap to carry" choice as Building's own spawnCountdownMs.
       spawnCountdownMs = c.spawnCountdownMs,
-      summonedBy = c.summonedBy.map(_.toDouble).getOrElse(null).asInstanceOf[js.Any]
+      summonedBy = c.summonedBy.map(_.toDouble).getOrElse(null).asInstanceOf[js.Any],
+      frozenMs = c.frozenMs
     )
 
   private def encodeBuilding(b: Building): js.Dynamic =
@@ -230,12 +231,13 @@ private object Persistence:
         case "Necromancer" => UnitKind.Necromancer
         case "Soul"        => UnitKind.Soul
         case _             => UnitKind.Goblin,
-      // Pre-Necromancer saves have neither field — default to 0.0/None, same fallback
-      // shape as buildingsCorrupted/researchLevels' migration elsewhere in this file.
+      // Pre-Necromancer saves have none of these fields — default to 0.0/None, same
+      // fallback shape as buildingsCorrupted/researchLevels' migration elsewhere in this file.
       spawnCountdownMs = if js.isUndefined(d.spawnCountdownMs) then 0.0 else asDouble(d.spawnCountdownMs),
       summonedBy =
         if js.isUndefined(d.summonedBy) || d.summonedBy == null then None
-        else Some(asDouble(d.summonedBy).toLong)
+        else Some(asDouble(d.summonedBy).toLong),
+      frozenMs = if js.isUndefined(d.frozenMs) then 0.0 else asDouble(d.frozenMs)
     )
 
   private def decodeBuilding(d: js.Dynamic): Building =

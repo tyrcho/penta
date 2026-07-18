@@ -52,7 +52,8 @@ object CombatEngine:
     val (s1, stolen, arrivals) = moveCreatures(state, deltaMs, attackerResearchLevels)
     val (s2, deaths) = applyDamageSources(s1, deltaMs)
     val (s3, corrupted, hitsByCreature) = applyCorruption(s2, deltaMs)
-    val s3b = healSummoners(s3, hitsByCreature, deltaMs)
+    val s3a = healBuildingCorruption(s3, deltaMs)
+    val s3b = healSummoners(s3a, hitsByCreature, deltaMs)
     val s4 = produceResources(s3b, deltaMs)
     val (s5, spawned) = advanceSpawnTimers(s4, deltaMs)
     val s6 = advanceCreatureSummons(s5, deltaMs)
@@ -101,6 +102,10 @@ object CombatEngine:
       val base = CreatureSpecs.all(kind).plunder
       Resource.values.map(res => res -> (base.getOrElse(res, 0.0) + bonus)).toMap
 
+  // Necromancien.md: "pendant 1 seconde, il reste immobile" (see CreatureSpec.
+  // spawnFreezeMs/Creature.frozenMs) — a frozen creature doesn't pathfind or move at all
+  // this tick, just burns down its own freeze timer; still takes damage normally (this
+  // check only short-circuits movement, applyDamageSources doesn't look at frozenMs).
   private def stepCreature(
       creature: Creature,
       allCreatures: List[Creature],
@@ -108,12 +113,14 @@ object CombatEngine:
       angelCells: Set[(Int, Int)],
       deltaMs: Double
   ): Either[Creature, Creature] =
-    val currentCell = GridConfig.cellOf(creature.pos)
-    if currentCell == GridConfig.goalCell then Right(creature)
+    if creature.frozenMs > 0 then Left(creature.copy(frozenMs = math.max(0.0, creature.frozenMs - deltaMs)))
     else
-      Pathfinding.shortestPath(currentCell, GridConfig.goalCell, blocked) match
-        case None => Left(creature) // no route right now (shouldn't happen, placement guards this)
-        case Some(path) => Left(advanceTowards(creature, allCreatures, angelCells, path, deltaMs))
+      val currentCell = GridConfig.cellOf(creature.pos)
+      if currentCell == GridConfig.goalCell then Right(creature)
+      else
+        Pathfinding.shortestPath(currentCell, GridConfig.goalCell, blocked) match
+          case None => Left(creature) // no route right now (shouldn't happen, placement guards this)
+          case Some(path) => Left(advanceTowards(creature, allCreatures, angelCells, path, deltaMs))
 
   private def advanceTowards(
       creature: Creature,
@@ -314,6 +321,36 @@ object CombatEngine:
       }.toMap
       (state.copy(buildings = remaining), corrosions, hitCountByCreature)
 
+  // Not from the vault's own numbers — added at the project owner's explicit request (see
+  // Balance.GroveCorruptionHealPercentPerSec's doc): each tier heals at its own rate.
+  private val natureCorruptionHealPercentPerSec: Map[BuildingKind, Double] = Map(
+    BuildingKind.Grove -> Balance.GroveCorruptionHealPercentPerSec,
+    BuildingKind.Forest -> Balance.ForestCorruptionHealPercentPerSec,
+    BuildingKind.Jungle -> Balance.JungleCorruptionHealPercentPerSec
+  )
+
+  // Mirrors applyCorruption's shape but in reverse (reduces corruptionPercent instead of
+  // raising it) and building-to-building rather than creature-to-building: a Nature
+  // building heals itself and its 8 surrounding buildings (Chebyshev distance <= 1, unlike
+  // the 4-orthogonal-neighbor rule everywhere else in this file — self-healing at distance
+  // 0 needs the wider metric anyway). Multiple nearby healers stack, same as multiple
+  // corrupting creatures do above. Runs after applyCorruption so it can partially (or
+  // fully) offset the same tick's corruption increase, but can't save a building that
+  // already hit CorruptionMaxPercent and was destroyed this tick — that's resolved first.
+  private def healBuildingCorruption(state: MazeState, deltaMs: Double): MazeState =
+    val healers = state.buildings.filter(b => natureCorruptionHealPercentPerSec.contains(b.kind))
+    if healers.isEmpty || !state.buildings.exists(_.corruptionPercent > 0.0) then state
+    else
+      state.copy(buildings = state.buildings.map { b =>
+        if b.corruptionPercent <= 0.0 then b
+        else
+          val heal = healers
+            .filter(h => chebyshevDistance((h.col, h.row), (b.col, b.row)) <= 1)
+            .map(h => natureCorruptionHealPercentPerSec(h.kind) * deltaMs / 1000.0)
+            .sum
+          if heal <= 0.0 then b else b.copy(corruptionPercent = math.max(0.0, b.corruptionPercent - heal))
+      })
+
   // Ame.md: "Chaque fois qu'elle corrompt un batiment, elle soigne le Necromancien... de 1
   // PV... Si sa corruption touche plusieurs batiments a la fois, elle soigne davantage" —
   // credited to the *specific* Necromancer each Soul was summoned by (Creature.summonedBy),
@@ -347,7 +384,8 @@ object CombatEngine:
       val (updatedSummoners, newCreatures, nextId) =
         summoners.foldLeft((List.empty[Creature], List.empty[Creature], state.nextId)) {
           case ((accUpdated, accNew, id), summoner) =>
-            val (summonedKind, intervalMs) = CreatureSpecs.all(summoner.kind).spawns.get
+            val summonerSpec = CreatureSpecs.all(summoner.kind)
+            val (summonedKind, intervalMs) = summonerSpec.spawns.get
             val remaining = summoner.spawnCountdownMs - deltaMs
             if remaining > 0 then (summoner.copy(spawnCountdownMs = remaining) :: accUpdated, accNew, id)
             else
@@ -363,7 +401,10 @@ object CombatEngine:
                 summonedBy = Some(summoner.id)
               )
               (
-                summoner.copy(spawnCountdownMs = remaining + intervalMs) :: accUpdated,
+                summoner.copy(
+                  spawnCountdownMs = remaining + intervalMs,
+                  frozenMs = summonerSpec.spawnFreezeMs
+                ) :: accUpdated,
                 summoned :: accNew,
                 id + 1
               )

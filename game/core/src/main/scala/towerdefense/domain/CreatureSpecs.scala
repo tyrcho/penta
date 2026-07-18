@@ -7,11 +7,17 @@ package towerdefense.domain
 // (Ame.md/Necromancien.md: a *creature* that itself periodically spawns another creature
 // into the same maze it's walking, unlike every building's spawn which crosses into the
 // opponent's maze — see CombatEngine.advanceCreatureSummons/BattleEngine.spawnCreature).
+// spawnFreezeMs: how long this creature stops advancing toward the goal the instant its
+// own `spawns` triggers — 0.0 (no freeze) for every kind except Necromancer (Necromancien.
+// md: "pendant 1 seconde, il reste immobile" — see CombatEngine.advanceCreatureSummons/
+// stepCreature). Meaningless without `spawns` set, but kept as its own field rather than
+// folded into the pair so a future summoner without a freeze doesn't need a fake 0.0 there.
 case class CreatureSpec(
     maxHp: Double,
     speedPerMs: Double,
     plunder: Map[Resource, Double],
-    spawns: Option[(UnitKind, Double)] = None
+    spawns: Option[(UnitKind, Double)] = None,
+    spawnFreezeMs: Double = 0.0
 )
 
 object CreatureSpecs:
@@ -52,7 +58,8 @@ object CreatureSpecs:
       Balance.NecromancerMaxHp,
       Balance.NecromancerSpeedPerMs,
       plunder = Map.empty,
-      spawns = Some(UnitKind.Soul -> Balance.SoulSummonIntervalMs)
+      spawns = Some(UnitKind.Soul -> Balance.SoulSummonIntervalMs),
+      spawnFreezeMs = Balance.NecromancerSummonFreezeMs
     ),
     // Ame.md gives it no plunder ability either — its value is corrupting adjacent enemy
     // buildings and healing its summoning Necromancer, a combat ability that stays outside

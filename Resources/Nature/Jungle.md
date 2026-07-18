@@ -11,3 +11,6 @@ Produit 1 bois / sec.
 Amelioration de la [Foret](Foret.md)
 
 Produit un [Loup](Loup.md) toutes les 5 sec.
+
+Soigne la corruption (voir [Corruption](../Mort/Corruption.md)) de lui-meme et des 8
+batiments environnants de 3% par seconde.

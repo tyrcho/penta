@@ -77,6 +77,10 @@ private class MazeSprites:
   // Which of a directional creature's (Goblin, Elf) 4 frame sets is currently applied —
   // avoids resetting the walk-cycle animation every tick, only when the facing changes.
   val directionalFacing = mutable.Map.empty[Long, String]
+  // Necromancer ids currently showing the sheet's "Summon" animation (Creature.frozenMs >
+  // 0) rather than their normal walk cycle — same "only swap textures on an actual state
+  // change" guard as directionalFacing, avoiding restarting the animation every tick.
+  val necromancerSummoning = mutable.Set.empty[Long]
   val buildings = mutable.Map.empty[Long, Sprite]
   // Only populated for kinds with a spawn timer (BuildingSpecs.all(_).spawns.isDefined) —
   // Watchtower is naturally absent, no special-casing needed.
@@ -129,6 +133,9 @@ private object AssetPaths:
   // row (per the project owner's instruction), Soul's are its "Soul: Walk" row.
   val NecromancerFrames: List[String] = (0 until 6).map(i => f"./assets/necromancer/walk-$i%02d.png").toList
   val SoulFrames: List[String] = (0 until 5).map(i => f"./assets/soul/walk-$i%02d.png").toList
+  // The sheet's "Summon" row — shown instead of NecromancerFrames while
+  // Creature.frozenMs > 0 (Necromancien.md: rooted in place for 1s while it invokes an Ame).
+  val NecromancerSummonFrames: List[String] = (0 until 8).map(i => f"./assets/necromancer/summon-$i%02d.png").toList
   private val Directions = List("front", "back", "left", "right")
   // 4-direction walk-cycle frame sets, keyed by direction — shared shape for any
   // creature animated this way (see newDirectionalFrames/syncCreatures' facing logic).
@@ -144,7 +151,7 @@ private object AssetPaths:
       TombIcon, BlackCastleIcon, Vampire, LaboNaturelIcon, LaboSombreIcon, LaboDeRechercheIcon,
       LaboDeLaLoiIcon, LaboDuChaosIcon, DeathHouseIcon
     ) ++ GoblinFrames.values.flatten ++ ElfFrames.values.flatten ++ Flames ++ Wolf ++ ZombieFrames ++
-      NecromancerFrames ++ SoulFrames
+      NecromancerFrames ++ SoulFrames ++ NecromancerSummonFrames
 
 private val CaveTint = 0xff7a45 // warm/fiery recolor for an otherwise cool-gray rock tile
 
@@ -261,6 +268,7 @@ def onReady(app: Application, textures: js.Dictionary[Texture]): Unit =
   val zombieFrames = js.Array(AssetPaths.ZombieFrames.map(textures(_))*)
   val necromancerFrames = js.Array(AssetPaths.NecromancerFrames.map(textures(_))*)
   val soulFrames = js.Array(AssetPaths.SoulFrames.map(textures(_))*)
+  val necromancerSummonFrames = js.Array(AssetPaths.NecromancerSummonFrames.map(textures(_))*)
   val goblinFrames: Map[String, js.Array[Texture]] =
     AssetPaths.GoblinFrames.map { case (dir, paths) => dir -> js.Array(paths.map(textures(_))*) }
   val elfFrames: Map[String, js.Array[Texture]] =
@@ -421,6 +429,7 @@ def onReady(app: Application, textures: js.Dictionary[Texture]): Unit =
       zombieFrames,
       necromancerFrames,
       soulFrames,
+      necromancerSummonFrames,
       flameFrames,
       isPlayer = true,
       h => hovered = h
@@ -436,6 +445,7 @@ def onReady(app: Application, textures: js.Dictionary[Texture]): Unit =
       zombieFrames,
       necromancerFrames,
       soulFrames,
+      necromancerSummonFrames,
       flameFrames,
       isPlayer = false,
       h => hovered = h
@@ -843,6 +853,7 @@ private def syncMaze(
     zombieFrames: js.Array[Texture],
     necromancerFrames: js.Array[Texture],
     soulFrames: js.Array[Texture],
+    necromancerSummonFrames: js.Array[Texture],
     flames: js.Array[Texture],
     isPlayer: Boolean,
     setHovered: Option[HoverTarget] => Unit
@@ -859,6 +870,7 @@ private def syncMaze(
     zombieFrames,
     necromancerFrames,
     soulFrames,
+    necromancerSummonFrames,
     flames,
     blocked,
     isPlayer,
@@ -877,6 +889,7 @@ private def syncCreatures(
     zombieFrames: js.Array[Texture],
     necromancerFrames: js.Array[Texture],
     soulFrames: js.Array[Texture],
+    necromancerSummonFrames: js.Array[Texture],
     flames: js.Array[Texture],
     blocked: Set[(Int, Int)],
     isPlayer: Boolean,
@@ -885,6 +898,7 @@ private def syncCreatures(
   val liveIds = maze.creatures.map(_.id).toSet
   removeStaleWithEffect(world, sprites.creatures, liveIds, flames)
   sprites.directionalFacing.filterInPlace((id, _) => liveIds.contains(id))
+  sprites.necromancerSummoning.filterInPlace(liveIds.contains)
   maze.creatures.foreach { c =>
     val g = sprites.creatures.getOrElseUpdate(
       c.id,
@@ -905,14 +919,35 @@ private def syncCreatures(
     setPos(g, c.pos)
     val angle = creatureFacingAngle(c, blocked)
     c.kind match
-      case UnitKind.Minotaur | UnitKind.Paladin | UnitKind.Wolf | UnitKind.Vampire | UnitKind.Zombie |
-          UnitKind.Necromancer | UnitKind.Soul =>
+      case UnitKind.Necromancer =>
+        angle.foreach(a => g.rotation = a)
+        applyNecromancerAnimation(sprites, c.id, g, isSummoning = c.frozenMs > 0, necromancerFrames, necromancerSummonFrames)
+      case UnitKind.Minotaur | UnitKind.Paladin | UnitKind.Wolf | UnitKind.Vampire | UnitKind.Zombie | UnitKind.Soul =>
         angle.foreach(a => g.rotation = a)
       case UnitKind.Goblin =>
         applyFacing(sprites, c.id, g, angle, goblinFrames)
       case UnitKind.Elf =>
         applyFacing(sprites, c.id, g, angle, elfFrames)
   }
+
+// Swaps the Necromancer's AnimatedSprite between its normal walk cycle and the sheet's
+// "Summon" row (Necromancien.md: rooted in place for 1s while it invokes an Ame — see
+// Creature.frozenMs), only when that state actually changes — same "avoid resetting the
+// animation every tick" guard as applyFacing below.
+private def applyNecromancerAnimation(
+    sprites: MazeSprites,
+    id: Long,
+    g: Container,
+    isSummoning: Boolean,
+    walkFrames: js.Array[Texture],
+    summonFrames: js.Array[Texture]
+): Unit =
+  val wasSummoning = sprites.necromancerSummoning.contains(id)
+  if isSummoning != wasSummoning then
+    if isSummoning then sprites.necromancerSummoning.add(id) else sprites.necromancerSummoning.remove(id)
+    val anim = g.asInstanceOf[AnimatedSprite]
+    anim.textures = if isSummoning then summonFrames else walkFrames
+    anim.play()
 
 // Swaps a directional creature's AnimatedSprite to the frame set matching its current
 // facing, only when the facing actually changes — avoids resetting the walk-cycle

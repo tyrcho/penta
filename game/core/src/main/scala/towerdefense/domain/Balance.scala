@@ -36,6 +36,17 @@ object Balance:
   val WolfSpeedAuraMultiplier: Double = 1.5
   val WolfSpeedAuraRangeCells: Int = 2
 
+  // Not from the vault's own numbers — added at the project owner's explicit request:
+  // each Nature building heals corruption (Corruption.md's mechanic) from itself and its 8
+  // surrounding buildings (a Chebyshev-distance-1 block, unlike the aura-damage/corruption
+  // rules elsewhere which only reach the 4 orthogonal neighbors), at a rate depending on
+  // its own tier. Multiple nearby healers stack, same "summed, not just present/absent" as
+  // multiple corrupting creatures on the same building — see
+  // CombatEngine.healBuildingCorruption.
+  val GroveCorruptionHealPercentPerSec: Double = 1.0
+  val ForestCorruptionHealPercentPerSec: Double = 2.0
+  val JungleCorruptionHealPercentPerSec: Double = 3.0
+
   // ── Chaos (AI) ───────────────────────────────────────────────────────────
   val CaveCostWood: Double = 0.0 // Cave.md: "cout en wood: 5"
   val CaveCostFire: Double = 10.0 // Cave.md: "cout en fire: 10"
@@ -145,6 +156,10 @@ object Balance:
   // another creature into the same maze it's currently walking, unlike every other spawn
   // in the game (always building -> opponent's maze) — see CombatEngine.advanceCreatureSummons.
   val SoulSummonIntervalMs: Double = 5_000.0
+  // Necromancien.md: "pendant 1 seconde, il reste immobile" — the instant it summons a
+  // Soul, it stops advancing toward the goal for this long (see CreatureSpec.spawnFreezeMs/
+  // Creature.frozenMs, CombatEngine.stepCreature).
+  val NecromancerSummonFreezeMs: Double = 1_000.0
 
   val SoulMaxHp: Double = 10.0 // Ame.md: "PV: 10"
   // Ame.md: "Se deplace a vitesse normale (1 case/sec)" — Elf's own pace is the game's
