@@ -651,15 +651,16 @@ private val CaveTooltip =
   s"Cave — cost ${Balance.CaveCostWood.toInt} wood + ${Balance.CaveCostFire.toInt} fire. " +
     s"+${formatDecimal(Balance.FirePerSecPerCave)} fire/s, spawns a Goblin every ${(Balance.GoblinSpawnIntervalMs / 1000).toInt}s"
 
+// The unit's own ability (plunder amount, shield, etc.) is appended generically via
+// spawnAbilitySuffix when this is shown (see BuildingTooltips/buildingHoverText), so this
+// string itself only needs cost/production/spawn-interval.
 private val LabyrintheTooltip =
   s"Labyrinthe — cost ${Balance.LabyrintheCostWood.toInt} wood + ${Balance.LabyrintheCostFire.toInt} fire. " +
-    s"Spawns a Minotaur every ${(Balance.MinotaurSpawnIntervalMs / 1000).toInt}s, " +
-    s"which plunders ${Balance.MinotaurPlunderPerUnit.toInt} wood + ${Balance.MinotaurPlunderPerUnit.toInt} fire on arrival"
+    s"Spawns a Minotaur every ${(Balance.MinotaurSpawnIntervalMs / 1000).toInt}s"
 
 private val EgliseTooltip =
   s"Eglise — cost ${Balance.EgliseCostWood.toInt} wood + ${Balance.EgliseCostLight.toInt} light. " +
-    s"+${formatDecimal(Balance.LightPerSecPerEglise)} light/s, spawns a Paladin every ${(Balance.PaladinSpawnIntervalMs / 1000).toInt}s, " +
-    s"which shields adjacent allies from ${Balance.PaladinAuraDamageReductionPerSec.toInt} dmg/s (doesn't plunder itself)"
+    s"+${formatDecimal(Balance.LightPerSecPerEglise)} light/s, spawns a Paladin every ${(Balance.PaladinSpawnIntervalMs / 1000).toInt}s"
 
 private val WatchtowerTooltip =
   s"Tour de guet — cost ${Balance.WatchtowerCostWood.toInt} wood + ${Balance.WatchtowerCostLight.toInt} light. " +
@@ -696,9 +697,7 @@ private val LaboFondamentalTooltip =
 
 private val StonehengeTooltip =
   s"Stonehenge — cost ${Balance.StonehengeCostWood.toInt} wood. Spawns an Arbre Anime every " +
-    s"${(Balance.StonehengeSpawnIntervalMs / 1000).toInt}s — it raids the opponent like any " +
-    s"other unit, keeps cloning smaller copies of itself along the way, and counts toward " +
-    s"your own forest victory the whole time"
+    s"${(Balance.StonehengeSpawnIntervalMs / 1000).toInt}s"
 
 private val PassingGateTooltip =
   s"Portail — cost ${Balance.PassingGateCostShadow.toInt} shadow + ${Balance.PassingGateCostLight.toInt} light. " +
@@ -706,6 +705,10 @@ private val PassingGateTooltip =
     s"cells, and harvests ${(Balance.PassingGateDeathShadowFraction * 100).toInt}% of your own total " +
     s"resources as bonus shadow whenever any creature dies on one of those cells"
 
+// spawnAbilitySuffix appended uniformly here (rather than baked into each *Tooltip val
+// above) — every kind that spawns a unit states what that unit does, before it's even
+// placed, without each constant needing to spell it out (and risk drifting from
+// unitAbilitySummary's own numbers).
 private val BuildingTooltips: Map[BuildingKind, String] = Map(
   BuildingKind.Grove -> GroveTooltip,
   BuildingKind.Cave -> CaveTooltip,
@@ -719,7 +722,7 @@ private val BuildingTooltips: Map[BuildingKind, String] = Map(
   BuildingKind.LaboFondamental -> LaboFondamentalTooltip,
   BuildingKind.Stonehenge -> StonehengeTooltip,
   BuildingKind.PassingGate -> PassingGateTooltip
-)
+).map { case (kind, text) => kind -> (text + spawnAbilitySuffix(kind)) }
 
 // canAfford is read at click time (not baked into the closure) since the player's
 // wood/fire change every tick — see updateBuildButtonsAffordability for the matching
@@ -1624,8 +1627,20 @@ private def upgradeOptionsInfo(
                     .map { case (res, amount) => s"${formatDecimal(amount)} ${resourceName(res)}" }
                     .mkString(", ")
                   val previewCountdown = nextSpec.spawns.map(_._2).getOrElse(0.0)
-                  val preview =
-                    buildingHoverText(nextKind, b.copy(kind = nextKind, spawnCountdownMs = previewCountdown), maze)
+                  // Upgrading always grants at least research level 1 for free (see
+                  // Placement.upgradeBuilding's doc) — the preview reflects that immediately,
+                  // rather than showing "no bonus yet" for a lab the click is about to unlock.
+                  val previewMaze =
+                    if ResearchSpecs.all.contains(nextKind) then
+                      maze.copy(researchLevels =
+                        maze.researchLevels.updated(nextKind, math.max(maze.researchLevels.getOrElse(nextKind, 0), 1))
+                      )
+                    else maze
+                  val preview = buildingHoverText(
+                    nextKind,
+                    b.copy(kind = nextKind, spawnCountdownMs = previewCountdown),
+                    previewMaze
+                  )
                   // A kind already claimed by another building of this maze (Note sur les
                   // laboratoires.md: one of each specific kind at a time) greys the button
                   // out here too, not just an unaffordable cost — Placement.tryUpgradeBuilding
@@ -1663,6 +1678,31 @@ private def upgradePlayerBuilding(battle: BattleState, mode: Mode, col: Int, row
   else
     Placement.tryUpgradeBuilding(battle.player, col, row, Some(targetKind)).map(p => battle.copy(player = p)).getOrElse(battle)
 
+// The concrete magnitude a lab's research level actually gives — same numbers
+// VictoryConditions/CombatEngine/Placement.effectiveCost themselves read (Balance.*ByLevel
+// via ResearchSpecs.effectAtLevel), so this can't silently drift from what leveling up
+// really does. Recherche fondamentale has no numeric effectByLevel (its own doc: "the
+// victory check itself") — described instead via Balance.FondamentaleRequiredOtherLabLevel,
+// the same list VictoryConditions.hasWonViaFondamentale compares against.
+private def researchEffectSummary(labKind: BuildingKind, level: Int): String =
+  val spec = ResearchSpecs.all(labKind)
+  labKind match
+    case BuildingKind.LaboNaturel => s"-${(spec.effectAtLevel(level) * 100).toInt}% building cost"
+    case BuildingKind.LaboSombre  => s"+${(spec.effectAtLevel(level) * 100).toInt}% opponent's victory targets"
+    case BuildingKind.LaboDuChaos => s"+${formatDecimal(spec.effectAtLevel(level))} plunder per resource, every unit"
+    case BuildingKind.LaboDeLaLoi => s"+${(spec.effectAtLevel(level) * 100).toInt}% building damage"
+    case BuildingKind.LaboDeRecherche =>
+      s"wins outright once every other lab reaches level ${Balance.FondamentaleRequiredOtherLabLevel(level - 1)}+"
+    case _ => ""
+
+// A specific lab's own live hover text (perKindHoverText) — current level plus what it's
+// actually buying, or an explicit "no bonus yet" at level 0 rather than researchEffectSummary's
+// level-0 numbers (which read oddly, e.g. "-0% building cost").
+private def researchLevelText(maze: MazeState, kind: BuildingKind): String =
+  val level = maze.researchLevels.getOrElse(kind, 0)
+  if level <= 0 then s"research level 0/${Balance.MaxResearchLevel} (no bonus yet)"
+  else s"research level $level/${Balance.MaxResearchLevel} (${researchEffectSummary(kind, level)})"
+
 // Only the player's own Science lab can be researched from the UI (the AI researches via
 // AiStrategy.maybeResearch instead) — mirrors upgradeInfo's shape/wiring, but keyed by
 // BuildingKind rather than cell/id: ResearchSpecs.all has no entry for non-lab kinds, and
@@ -1692,7 +1732,8 @@ private def researchInfo(target: HoverTarget, maze: MazeState): Option[(Int, Int
                 (
                   b.col,
                   b.row,
-                  s"Research level $nextLevel/${Balance.MaxResearchLevel} ($costText)",
+                  s"Research level $nextLevel/${Balance.MaxResearchLevel} ($costText) " +
+                    s"→ ${researchEffectSummary(b.kind, nextLevel)}",
                   Placement.canAfford(maze.resources, cost)
                 )
               )
@@ -1780,7 +1821,48 @@ private def hoverText(target: HoverTarget, battle: BattleState): Option[String] 
 // building kind is a fair corruption target (Corruption.md gives no kind restriction),
 // so it isn't part of the per-kind match itself.
 private def buildingHoverText(kind: BuildingKind, b: Building, maze: MazeState): String =
-  perKindHoverText(kind, b, maze) + corruptionSuffix(b)
+  perKindHoverText(kind, b, maze) + spawnAbilitySuffix(kind) + corruptionSuffix(b)
+
+// A short ability fragment for a creature kind — same numbers as hoverText's own EnemyH
+// branch (kept in sync by construction: both read the same Balance constants), but without
+// the HP prefix, since this is meant to be appended to a *building's* tooltip/hover text,
+// not shown on the creature itself. Every building that spawns a unit gets this appended
+// (see spawnAbilitySuffix) so its tooltip states not just "spawns a Goblin" but what a
+// Goblin actually does once it arrives.
+private def unitAbilitySummary(kind: UnitKind): String = kind match
+  case UnitKind.Elf => s"plunders ${Balance.PlunderPerUnit.toInt} wood on arrival"
+  case UnitKind.Goblin =>
+    s"plunders ${Balance.PlunderPerUnit.toInt} wood + ${Balance.PlunderPerUnit.toInt} fire on arrival"
+  case UnitKind.Minotaur =>
+    s"plunders ${Balance.MinotaurPlunderPerUnit.toInt} wood + ${Balance.MinotaurPlunderPerUnit.toInt} fire on arrival"
+  case UnitKind.Paladin =>
+    s"doesn't plunder — shields adjacent allies from ${Balance.PaladinAuraDamageReductionPerSec.toInt} dmg/s"
+  case UnitKind.Wolf =>
+    s"doesn't plunder — speeds up allies within ${Balance.WolfSpeedAuraRangeCells} cells by " +
+      s"${((Balance.WolfSpeedAuraMultiplier - 1) * 100).toInt}%"
+  case UnitKind.Zombie =>
+    s"doesn't plunder — corrupts adjacent enemy buildings by ${Balance.ZombieCorruptionPercentPerSec.toInt}%/s"
+  case UnitKind.Vampire =>
+    s"doesn't plunder — corrupts adjacent enemy buildings by ${Balance.VampireCorruptionPercentPerSec.toInt}%/s, " +
+      s"takes ${(Balance.VampireDamageReductionFraction * 100).toInt}% less damage"
+  case UnitKind.Necromancer =>
+    s"doesn't plunder — invokes a Soul every ${(Balance.SoulSummonIntervalMs / 1000).toInt}s"
+  case UnitKind.Soul =>
+    s"doesn't plunder — corrupts adjacent enemy buildings by ${Balance.SoulCorruptionPercentPerSec.toInt}%/s"
+  case UnitKind.Tree =>
+    s"doesn't plunder — every ${(Balance.TreeCloneIntervalMs / 1000).toInt}s clones a smaller copy of itself " +
+      s"(down to ${(Balance.TreeMinCloneSizeFraction * 100).toInt}% size), counting toward its owner's " +
+      s"forest victory the whole time"
+
+// Appended to any building's tooltip (static build-button hover — BuildingTooltips — or
+// live per-building hover — buildingHoverText) that spawns a unit, so its value proposition
+// is visible whether or not the building has been placed yet. Empty for a kind with no
+// spawn (BuildingSpecs.all(_).spawns = None — Watchtower, Angel, PassingGate, every Science
+// lab), which already describes its own (non-unit) ability directly in its own text.
+private def spawnAbilitySuffix(kind: BuildingKind): String =
+  BuildingSpecs.all(kind).spawns match
+    case Some((unitKind, _)) => s" — $unitKind ${unitAbilitySummary(unitKind)}"
+    case None                => ""
 
 // Zombie/Vampire corrupt buildings gradually toward Balance.CorruptionMaxPercent (see
 // CombatEngine's corruption mechanic) — shown only once corruption has actually started,
@@ -1838,19 +1920,19 @@ private def perKindHoverText(kind: BuildingKind, b: Building, maze: MazeState): 
       s"no research bonus — upgrade it into a specific lab below"
   case BuildingKind.LaboNaturel =>
     s"Labo Naturel — +${formatDecimal(effectiveRate(maze, kind, Resource.Crystal))} crystal/s, " +
-      s"research level ${maze.researchLevels.getOrElse(kind, 0)}/${Balance.MaxResearchLevel}"
+      researchLevelText(maze, kind)
   case BuildingKind.LaboSombre =>
     s"Labo Sombre — +${formatDecimal(effectiveRate(maze, kind, Resource.Crystal))} crystal/s, " +
-      s"research level ${maze.researchLevels.getOrElse(kind, 0)}/${Balance.MaxResearchLevel}"
+      researchLevelText(maze, kind)
   case BuildingKind.LaboDeRecherche =>
     s"Labo de Recherche — +${formatDecimal(effectiveRate(maze, kind, Resource.Crystal))} crystal/s, " +
-      s"research level ${maze.researchLevels.getOrElse(kind, 0)}/${Balance.MaxResearchLevel}"
+      researchLevelText(maze, kind)
   case BuildingKind.LaboDeLaLoi =>
     s"Labo de la Loi — +${formatDecimal(effectiveRate(maze, kind, Resource.Crystal))} crystal/s, " +
-      s"research level ${maze.researchLevels.getOrElse(kind, 0)}/${Balance.MaxResearchLevel}"
+      researchLevelText(maze, kind)
   case BuildingKind.LaboDuChaos =>
     s"Labo du Chaos — +${formatDecimal(effectiveRate(maze, kind, Resource.Crystal))} crystal/s, " +
-      s"research level ${maze.researchLevels.getOrElse(kind, 0)}/${Balance.MaxResearchLevel}"
+      researchLevelText(maze, kind)
   case BuildingKind.Stonehenge =>
     val nextTreeS = (b.spawnCountdownMs / 1000).ceil.toInt
     s"Stonehenge — spawns no resource, next Arbre Anime in ${nextTreeS}s"
