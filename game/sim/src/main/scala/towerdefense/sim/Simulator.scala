@@ -276,14 +276,16 @@ object Simulator:
   // One-off comparison of build *speed* (RateLimited.buildCooldownMs) crossed with a
   // handful of existing ladder strategies, all in one round-robin — not a permanent ladder
   // addition (AiStrategy.all is untouched; these names only exist inside this run, via
-  // tournamentStandings' resolve override). Rates are builds/upgrades per second, converted
-  // to the cooldown RateLimited actually stores (buildCooldownMs = 1000/rate).
-  // matchesPerPairing = 1 ("single win" per pairing, not averaged over many).
+  // tournamentStandings' resolve override). Speeds are seconds-per-build periods, not a
+  // builds/sec rate: 1 second (the fastest — not faster than a human could plausibly click)
+  // down to 1 build every 8 seconds (the slowest), converted straight to the cooldown
+  // RateLimited stores (buildCooldownMs = periodSec * 1000). matchesPerPairing = 1 ("single
+  // win" per pairing, not averaged over many).
   //
   // baseNames defaults to 5 strategies spanning the full ladder's measured strength (see
   // AiStrategy.ladder's own doc): "linear" (bottom), "resource-maze" and "balanced" (mid),
   // "comb-corruption" and "maze-corruption" (top) — not the entire 16-entry ladder, since
-  // 16 x 5 rates = 80 names -> C(80,2) = 3160 single matches, which timing (~10s/match
+  // 16 x 5 periods = 80 names -> C(80,2) = 3160 single matches, which timing (~10s/match
   // observed via `sim/run linear balanced 3`) puts at several hours; 5 x 5 = 25 names ->
   // C(25,2) = 300 matches is a comparable-effort, comparable-signal stand-in. Pass a
   // comma-separated 3rd arg to override which base strategies are included.
@@ -294,16 +296,19 @@ object Simulator:
       .lift(2)
       .map(_.split(",").toSeq)
       .getOrElse(Seq("linear", "resource-maze", "balanced", "comb-corruption", "maze-corruption"))
-    val ratesPerSec = Seq(1, 2, 3, 5, 8)
+    val secondsPerBuild = Seq(1, 2, 3, 5, 8)
     val variants: Map[String, AiStrategy] = (for
       baseName <- baseNames
       baseStrategy = AiStrategy.all(baseName)
-      rate <- ratesPerSec
-    yield s"$baseName@${rate}bps" -> RateLimited(baseStrategy, buildCooldownMs = 1000.0 / rate)).toMap
+      periodSec <- secondsPerBuild
+    yield s"$baseName@${periodSec}s" -> RateLimited(baseStrategy, buildCooldownMs = periodSec * 1_000.0)).toMap
     val names = variants.keys.toSeq
     val reporter = new ProgressReporter("rateTournament", names.combinations(2).size)
     val standings = tournamentStandings(names, matchesPerPairing = 1, maxTicks, deltaMs, reporter.tick, variants)
-    println(s"Rate tournament: ${names.size} strategy/rate combinations (${baseNames.mkString(", ")} x $ratesPerSec bps), 1 match/pairing:")
+    println(
+      s"Rate tournament: ${names.size} strategy/speed combinations " +
+        s"(${baseNames.mkString(", ")} x $secondsPerBuild sec/build), 1 match/pairing:"
+    )
     println(formatStandingsTable(standings))
 
   @main def tune(args: String*): Unit =
