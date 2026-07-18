@@ -139,29 +139,29 @@ class AiStrategyTest extends munit.FunSuite:
   // towerdefense.sim.tournament 3) after splitting AiStrategy into LayoutPolicy x
   // SpendingPolicy combinations — see AiStrategy.ladder's doc and docs/adr/0010. Linear
   // (the deterministic, non-reactive baseline) is always first.
-  test("the ladder is ordered weakest to strongest by measured win rate, linear first") {
-    // Re-measured after Death/Science landed — see AiStrategy.ladder's doc for the full
-    // tournament run and why several pre-existing entries reshuffled, not just the two new
-    // corruption ones.
+  test("the ladder is ordered weakest to strongest by measured win rate") {
+    // Re-measured after the manual Balance.scala rebalance (commit "balance") — see
+    // AiStrategy.ladder's doc for the full tournament run and why the order reshuffled far
+    // more violently than the earlier Death/Science re-measurement did.
     assertEquals(
       AiStrategy.ladder.map(_._1),
       Seq(
-        "linear",
-        "counter-only",
         "comb-vertical",
         "comb",
-        "maze-counter",
-        "comb-resource",
-        "comb-corruption",
-        "comb-vertical-resource",
+        "linear",
+        "counter-only",
         "resource-only",
-        "maze-corruption",
+        "maze-counter",
+        "resource-maze",
         "balanced",
         "maze-plunder",
-        "maze-only",
-        "comb-vertical-plunder",
         "comb-plunder",
-        "resource-maze"
+        "comb-vertical-plunder",
+        "maze-only",
+        "comb-resource",
+        "comb-vertical-resource",
+        "comb-corruption",
+        "maze-corruption"
       )
     )
   }

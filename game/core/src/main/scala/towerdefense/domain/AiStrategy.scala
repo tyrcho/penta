@@ -63,110 +63,92 @@ object AiStrategy:
   // doc) instead of always taking the first in generation order, so — unlike the old,
   // fully deterministic ladder — repeated matches between the same two entries can now
   // produce different outcomes. Ordered weakest to strongest by win rate averaged over a
-  // 3-matches-per-pairing round-robin (`sim/runMain towerdefense.sim.tournament 3`), not a
-  // single deterministic game per pairing.
+  // round-robin (`sim/runMain towerdefense.sim.tournament <n>`), not a single deterministic
+  // game per pairing.
   //
-  // maze-only is the one entry with 0 wins that still ranks above linear: it has 0 losses
-  // too (39 draws out of 39 matches) — a genuine, reproducible defensive lockout, not
-  // matchmaking luck. Its SpendingPolicy weight is (resource=0, counter=0), so it never
-  // once considers whether a spend is sustainable — it builds Watchtowers as long as
-  // FreeformLayout's ranged-damage credit outscores everything else, drains Wood to
-  // exactly 0 with no Grove ever built to replenish it, and then freezes permanently with
-  // a small, apparently-effective Watchtower cluster that denies every opponent a win
-  // within 3000 ticks without ever mounting a real offense of its own.
+  // maze-only is the one entry with 0 wins that still ranks fairly high: it has very few
+  // losses too — a genuine, reproducible defensive lockout, not matchmaking luck. Its
+  // SpendingPolicy weight is (resource=0, counter=0), so it never once considers whether a
+  // spend is sustainable — it builds Watchtowers as long as FreeformLayout's ranged-damage
+  // credit outscores everything else, drains Wood to exactly 0 with no Grove ever built to
+  // replenish it, and then freezes permanently with a small, apparently-effective
+  // Watchtower cluster that denies every opponent a win within maxTicks without ever
+  // mounting a real offense of its own. `growthBonus` (see SpendingPolicy) exists to keep
+  // resource-aware strategies (resource-maze, balanced, comb-resource, ...) from falling
+  // into the same freeze: Watchtower (Wood+Light) would otherwise keep outscoring Grove
+  // (Wood only, Wood's only producer) because Watchtower's margin gets pulled up by
+  // averaging in Light, which Grove has nothing to average against — growthBonus credits
+  // *fixing* the shortage directly, flipping Grove ahead of Watchtower once Wood
+  // production actually hits zero. maze-only keeps the freeze on purpose: its own weight
+  // zeroes growthBonus out along with everything else resource-aware, an accurate
+  // reflection of "pure maze scoring, zero resource-awareness" as an archetype.
   //
-  // That same freeze was originally hitting maze-only AND resource-maze, which is what
-  // motivated growthBonus (see SpendingPolicy): a spend-margin penalty alone discourages
-  // draining a resource with no producer, but doesn't credit *fixing* the shortage —
-  // Watchtower (Wood+Light) kept outscoring Grove (Wood only, Wood's only producer)
-  // because Watchtower's margin got pulled up by averaging in Light, which Grove has
-  // nothing to average against. `sim/run resource-maze linear 1 --log` showed the exact
-  // same 5-Watchtowers-then-freeze pattern before the fix; resource-maze (whose weight
-  // does include resource=1.0) now wins normally, since growthBonus flips Grove ahead of
-  // Watchtower once Wood's production has actually hit zero. maze-only keeps the freeze,
-  // since its own weight zeroes growthBonus out along with everything else resource-aware
-  // — an accurate reflection of "pure maze scoring, zero resource-awareness" as an
-  // archetype, not a leftover bug.
+  // Re-measured (`sim/runMain towerdefense.sim.tournament 2`, all 16 entries) after a
+  // direct manual rebalance of Balance.scala (commit "balance"): Grove/Forest/Jungle/
+  // Cave/Labyrinth/Eglise all got cheaper, Watchtower's Light cost roughly quadrupled, and
+  // StartingShadow/StartingCrystal both doubled (10 -> 20). This reshuffled the ladder far
+  // more violently than the Death/Science addition did — the previous champion
+  // (resource-maze, 0.80 winRate) fell all the way to a 0.43 winRate mid-table tie.
   //
-  // Re-measured (`sim/runMain towerdefense.sim.tournament 3`, all 16 entries incl. the two
-  // Mort-racing ones below) after three changes landed together: Death (Tomb/BlackCastle,
-  // corruption) and Science (5 labs + full leveled research, every strategy now researches
-  // opportunistically via maybeResearch) were added, and BuildingKind's count roughly
-  // doubled (7 → 14), which reshuffles every LayoutPolicy/SpendingPolicy score's relative
-  // weighting even for strategies that never touch a Mort/Science building directly — so
-  // this order isn't just "the old order plus two new rows", several older entries moved.
+  // The throughline: buildings across every faction got cheaper at once, so ANY strategy
+  // now ramps its economy fast enough to reach Chaos's plunder target (a flat 50,
+  // Balance.ChaosVictoryPlunderTarget, untouched by this rebalance) well before slower
+  // victory conditions (Forest count, corruption, research) come into range — plunder
+  // races, not sustained economic advantage, now decide most matches. Spot-checked via
+  // `sim/run maze-corruption comb 1 --log` (win in 524 ticks, 0 CORRUPT lines — the win
+  // was a stray Cave's Goblins hitting Chaos's target) and `sim/run resource-maze
+  // maze-corruption 1 --log` (b wins the same way, at 1538 ticks, with a's own stray Cave
+  // reaching only 45 of the 55 plunder needed first) — even resource-maze's own losses are
+  // now decided by this same race, not by being out-teched.
   //
-  // resource-maze stays champion (0.80 winRate, elo 1797, 0 losses). The zero-loss tier is
-  // now resource-maze, maze-only, maze-plunder, AND maze-corruption (25-20-0, elo 1705) —
-  // FreeformLayout-based strategies broadly hold up better than any fixed TemplateLayout
-  // wall once there are 14 kinds of candidate to weigh instead of 7.
+  // maze-corruption (0.97) and comb-corruption (0.93) top the table, but — as before this
+  // rebalance — NOT via Death's own mechanic: still 0 CORRUPT events across every spot-
+  // checked transcript. CorruptionSpending's 0.25*resourceScore fallback term happens to
+  // grab a cheap Cave early (everything's cheap now) and that Cave's Goblins win the race
+  // to Chaos's plunder target before the opponent mounts any defense. Treat these two
+  // entries as "CorruptionSpending's fallback economy, sped up by cheaper buildings", not
+  // "corruption is viable" — Mort's own mechanic (Corruption.md's 1%/2% per second
+  // adjacency rate) still needs a design revisit before a strategy can race it on purpose.
   //
-  // maze-corruption's 0.56 winRate is real and reproducible, but NOT mostly earned through
-  // Death's own mechanic: `sim/run maze-corruption linear 1 --log` and `sim/run
-  // maze-corruption comb 1 --log` both show it winning via Chaos plunder (a stray Cave,
-  // built through CorruptionSpending's 0.25*resourceScore fallback term, sends Goblins
-  // that a Cave-focused opponent never bothers defending against) — corruption itself never
-  // landed a single building-destroying hit in either transcript. This matches Corruption.md's
-  // own math: a Zombie needs ~100 continuous seconds of adjacency to one building (1%/sec)
-  // to destroy it, but a creature only grazes past buildings for a few seconds while pathing
-  // to the goal, even against a densely-walled `comb` defender — the rate is the vault's own
-  // explicit number, not a POC default, so it's left untouched rather than silently buffed.
-  // comb-corruption (TemplateLayout(comb) instead of FreeformLayout) does much worse
-  // (0.38 winRate) — the fixed wall doesn't prioritize the same fallback economy maze-
-  // corruption stumbles into. Treat "maze-corruption" as measuring "CorruptionSpending's
-  // resourceScore fallback with a Chaos-adjacent economy", not "corruption is viable" —
-  // Mort's own mechanic needs a design revisit (denser required adjacency, or units that
-  // linger rather than path straight through) before a strategy can race it on purpose.
-  //
-  // maze-only is the one entry with 0 wins that still ranks above linear: it has 0 losses
-  // too — a genuine, reproducible defensive lockout, not matchmaking luck. Its SpendingPolicy
-  // weight is (resource=0, counter=0), so it never once considers whether a spend is
-  // sustainable — it builds Watchtowers as long as FreeformLayout's ranged-damage credit
-  // outscores everything else, drains Wood to exactly 0 with no Grove ever built to
-  // replenish it, and then freezes permanently with a small, apparently-effective Watchtower
-  // cluster that denies every opponent a win without ever mounting a real offense of its own.
-  //
-  // That same freeze was originally hitting maze-only AND resource-maze, which is what
-  // motivated growthBonus (see SpendingPolicy): a spend-margin penalty alone discourages
-  // draining a resource with no producer, but doesn't credit *fixing* the shortage —
-  // Watchtower (Wood+Light) kept outscoring Grove (Wood only, Wood's only producer)
-  // because Watchtower's margin got pulled up by averaging in Light, which Grove has
-  // nothing to average against. resource-maze (whose weight does include resource=1.0) now
-  // wins normally, since growthBonus flips Grove ahead of Watchtower once Wood's production
-  // has actually hit zero. maze-only keeps the freeze, since its own weight zeroes
-  // growthBonus out along with everything else resource-aware — an accurate reflection of
-  // "pure maze scoring, zero resource-awareness" as an archetype, not a leftover bug.
+  // linear, comb, and comb-vertical now sit at the bottom with unusually high draw counts
+  // (6, 5, and 4 draws out of 30 matches respectively) — a separate, LinearStrategy-rooted
+  // issue (see its own doc): GroveCostWood now equals TombCostWood exactly and Grove costs
+  // nothing else, so LinearStrategy (fixed priority, never reconsiders) tiles Grove forever
+  // instead of ever reaching Tomb/LaboNaturel, and often never crosses ANY victory
+  // condition within maxTicks against a slow-enough opponent — it just times out. comb/
+  // comb-vertical (GrovePriority spending atop a fixed wall) share the same Grove-hoarding
+  // shape, which is why their placement here dropped as hard as linear's did.
   val ladder: Seq[(String, AiStrategy)] = Seq(
-    "linear" -> LinearStrategy,
-    "counter-only" -> ComposedStrategy(NoLayoutPreference, WeightedSpending(resourceWeight = 0.0, counterWeight = 1.0)),
     "comb-vertical" -> ComposedStrategy(TemplateLayout(MazeTemplate.combVertical), GrovePriority),
     "comb" -> ComposedStrategy(TemplateLayout(MazeTemplate.comb), GrovePriority),
-    "maze-counter" -> ComposedStrategy(FreeformLayout, WeightedSpending(resourceWeight = 0.0, counterWeight = 1.0)),
-    "comb-resource" -> ComposedStrategy(
-      TemplateLayout(MazeTemplate.comb),
-      WeightedSpending(resourceWeight = 1.0, counterWeight = 0.0)
-    ),
-    // Mort's Tomb/BlackCastle-racing counterparts to comb-plunder/maze-plunder below — see
-    // this doc's maze-corruption paragraph for why their win rate doesn't mean what the name
-    // implies.
-    "comb-corruption" -> ComposedStrategy(TemplateLayout(MazeTemplate.comb), CorruptionSpending),
-    "comb-vertical-resource" -> ComposedStrategy(
-      TemplateLayout(MazeTemplate.combVertical),
-      WeightedSpending(resourceWeight = 1.0, counterWeight = 0.0)
-    ),
+    "linear" -> LinearStrategy,
+    "counter-only" -> ComposedStrategy(NoLayoutPreference, WeightedSpending(resourceWeight = 0.0, counterWeight = 1.0)),
     "resource-only" -> ComposedStrategy(NoLayoutPreference, WeightedSpending(resourceWeight = 1.0, counterWeight = 0.0)),
-    "maze-corruption" -> ComposedStrategy(FreeformLayout, CorruptionSpending),
-    "balanced" -> ComposedStrategy(FreeformLayout, WeightedSpending(resourceWeight = 1.0, counterWeight = 1.0)),
-    "maze-plunder" -> ComposedStrategy(FreeformLayout, PlunderSpending),
-    "maze-only" -> ComposedStrategy(FreeformLayout, WeightedSpending(resourceWeight = 0.0, counterWeight = 0.0)),
-    "comb-vertical-plunder" -> ComposedStrategy(TemplateLayout(MazeTemplate.combVertical), PlunderSpending),
-    "comb-plunder" -> ComposedStrategy(TemplateLayout(MazeTemplate.comb), PlunderSpending),
+    "maze-counter" -> ComposedStrategy(FreeformLayout, WeightedSpending(resourceWeight = 0.0, counterWeight = 1.0)),
     "resource-maze" -> ComposedStrategy(
       FreeformLayout,
       WeightedSpending(resourceWeight = 1.0, counterWeight = 0.0),
       layoutWeight = 0.25,
       spendingWeight = 0.5
-    )
+    ),
+    "balanced" -> ComposedStrategy(FreeformLayout, WeightedSpending(resourceWeight = 1.0, counterWeight = 1.0)),
+    "maze-plunder" -> ComposedStrategy(FreeformLayout, PlunderSpending),
+    "comb-plunder" -> ComposedStrategy(TemplateLayout(MazeTemplate.comb), PlunderSpending),
+    "comb-vertical-plunder" -> ComposedStrategy(TemplateLayout(MazeTemplate.combVertical), PlunderSpending),
+    "maze-only" -> ComposedStrategy(FreeformLayout, WeightedSpending(resourceWeight = 0.0, counterWeight = 0.0)),
+    "comb-resource" -> ComposedStrategy(
+      TemplateLayout(MazeTemplate.comb),
+      WeightedSpending(resourceWeight = 1.0, counterWeight = 0.0)
+    ),
+    "comb-vertical-resource" -> ComposedStrategy(
+      TemplateLayout(MazeTemplate.combVertical),
+      WeightedSpending(resourceWeight = 1.0, counterWeight = 0.0)
+    ),
+    // Mort's Tomb/BlackCastle-racing counterparts to comb-plunder/maze-plunder above — see
+    // this doc's maze-corruption paragraph for why their win rate doesn't mean what the
+    // name implies.
+    "comb-corruption" -> ComposedStrategy(TemplateLayout(MazeTemplate.comb), CorruptionSpending),
+    "maze-corruption" -> ComposedStrategy(FreeformLayout, CorruptionSpending)
   )
 
   val all: Map[String, AiStrategy] = ladder.toMap
