@@ -26,10 +26,15 @@ object SpendingPolicy:
   // approaches the entire stock, and is 0 when the spend is negligible relative to what's
   // on hand.
   private def marginFor(state: MazeState, res: Resource, amount: Double): Double =
-    val available = state.resources.getOrElse(res, 0.0)
-    val plainMargin = (available - amount) / available
-    val rate = CombatEngine.productionPerSec(state, res)
-    if rate > 0.0 then plainMargin else plainMargin - amount / available
+    // A zero-cost entry (e.g. Balance.CaveCostWood = 0.0) never penalizes the margin,
+    // regardless of how depleted that resource's stock is — this also sidesteps a
+    // 0.0/0.0 = NaN divide when the stock has independently dropped to exactly zero too.
+    if amount == 0.0 then 1.0
+    else
+      val available = state.resources.getOrElse(res, 0.0)
+      val plainMargin = (available - amount) / available
+      val rate = CombatEngine.productionPerSec(state, res)
+      if rate > 0.0 then plainMargin else plainMargin - amount / available
 
   // rawMargin's penalty alone isn't enough to avoid a lockout: it discourages *spending*
   // a no-production resource, but a kind that costs that same resource without producing

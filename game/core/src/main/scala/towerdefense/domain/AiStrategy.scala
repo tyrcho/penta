@@ -144,7 +144,13 @@ object AiStrategy:
   // condition within maxTicks against a slow-enough opponent — it just times out. comb/
   // comb-vertical (GrovePriority spending atop a fixed wall) share the same Grove-hoarding
   // shape, which is why their placement here dropped as hard as linear's did.
-  val ladder: Seq[(String, AiStrategy)] = Seq(
+  //
+  // No longer exposed as the AI difficulty ladder (see `ladder` below, which now serves
+  // that role with a finer-grained, Elo-measured progression) — kept as `catalog` purely
+  // as a pool of distinct LayoutPolicy x SpendingPolicy combinations that CLI tools
+  // (sim/run, sim/tournament, sim/rateTournament's baseName arg, ...) can still resolve by
+  // name via `all`.
+  val catalog: Seq[(String, AiStrategy)] = Seq(
     "comb-vertical" -> ComposedStrategy(TemplateLayout(MazeTemplate.combVertical), GrovePriority),
     "comb" -> ComposedStrategy(TemplateLayout(MazeTemplate.comb), GrovePriority),
     "linear" -> LinearStrategy,
@@ -177,4 +183,52 @@ object AiStrategy:
     "maze-corruption" -> ComposedStrategy(FreeformLayout, CorruptionSpending)
   )
 
-  val all: Map[String, AiStrategy] = ladder.toMap
+  // The AI difficulty ladder GameApp actually drives players/spectators through (see
+  // GameApp.aiLevelIndex): 25 levels built by crossing 5 of catalog's strongest/most
+  // distinct base strategies with 5 build-speed periods (1/2/3/5/8 seconds per build, via
+  // RateLimited — see AiStrategy.buildCooldownMs's doc), then ordering all 25 combinations
+  // by the Elo rating `sim/runMain towerdefense.sim.rateTournament` measured across a full
+  // round-robin (300 pairings, 1 match each). Build speed turned out to dominate strategy
+  // choice at every tier (each base strategy's own @1s beats its @2s beats its @3s, ...,
+  // monotonically), so the ladder interleaves strategies and speeds rather than grouping
+  // by either alone — e.g. maze-corruption@1s (Elo 1653) outranks resource-maze@3s (Elo
+  // 1628), even though resource-maze beats maze-corruption at matched speed.
+  private val catalogByName: Map[String, AiStrategy] = catalog.toMap
+
+  private def rateLimited(baseName: String, periodSec: Int): (String, AiStrategy) =
+    s"$baseName@${periodSec}s" -> RateLimited(catalogByName(baseName), buildCooldownMs = periodSec * 1_000.0)
+
+  val ladder: Seq[(String, AiStrategy)] = Seq(
+    rateLimited("comb-corruption", 8),
+    rateLimited("balanced", 8),
+    rateLimited("linear", 8),
+    rateLimited("maze-corruption", 8),
+    rateLimited("resource-maze", 8),
+    rateLimited("comb-corruption", 5),
+    rateLimited("balanced", 5),
+    rateLimited("linear", 5),
+    rateLimited("linear", 3),
+    rateLimited("comb-corruption", 3),
+    rateLimited("maze-corruption", 5),
+    rateLimited("balanced", 3),
+    rateLimited("linear", 2),
+    rateLimited("resource-maze", 5),
+    rateLimited("linear", 1),
+    rateLimited("maze-corruption", 3),
+    rateLimited("balanced", 2),
+    rateLimited("maze-corruption", 2),
+    rateLimited("resource-maze", 3),
+    rateLimited("maze-corruption", 1),
+    rateLimited("resource-maze", 2),
+    rateLimited("balanced", 1),
+    rateLimited("resource-maze", 1),
+    rateLimited("comb-corruption", 2),
+    rateLimited("comb-corruption", 1)
+  )
+
+  // Both catalog (named base combinations, for CLI experiments) and ladder (the 25
+  // Elo-ranked difficulty levels built on top of 5 of them) resolve through the same name
+  // -> strategy map, so `sim/run <name>`, `sim/tournament`, and rateTournament's baseName
+  // argument can all still address catalog entries by their plain name (e.g. "linear")
+  // alongside the ladder's own "linear@1s".."linear@8s" names.
+  val all: Map[String, AiStrategy] = (catalog ++ ladder).toMap

@@ -7,11 +7,27 @@ import towerdefense.domain.*
 // strategies can be compared/tuned by simulating many matches on the JVM.
 object Simulator:
 
-  case class MatchOutcome(winner: Option[String], ticks: Int)
-  case class Tally(name: String, wins: Int, draws: Int, avgTicks: Double)
+  // totalResearchA/B: each side's own research investment at match end — the sum of every
+  // lab's level (MazeState.researchLevels.values.sum), not any one lab's level alone, so a
+  // side that spread research across several labs and one that maxed a single lab both
+  // show up as "did research", comparably. Exists to make research visible in the
+  // aggregate stats (Tally.avgResearch/Standing.avgResearch below) — a strategy's own
+  // build/upgrade choices already drive whether it researches at all (see
+  // AiStrategy.maybeResearch), this just surfaces the outcome.
+  case class MatchOutcome(winner: Option[String], ticks: Int, totalResearchA: Int, totalResearchB: Int)
+  case class Tally(name: String, wins: Int, draws: Int, avgTicks: Double, avgResearch: Double)
   case class SpendingWeights(resourceWeight: Double, counterWeight: Double, layoutWeight: Double)
   case class WeightResult(weights: SpendingWeights, winRate: Double)
-  case class Standing(name: String, wins: Int, draws: Int, losses: Int, matches: Int, winRate: Double, elo: Double)
+  case class Standing(
+      name: String,
+      wins: Int,
+      draws: Int,
+      losses: Int,
+      matches: Int,
+      winRate: Double,
+      elo: Double,
+      avgResearch: Double
+  )
 
   def runMatch(
       strategyA: AiStrategy,
@@ -28,7 +44,7 @@ object Simulator:
       case MatchResult.PlayerWins(_) => "a"
       case MatchResult.AiWins(_)     => "b"
     }
-    MatchOutcome(winner, ticks)
+    MatchOutcome(winner, ticks, battle.player.researchLevels.values.sum, battle.ai.researchLevels.values.sum)
 
   // Same match as runMatch, but drives BattleEngine.tickDetailed instead of tick and
   // formats every event through MatchLog, handing each line to `writeLine` — a separate
@@ -60,7 +76,7 @@ object Simulator:
       case MatchResult.PlayerWins(_) => "a"
       case MatchResult.AiWins(_)     => "b"
     }
-    MatchOutcome(winner, ticks)
+    MatchOutcome(winner, ticks, battle.player.researchLevels.values.sum, battle.ai.researchLevels.values.sum)
 
   // Runs `matches` independent games of the two named strategies (resolved via
   // AiStrategy.all) and tallies wins/draws/avg-ticks per side. `onProgress` (default
@@ -89,7 +105,10 @@ object Simulator:
     val draws = outcomes.count(_.winner.isEmpty)
     val avgTicks =
       if outcomes.isEmpty then 0.0 else outcomes.map(_.ticks).sum.toDouble / outcomes.size
-    Tally(name, wins, draws, avgTicks)
+    val avgResearch =
+      if outcomes.isEmpty then 0.0
+      else outcomes.map(o => if side == "a" then o.totalResearchA else o.totalResearchB).sum.toDouble / outcomes.size
+    Tally(name, wins, draws, avgTicks, avgResearch)
 
   // Every pairing among `names` (each combination played once, `matchesPerPairing`
   // matches within it — not the full N² including mirror matches, since a strategy
@@ -122,6 +141,7 @@ object Simulator:
     val strategies = names.map(n => n -> resolve(n)).toMap
     val records = scala.collection.mutable.Map.empty[String, (Int, Int, Int)].withDefaultValue((0, 0, 0))
     val ratings = scala.collection.mutable.Map.from(names.map(_ -> EloRating.InitialRating))
+    val researchTotals = scala.collection.mutable.Map.empty[String, Int].withDefaultValue(0)
     names.combinations(2).zipWithIndex.foreach { case (Seq(nameA, nameB), idx) =>
       val outcomes =
         Seq.fill(matchesPerPairing)(runMatch(strategies(nameA), strategies(nameB), maxTicks, deltaMs))
@@ -138,6 +158,8 @@ object Simulator:
       val (winsB, drawsB, lossesB) = record(outcomes, "b")
       records(nameA) = addRecord(records(nameA), (winsA, drawsA, lossesA))
       records(nameB) = addRecord(records(nameB), (winsB, drawsB, lossesB))
+      researchTotals(nameA) = researchTotals(nameA) + outcomes.map(_.totalResearchA).sum
+      researchTotals(nameB) = researchTotals(nameB) + outcomes.map(_.totalResearchB).sum
       onPairingDone(idx + 1)
     }
     names
@@ -145,7 +167,8 @@ object Simulator:
         val (wins, draws, losses) = records(name)
         val matches = wins + draws + losses
         val winRate = if matches == 0 then 0.0 else wins.toDouble / matches
-        Standing(name, wins, draws, losses, matches, winRate, ratings(name))
+        val avgResearch = if matches == 0 then 0.0 else researchTotals(name).toDouble / matches
+        Standing(name, wins, draws, losses, matches, winRate, ratings(name), avgResearch)
       }
       .sortBy(-_.winRate)
 
@@ -197,14 +220,16 @@ object Simulator:
     yield SpendingWeights(resource, counter, layout)
 
   private def formatTallyTable(tallies: Seq[Tally], matches: Int): String =
-    val header = f"${"strategy"}%-14s ${"wins"}%6s ${"draws"}%6s ${"avgTicks"}%10s"
-    val rows = tallies.map(t => f"${t.name}%-14s ${t.wins}%6d ${t.draws}%6d ${t.avgTicks}%10.1f")
+    val header = f"${"strategy"}%-14s ${"wins"}%6s ${"draws"}%6s ${"avgTicks"}%10s ${"avgResearch"}%11s"
+    val rows =
+      tallies.map(t => f"${t.name}%-14s ${t.wins}%6d ${t.draws}%6d ${t.avgTicks}%10.1f ${t.avgResearch}%11.1f")
     (header +: rows).mkString(s"$matches matches\n", "\n", "")
 
   private def formatStandingsTable(standings: Seq[Standing]): String =
-    val header = f"${"strategy"}%-14s ${"wins"}%6s ${"draws"}%6s ${"losses"}%6s ${"winRate"}%8s ${"elo"}%7s"
+    val header =
+      f"${"strategy"}%-14s ${"wins"}%6s ${"draws"}%6s ${"losses"}%6s ${"winRate"}%8s ${"elo"}%7s ${"avgResearch"}%11s"
     val rows = standings.map(s =>
-      f"${s.name}%-14s ${s.wins}%6d ${s.draws}%6d ${s.losses}%6d ${s.winRate}%8.2f ${s.elo}%7.0f"
+      f"${s.name}%-14s ${s.wins}%6d ${s.draws}%6d ${s.losses}%6d ${s.winRate}%8.2f ${s.elo}%7.0f ${s.avgResearch}%11.1f"
     )
     (header +: rows).mkString("\n")
 
@@ -276,14 +301,16 @@ object Simulator:
   // One-off comparison of build *speed* (RateLimited.buildCooldownMs) crossed with a
   // handful of existing ladder strategies, all in one round-robin — not a permanent ladder
   // addition (AiStrategy.all is untouched; these names only exist inside this run, via
-  // tournamentStandings' resolve override). Rates are builds/upgrades per second, converted
-  // to the cooldown RateLimited actually stores (buildCooldownMs = 1000/rate).
-  // matchesPerPairing = 1 ("single win" per pairing, not averaged over many).
+  // tournamentStandings' resolve override). Speeds are seconds-per-build periods, not a
+  // builds/sec rate: 1 second (the fastest — not faster than a human could plausibly click)
+  // down to 1 build every 8 seconds (the slowest), converted straight to the cooldown
+  // RateLimited stores (buildCooldownMs = periodSec * 1000). matchesPerPairing = 1 ("single
+  // win" per pairing, not averaged over many).
   //
   // baseNames defaults to 5 strategies spanning the full ladder's measured strength (see
   // AiStrategy.ladder's own doc): "linear" (bottom), "resource-maze" and "balanced" (mid),
   // "comb-corruption" and "maze-corruption" (top) — not the entire 16-entry ladder, since
-  // 16 x 5 rates = 80 names -> C(80,2) = 3160 single matches, which timing (~10s/match
+  // 16 x 5 periods = 80 names -> C(80,2) = 3160 single matches, which timing (~10s/match
   // observed via `sim/run linear balanced 3`) puts at several hours; 5 x 5 = 25 names ->
   // C(25,2) = 300 matches is a comparable-effort, comparable-signal stand-in. Pass a
   // comma-separated 3rd arg to override which base strategies are included.
@@ -294,16 +321,19 @@ object Simulator:
       .lift(2)
       .map(_.split(",").toSeq)
       .getOrElse(Seq("linear", "resource-maze", "balanced", "comb-corruption", "maze-corruption"))
-    val ratesPerSec = Seq(1, 2, 3, 5, 8)
+    val secondsPerBuild = Seq(1, 2, 3, 5, 8)
     val variants: Map[String, AiStrategy] = (for
       baseName <- baseNames
       baseStrategy = AiStrategy.all(baseName)
-      rate <- ratesPerSec
-    yield s"$baseName@${rate}bps" -> RateLimited(baseStrategy, buildCooldownMs = 1000.0 / rate)).toMap
+      periodSec <- secondsPerBuild
+    yield s"$baseName@${periodSec}s" -> RateLimited(baseStrategy, buildCooldownMs = periodSec * 1_000.0)).toMap
     val names = variants.keys.toSeq
     val reporter = new ProgressReporter("rateTournament", names.combinations(2).size)
     val standings = tournamentStandings(names, matchesPerPairing = 1, maxTicks, deltaMs, reporter.tick, variants)
-    println(s"Rate tournament: ${names.size} strategy/rate combinations (${baseNames.mkString(", ")} x $ratesPerSec bps), 1 match/pairing:")
+    println(
+      s"Rate tournament: ${names.size} strategy/speed combinations " +
+        s"(${baseNames.mkString(", ")} x $secondsPerBuild sec/build), 1 match/pairing:"
+    )
     println(formatStandingsTable(standings))
 
   @main def tune(args: String*): Unit =

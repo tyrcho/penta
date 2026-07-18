@@ -96,6 +96,21 @@ class SpendingPolicyTest extends munit.FunSuite:
     assert(SpendingPolicy.rawMargin(bare, BuildingKind.Cave) < plainCaveMargin)
   }
 
+  test("rawMargin never returns NaN when a zero-cost resource's stock has also dropped to exactly zero") {
+    // Regression for a crash found via sim/rateTournament: Cave's cost lists Wood at
+    // exactly 0.0 (Balance.CaveCostWood). If the maze's actual Wood stock also happens to
+    // be exactly 0.0, the naive (available - amount) / available margin formula divides
+    // 0.0 by 0.0 = NaN, which then poisons resourceScore/ComposedStrategy's own max/tie
+    // search (NaN == NaN is false, so the "tied" candidate set silently becomes empty and
+    // random.nextInt(0) throws). Spending nothing of a resource should never be penalized
+    // regardless of how depleted that resource is.
+    val depleted = withResources(wood = 0.0, fire = 100.0, light = 0.0)
+    val margin = SpendingPolicy.rawMargin(depleted, BuildingKind.Cave)
+    assert(!margin.isNaN, s"rawMargin must never be NaN, got $margin")
+    val score = SpendingPolicy.resourceScore(depleted, BuildingKind.Cave)
+    assert(!score.isNaN, s"resourceScore must never be NaN, got $score")
+  }
+
   // ── counterScore ───────────────────────────────────────────────────────
 
   test("counterScore mirrors the opponent's dominant faction") {

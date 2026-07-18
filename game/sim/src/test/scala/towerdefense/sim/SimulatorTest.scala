@@ -105,6 +105,35 @@ class SimulatorTest extends munit.FunSuite:
     assertEquals(progress.toList, (1 to results.size).toList)
   }
 
+  test("runMatch reports each side's total research level (summed across all labs) at match end") {
+    // 1 tick isn't enough time for either side to even build a lab, let alone research it —
+    // an exact-zero assertion, not just "non-negative", since this case is fully predictable.
+    val tooShort =
+      Simulator.runMatch(towerdefense.domain.AiStrategy.all("linear"), towerdefense.domain.AiStrategy.all("linear"), maxTicks = 1, deltaMs = 100.0)
+    assertEquals(tooShort.totalResearchA, 0)
+    assertEquals(tooShort.totalResearchB, 0)
+
+    val longEnough = Simulator.runMatch(
+      towerdefense.domain.AiStrategy.all("linear"),
+      towerdefense.domain.AiStrategy.all("linear"),
+      maxTicks = 3_000,
+      deltaMs = 100.0
+    )
+    assert(longEnough.totalResearchA >= 0, s"$longEnough")
+    assert(longEnough.totalResearchB >= 0, s"$longEnough")
+  }
+
+  test("runMatches' tallies report each side's average research level across its matches") {
+    val tallies = Simulator.runMatches("linear", "linear", matches = 3, maxTicks = 3_000, deltaMs = 100.0)
+    tallies.foreach(t => assert(t.avgResearch >= 0.0, s"$t"))
+  }
+
+  test("tournamentStandings reports each strategy's average research level across all its matches") {
+    val standings =
+      Simulator.tournamentStandings(Seq("linear", "comb", "maze-only"), matchesPerPairing = 1, maxTicks = 3_000, deltaMs = 100.0)
+    standings.foreach(s => assert(s.avgResearch >= 0.0, s"$s"))
+  }
+
   test("runLoggedMatch writes a transcript, ending in a WINS line whenever the match resolves") {
     val lines = scala.collection.mutable.ArrayBuffer.empty[String]
     val outcome = Simulator.runLoggedMatch(
