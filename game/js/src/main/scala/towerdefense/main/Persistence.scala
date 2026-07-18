@@ -89,13 +89,20 @@ private object Persistence:
       maxHp = c.maxHp,
       speedPerMs = c.speedPerMs,
       kind = c.kind match
-        case UnitKind.Elf      => "Elf"
-        case UnitKind.Goblin   => "Goblin"
-        case UnitKind.Minotaur => "Minotaur"
-        case UnitKind.Paladin  => "Paladin"
-        case UnitKind.Wolf     => "Wolf"
-        case UnitKind.Zombie   => "Zombie"
-        case UnitKind.Vampire  => "Vampire"
+        case UnitKind.Elf         => "Elf"
+        case UnitKind.Goblin      => "Goblin"
+        case UnitKind.Minotaur    => "Minotaur"
+        case UnitKind.Paladin     => "Paladin"
+        case UnitKind.Wolf        => "Wolf"
+        case UnitKind.Zombie      => "Zombie"
+        case UnitKind.Vampire     => "Vampire"
+        case UnitKind.Necromancer => "Necromancer"
+        case UnitKind.Soul        => "Soul",
+      // Only Necromancer ever has a nonzero countdown (see CreatureSpec.spawns) and only
+      // Soul ever has a summonedBy — inert (0.0/null) for every other kind, same "cheap to
+      // carry" choice as Building's own spawnCountdownMs.
+      spawnCountdownMs = c.spawnCountdownMs,
+      summonedBy = c.summonedBy.map(_.toDouble).getOrElse(null).asInstanceOf[js.Any]
     )
 
   private def encodeBuilding(b: Building): js.Dynamic =
@@ -214,13 +221,21 @@ private object Persistence:
       maxHp = asDouble(d.maxHp),
       speedPerMs = asDouble(d.speedPerMs),
       kind = d.kind.asInstanceOf[String] match
-        case "Elf"      => UnitKind.Elf
-        case "Minotaur" => UnitKind.Minotaur
-        case "Paladin"  => UnitKind.Paladin
-        case "Wolf"     => UnitKind.Wolf
-        case "Zombie"   => UnitKind.Zombie
-        case "Vampire"  => UnitKind.Vampire
-        case _          => UnitKind.Goblin
+        case "Elf"         => UnitKind.Elf
+        case "Minotaur"    => UnitKind.Minotaur
+        case "Paladin"     => UnitKind.Paladin
+        case "Wolf"        => UnitKind.Wolf
+        case "Zombie"      => UnitKind.Zombie
+        case "Vampire"     => UnitKind.Vampire
+        case "Necromancer" => UnitKind.Necromancer
+        case "Soul"        => UnitKind.Soul
+        case _             => UnitKind.Goblin,
+      // Pre-Necromancer saves have neither field — default to 0.0/None, same fallback
+      // shape as buildingsCorrupted/researchLevels' migration elsewhere in this file.
+      spawnCountdownMs = if js.isUndefined(d.spawnCountdownMs) then 0.0 else asDouble(d.spawnCountdownMs),
+      summonedBy =
+        if js.isUndefined(d.summonedBy) || d.summonedBy == null then None
+        else Some(asDouble(d.summonedBy).toLong)
     )
 
   private def decodeBuilding(d: js.Dynamic): Building =
@@ -238,11 +253,13 @@ private object Persistence:
         case "Church"          => BuildingKind.Church
         case "Tomb"            => BuildingKind.Tomb
         case "BlackCastle"     => BuildingKind.BlackCastle
+        case "DeathHouse"      => BuildingKind.DeathHouse
         case "LaboNaturel"     => BuildingKind.LaboNaturel
         case "LaboSombre"      => BuildingKind.LaboSombre
         case "LaboDeRecherche" => BuildingKind.LaboDeRecherche
         case "LaboDeLaLoi"     => BuildingKind.LaboDeLaLoi
         case "LaboDuChaos"     => BuildingKind.LaboDuChaos
+        case "Angel"           => BuildingKind.Angel
         case _                 => BuildingKind.Watchtower,
       spawnCountdownMs = if js.isUndefined(d.spawnCountdownMs) then 0.0 else asDouble(d.spawnCountdownMs),
       corruptionPercent = if js.isUndefined(d.corruptionPercent) then 0.0 else asDouble(d.corruptionPercent)

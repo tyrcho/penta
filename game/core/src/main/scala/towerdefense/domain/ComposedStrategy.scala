@@ -55,7 +55,7 @@ case class ComposedStrategy(
     AiStrategy.researchAnyAffordable(state)
 
   // nonBlockingCells is computed once per scan (see its doc) and reused across every one
-  // of BuildingKind.values' 14 kinds, instead of re-running the reachability BFS for each.
+  // of BuildingKind.values' kinds, instead of re-running the reachability BFS for each.
   private def allCandidates(state: MazeState): Seq[Candidate] =
     val nonBlocking = Placement.nonBlockingCells(state)
     for

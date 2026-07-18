@@ -6,11 +6,11 @@ import towerdefense.domain.geometry.Vec2
 enum Resource derives CanEqual:
   case Wood, Fire, Light, Shadow, Crystal
 
-// Zombie/Vampire (Mort) have no plunder ability — see CreatureSpecs and CombatEngine's
-// corruption mechanic. Science (Recherches*.md) has no unit at all in the vault, only
-// buildings — see BuildingKind's Science cases.
+// Zombie/Vampire/Necromancer/Soul (Mort) have no plunder ability — see CreatureSpecs and
+// CombatEngine's corruption mechanic. Science (Recherches*.md) has no unit at all in the
+// vault, only buildings — see BuildingKind's Science cases.
 enum UnitKind derives CanEqual:
-  case Elf, Goblin, Minotaur, Paladin, Wolf, Zombie, Vampire
+  case Elf, Goblin, Minotaur, Paladin, Wolf, Zombie, Vampire, Necromancer, Soul
 
 // Grove/Forest/Jungle form Nature's upgrade chain (Bosquet.md/Foret.md/Jungle.md) — only
 // Grove is directly buildable; Forest and Jungle are reached by upgrading an existing
@@ -24,20 +24,29 @@ enum UnitKind derives CanEqual:
 // deliberately not implemented yet (the leveled research tree, its global modifiers, and
 // Science's victory condition).
 enum BuildingKind derives CanEqual:
-  case Grove, Forest, Jungle, Cave, Labyrinth, Church, Watchtower, Tomb, BlackCastle,
-    LaboNaturel, LaboSombre, LaboDeRecherche, LaboDeLaLoi, LaboDuChaos
+  case Grove, Forest, Jungle, Cave, Labyrinth, Church, Watchtower, Angel, Tomb, BlackCastle,
+    DeathHouse, LaboNaturel, LaboSombre, LaboDeRecherche, LaboDeLaLoi, LaboDuChaos
 
 // A unit currently walking this maze. From this maze owner's point of view it's
 // always hostile — sent by one of the opponent's buildings. See CreatureSpecs for
 // per-kind stats/plunder, and CombatEngine for combat abilities (Paladin's shield,
 // Forest's aura, Watchtower's ranged damage), which stay kind-based special cases.
+// spawnCountdownMs: inert (0.0) for every kind except Necromancer (see CreatureSpec.spawns
+// and CombatEngine.advanceCreatureSummons) — same "inert field, cheap to carry" choice as
+// Building.spawnCountdownMs.
+// summonedBy: the id of the Necromancer that invoked this creature (only ever set for a
+// Soul — see Ame.md) — None for every other kind, including Necromancer itself (it's
+// spawned by a building, not another creature). Used solely to credit Ame.md's heal to
+// the *specific* Necromancer that summoned this Soul, not any Necromancer present.
 case class Creature(
     id: Long,
     pos: Vec2,
     hp: Double,
     maxHp: Double,
     speedPerMs: Double,
-    kind: UnitKind
+    kind: UnitKind,
+    spawnCountdownMs: Double = 0.0,
+    summonedBy: Option[Long] = None
 )
 
 // Replaces the old per-faction Forest/Cave/Labyrinth/Eglise/Watchtower case classes —

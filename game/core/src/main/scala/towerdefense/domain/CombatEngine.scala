@@ -51,10 +51,12 @@ object CombatEngine:
   def tick(state: MazeState, deltaMs: Double, attackerResearchLevels: Map[BuildingKind, Int] = Map.empty): TickResult =
     val (s1, stolen, arrivals) = moveCreatures(state, deltaMs, attackerResearchLevels)
     val (s2, deaths) = applyDamageSources(s1, deltaMs)
-    val (s3, corrupted) = applyCorruption(s2, deltaMs)
-    val s4 = produceResources(s3, deltaMs)
+    val (s3, corrupted, hitsByCreature) = applyCorruption(s2, deltaMs)
+    val s3b = healSummoners(s3, hitsByCreature, deltaMs)
+    val s4 = produceResources(s3b, deltaMs)
     val (s5, spawned) = advanceSpawnTimers(s4, deltaMs)
-    TickResult(s5, spawned, stolen, deaths, arrivals, corrupted)
+    val s6 = advanceCreatureSummons(s5, deltaMs)
+    TickResult(s6, spawned, stolen, deaths, arrivals, corrupted)
 
   // Re-pathfinds every creature from its current cell to the goal each tick, avoiding
   // building cells — no cached path to invalidate when a new building changes the maze.
@@ -70,8 +72,9 @@ object CombatEngine:
       attackerResearchLevels: Map[BuildingKind, Int]
   ): (MazeState, Map[Resource, Double], List[UnitKind]) =
     val blocked = state.buildingCells
+    val angelCells = state.buildings.filter(_.kind == BuildingKind.Angel).map(b => (b.col, b.row)).toSet
     val (remaining, arrived) =
-      state.creatures.map(stepCreature(_, state.creatures, blocked, deltaMs)).partitionMap(identity)
+      state.creatures.map(stepCreature(_, state.creatures, blocked, angelCells, deltaMs)).partitionMap(identity)
     val plundered = arrived
       .flatMap(c => effectivePlunder(c.kind, attackerResearchLevels))
       .groupMapReduce(_._1)(_._2)(_ + _)
@@ -102,6 +105,7 @@ object CombatEngine:
       creature: Creature,
       allCreatures: List[Creature],
       blocked: Set[(Int, Int)],
+      angelCells: Set[(Int, Int)],
       deltaMs: Double
   ): Either[Creature, Creature] =
     val currentCell = GridConfig.cellOf(creature.pos)
@@ -109,41 +113,58 @@ object CombatEngine:
     else
       Pathfinding.shortestPath(currentCell, GridConfig.goalCell, blocked) match
         case None => Left(creature) // no route right now (shouldn't happen, placement guards this)
-        case Some(path) => Left(advanceTowards(creature, allCreatures, path, deltaMs))
+        case Some(path) => Left(advanceTowards(creature, allCreatures, angelCells, path, deltaMs))
 
   private def advanceTowards(
       creature: Creature,
       allCreatures: List[Creature],
+      angelCells: Set[(Int, Int)],
       path: List[(Int, Int)],
       deltaMs: Double
   ): Creature =
     val nextCell = if path.size > 1 then path(1) else path.head
     val target = GridConfig.cellCenter(nextCell._1, nextCell._2)
-    val speed = effectiveSpeedPerMs(creature, allCreatures)
+    val speed = effectiveSpeedPerMs(creature, allCreatures, angelCells)
     creature.copy(pos = moveToward(creature.pos, target, speed * deltaMs))
 
   // Loup.md: "augmente la vitesse de deplacement des unites a 2 cases de 50%" — any
   // Wolf within range multiplies another creature's speed (not its own; the boost is for
   // *other* units, Wolf's own speed is already baked into its CreatureSpec). Multiple
   // nearby Wolves don't stack — presence of at least one is enough, mirroring how
-  // Paladin's shield is binary rather than additive per source.
-  private def effectiveSpeedPerMs(creature: Creature, allCreatures: List[Creature]): Double =
+  // Paladin's shield is binary rather than additive per source. Ange.md's slow ("ralentit
+  // leur vitesse de deplacement de 25%") is the opposite kind of aura — a *building*
+  // debuffing any enemy creature adjacent to it (same adjacency rule as its own damage,
+  // see accumulateAuraHits) — and stacks multiplicatively with Wolf's boost rather than
+  // overriding it, since nothing in Ange.md/Loup.md says otherwise.
+  private def effectiveSpeedPerMs(creature: Creature, allCreatures: List[Creature], angelCells: Set[(Int, Int)]): Double =
     val cell = GridConfig.cellOf(creature.pos)
     val boosted = allCreatures.exists(other =>
       other.id != creature.id && other.kind == UnitKind.Wolf &&
         chebyshevDistance(cell, GridConfig.cellOf(other.pos)) <= Balance.WolfSpeedAuraRangeCells
     )
-    if boosted then creature.speedPerMs * Balance.WolfSpeedAuraMultiplier else creature.speedPerMs
+    val slowed = angelCells.exists(ac => Pathfinding.neighbors(ac).contains(cell))
+    val boostMultiplier = if boosted then Balance.WolfSpeedAuraMultiplier else 1.0
+    val slowMultiplier = if slowed then 1.0 - Balance.AngelSlowFraction else 1.0
+    creature.speedPerMs * boostMultiplier * slowMultiplier
 
   private def moveToward(pos: Vec2, target: Vec2, maxDist: Double): Vec2 =
     val delta = target - pos
     if delta.length <= maxDist then target else pos + delta.normalized * maxDist
 
-  // Buildings with the Ent aura — Foret.md introduces it, and Jungle (an upgrade of
-  // Foret) inherits it since "Amelioration" is cumulative; Grove/Bosquet, the base tier,
-  // doesn't have it yet. domain-visible (not private) since CompositeStrategy's maze
-  // scoring needs the same set to value routing paths past these buildings.
-  private[domain] val auraBuildingKinds: Set[BuildingKind] = Set(BuildingKind.Forest, BuildingKind.Jungle)
+  // Buildings that damage every enemy creature standing adjacent to them, each at its own
+  // rate (see auraDamagePerSecFor) — Foret.md introduces the Ent aura, Jungle (an upgrade
+  // of Foret) inherits it since "Amelioration" is cumulative (Grove/Bosquet, the base tier,
+  // doesn't have it yet), and Ange.md adds a third, independently-costed source at a
+  // different rate (plus its own slow debuff — see effectiveSpeedPerMs). domain-visible
+  // (not private) since CompositeStrategy's maze scoring needs the same set to value
+  // routing paths past these buildings — that heuristic (LayoutPolicy.dangerScore) still
+  // assumes a single flat Balance.AuraDamagePerSec per aura cell, so it currently
+  // underrates how dangerous a path past an Angel specifically is; only the real per-tick
+  // damage below (applyDamageSources) needs to be exact.
+  private[domain] val auraBuildingKinds: Set[BuildingKind] = Set(BuildingKind.Forest, BuildingKind.Jungle, BuildingKind.Angel)
+
+  private def auraDamagePerSecFor(kind: BuildingKind): Double =
+    if kind == BuildingKind.Angel then Balance.AngelDamagePerSec else Balance.AuraDamagePerSec
 
   // Two independent damage sources, combined before Paladin shielding is applied once to
   // the total (not once per source) — Forest/Jungle deal passive damage-over-time to
@@ -162,12 +183,11 @@ object CombatEngine:
     // chaotiques' plunder bonus above which needs the *opponent's* research instead.
     val loyalesLevel = state.researchLevels.getOrElse(BuildingKind.LaboDeLaLoi, 0)
     val loyalesMultiplier = 1.0 + ResearchSpecs.all(BuildingKind.LaboDeLaLoi).effectAtLevel(loyalesLevel)
-    val forestDamagePerHit = Balance.AuraDamagePerSec * deltaMs / 1000.0 * loyalesMultiplier
     val watchtowerDamagePerHit = Balance.WatchtowerDamagePerSec * deltaMs / 1000.0 * loyalesMultiplier
     val forests = state.buildings.filter(b => auraBuildingKinds.contains(b.kind))
     val watchtowers = state.buildings.filter(_.kind == BuildingKind.Watchtower)
     val fromForests = forests.foldLeft(Map.empty[Long, Double])((acc, f) =>
-      accumulateAuraHits(f, state.creatures, forestDamagePerHit, acc)
+      accumulateAuraHits(f, state.creatures, auraDamagePerSecFor(f.kind) * deltaMs / 1000.0 * loyalesMultiplier, acc)
     )
     val fromTowers = watchtowers.foldLeft(Map.empty[Long, Double])((acc, w) =>
       accumulateWatchtowerHit(w, state.creatures, watchtowerDamagePerHit, acc)
@@ -254,12 +274,15 @@ object CombatEngine:
     val shieldedCells = paladinCells.flatMap(c => c :: Pathfinding.neighbors(c)).toSet
     creatures.filter(c => shieldedCells.contains(GridConfig.cellOf(c.pos))).map(_.id).toSet
 
-  // Zombie.md/Vampire.md's corruption rates — Corruption.md: "Les unites de cette faction
-  // corrompent les batiments qu'elles touchent", no restriction to particular building
-  // kinds, so every building in `state` is a fair target the same way Forest's aura hits
-  // every creature, not just certain kinds of them.
-  private val corruptionRatesPerSec: Map[UnitKind, Double] =
-    Map(UnitKind.Zombie -> Balance.ZombieCorruptionPercentPerSec, UnitKind.Vampire -> Balance.VampireCorruptionPercentPerSec)
+  // Zombie.md/Vampire.md/Ame.md's corruption rates — Corruption.md: "Les unites de cette
+  // faction corrompent les batiments qu'elles touchent", no restriction to particular
+  // building kinds, so every building in `state` is a fair target the same way Forest's
+  // aura hits every creature, not just certain kinds of them.
+  private val corruptionRatesPerSec: Map[UnitKind, Double] = Map(
+    UnitKind.Zombie -> Balance.ZombieCorruptionPercentPerSec,
+    UnitKind.Vampire -> Balance.VampireCorruptionPercentPerSec,
+    UnitKind.Soul -> Balance.SoulCorruptionPercentPerSec
+  )
 
   // Mirrors applyDamageSources' aura pattern but building-side: instead of a *building*
   // hitting *creatures* on adjacent cells, a *creature* corrupts *buildings* on adjacent
@@ -267,9 +290,13 @@ object CombatEngine:
   // multiple Forests would stack aura damage on a creature between them). A building
   // whose corruptionPercent reaches Balance.CorruptionMaxPercent is removed from the
   // maze and reported as a Corrosion for the caller to refund.
-  private def applyCorruption(state: MazeState, deltaMs: Double): (MazeState, List[Corrosion]) =
+  // The third return value — how many buildings *each individual corruptor* is adjacent
+  // to this tick — exists solely for Ame.md's heal-the-summoner effect (see
+  // healSummoners): every other corruptor (Zombie/Vampire) simply has no `summonedBy` to
+  // credit it to, so it's inert for them.
+  private def applyCorruption(state: MazeState, deltaMs: Double): (MazeState, List[Corrosion], Map[Long, Int]) =
     val corruptors = state.creatures.filter(c => corruptionRatesPerSec.contains(c.kind))
-    if corruptors.isEmpty then (state, Nil)
+    if corruptors.isEmpty then (state, Nil, Map.empty)
     else
       val corruptionByCell = corruptors
         .groupMapReduce(c => GridConfig.cellOf(c.pos))(c => corruptionRatesPerSec(c.kind) * deltaMs / 1000.0)(_ + _)
@@ -280,7 +307,70 @@ object CombatEngine:
       }
       val (destroyed, remaining) = updated.partition(_.corruptionPercent >= Balance.CorruptionMaxPercent)
       val corrosions = destroyed.map(b => Corrosion(b.id, b.kind, b.col, b.row, BuildingSpecs.all(b.kind).cost))
-      (state.copy(buildings = remaining), corrosions)
+      val buildingCellsBefore = state.buildings.map(b => (b.col, b.row)).toSet
+      val hitCountByCreature = corruptors.map { c =>
+        val cell = GridConfig.cellOf(c.pos)
+        c.id -> Pathfinding.neighbors(cell).count(buildingCellsBefore.contains)
+      }.toMap
+      (state.copy(buildings = remaining), corrosions, hitCountByCreature)
+
+  // Ame.md: "Chaque fois qu'elle corrompt un batiment, elle soigne le Necromancien... de 1
+  // PV... Si sa corruption touche plusieurs batiments a la fois, elle soigne davantage" —
+  // credited to the *specific* Necromancer each Soul was summoned by (Creature.summonedBy),
+  // not any Necromancer present in the maze. A Soul whose summoner has already died simply
+  // heals no one (summonedBy no longer matches any living creature) — same "lost, not an
+  // error" shape as Corrosion crediting a side that has since changed.
+  private def healSummoners(state: MazeState, hitsByCreature: Map[Long, Int], deltaMs: Double): MazeState =
+    val healPerSummoner = state.creatures
+      .filter(c => c.kind == UnitKind.Soul && c.summonedBy.isDefined && hitsByCreature.getOrElse(c.id, 0) > 0)
+      .groupMapReduce(_.summonedBy.get)(c => hitsByCreature(c.id) * Balance.SoulHealPerSecPerBuilding * deltaMs / 1000.0)(
+        _ + _
+      )
+    if healPerSummoner.isEmpty then state
+    else
+      state.copy(creatures = state.creatures.map { c =>
+        healPerSummoner.get(c.id) match
+          case Some(amount) => c.copy(hp = math.min(c.maxHp, c.hp + amount))
+          case None         => c
+      })
+
+  // Necromancien.md: "Toutes les 5 secondes, invoque une Ame" — a *creature* spawning
+  // another creature directly into the same maze it's currently walking, unlike every
+  // building's spawn (which always crosses into the opponent's maze via BattleEngine's
+  // deliverUnits). Mirrors advanceSpawnTimers' countdown shape, but appends straight to
+  // `state.creatures` and consumes `state.nextId` itself instead of returning a count for
+  // the caller to deliver elsewhere.
+  private def advanceCreatureSummons(state: MazeState, deltaMs: Double): MazeState =
+    val summoners = state.creatures.filter(c => CreatureSpecs.all(c.kind).spawns.isDefined)
+    if summoners.isEmpty then state
+    else
+      val (updatedSummoners, newCreatures, nextId) =
+        summoners.foldLeft((List.empty[Creature], List.empty[Creature], state.nextId)) {
+          case ((accUpdated, accNew, id), summoner) =>
+            val (summonedKind, intervalMs) = CreatureSpecs.all(summoner.kind).spawns.get
+            val remaining = summoner.spawnCountdownMs - deltaMs
+            if remaining > 0 then (summoner.copy(spawnCountdownMs = remaining) :: accUpdated, accNew, id)
+            else
+              val spec = CreatureSpecs.all(summonedKind)
+              val summoned = Creature(
+                id,
+                summoner.pos,
+                spec.maxHp,
+                spec.maxHp,
+                spec.speedPerMs,
+                summonedKind,
+                spawnCountdownMs = spec.spawns.map(_._2).getOrElse(0.0),
+                summonedBy = Some(summoner.id)
+              )
+              (
+                summoner.copy(spawnCountdownMs = remaining + intervalMs) :: accUpdated,
+                summoned :: accNew,
+                id + 1
+              )
+        }
+      val summonerIds = summoners.map(_.id).toSet
+      val untouched = state.creatures.filterNot(c => summonerIds.contains(c.id))
+      state.copy(creatures = untouched ++ updatedSummoners ++ newCreatures, nextId = nextId)
 
   // Exposed (not private) so any other reader of live production rates — the UI's stock
   // display, tooltips — computes the exact same number tick applies, instead of

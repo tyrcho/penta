@@ -3,7 +3,16 @@ package towerdefense.domain
 // Stats and plunder-on-arrival amounts per unit kind — the data-driven replacement for
 // the old scattered per-kind Balance constants + hardcoded plunderAmounts match. Combat
 // abilities (Paladin's shield) stay a kind-based special case in CombatEngine.
-case class CreatureSpec(maxHp: Double, speedPerMs: Double, plunder: Map[Resource, Double])
+// spawns: mirrors BuildingSpec's identical field — None for every kind except Necromancer
+// (Ame.md/Necromancien.md: a *creature* that itself periodically spawns another creature
+// into the same maze it's walking, unlike every building's spawn which crosses into the
+// opponent's maze — see CombatEngine.advanceCreatureSummons/BattleEngine.spawnCreature).
+case class CreatureSpec(
+    maxHp: Double,
+    speedPerMs: Double,
+    plunder: Map[Resource, Double],
+    spawns: Option[(UnitKind, Double)] = None
+)
 
 object CreatureSpecs:
   val all: Map[UnitKind, CreatureSpec] = Map(
@@ -35,5 +44,18 @@ object CreatureSpecs:
     // adjacent enemy buildings over time (Corruption.md), a combat ability that stays
     // outside this spec (see CombatEngine's corruption handling).
     UnitKind.Zombie -> CreatureSpec(Balance.ZombieMaxHp, Balance.ZombieSpeedPerMs, plunder = Map.empty),
-    UnitKind.Vampire -> CreatureSpec(Balance.VampireMaxHp, Balance.VampireSpeedPerMs, plunder = Map.empty)
+    UnitKind.Vampire -> CreatureSpec(Balance.VampireMaxHp, Balance.VampireSpeedPerMs, plunder = Map.empty),
+    // Necromancien.md gives it no plunder ability either — its value is periodically
+    // invoking an Ame, a combat ability that stays outside this spec (see CombatEngine's
+    // advanceCreatureSummons).
+    UnitKind.Necromancer -> CreatureSpec(
+      Balance.NecromancerMaxHp,
+      Balance.NecromancerSpeedPerMs,
+      plunder = Map.empty,
+      spawns = Some(UnitKind.Soul -> Balance.SoulSummonIntervalMs)
+    ),
+    // Ame.md gives it no plunder ability either — its value is corrupting adjacent enemy
+    // buildings and healing its summoning Necromancer, a combat ability that stays outside
+    // this spec (see CombatEngine's corruption/healSummoners handling).
+    UnitKind.Soul -> CreatureSpec(Balance.SoulMaxHp, Balance.SoulSpeedPerMs, plunder = Map.empty)
   )

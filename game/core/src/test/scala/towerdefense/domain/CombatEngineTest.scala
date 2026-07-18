@@ -330,6 +330,75 @@ class CombatEngineTest extends munit.FunSuite:
     assertEquals(byId(2).hp, farther.hp)
   }
 
+  test("angels produce light over time, at their own rate") {
+    val angel = Building(100, col = 5, row = 5, BuildingKind.Angel, 0.0)
+    val state = withResources(light = 0.0).copy(buildings = List(angel))
+    val result = CombatEngine.tick(state, deltaMs = 2000.0)
+    assertEquals(result.state.resources(Resource.Light), Balance.LightPerSecPerAngel * 2.0)
+  }
+
+  test("an angel damages an adjacent enemy at its own rate, not Forest's AuraDamagePerSec") {
+    val angel = Building(100, col = 5, row = 5, BuildingKind.Angel, 0.0)
+    val adjacent =
+      Creature(1, GridConfig.cellCenter(6, 5), hp = 100.0, maxHp = 100.0, speedPerMs = 0.0, UnitKind.Elf)
+    val distant =
+      Creature(2, GridConfig.cellCenter(0, 0), hp = 100.0, maxHp = 100.0, speedPerMs = 0.0, UnitKind.Elf)
+    val state = withResources().copy(creatures = List(adjacent, distant), buildings = List(angel))
+    val result = CombatEngine.tick(state, deltaMs = 1000.0)
+    val byId = result.state.creatures.map(c => c.id -> c).toMap
+    assertEquals(byId(1).hp, adjacent.hp - Balance.AngelDamagePerSec)
+    assertEquals(byId(2).hp, distant.hp)
+  }
+
+  test("an angel slows an adjacent enemy's movement by AngelSlowFraction") {
+    val angel = Building(100, col = 5, row = 5, BuildingKind.Angel, 0.0)
+    val nearbyElf =
+      Creature(1, GridConfig.cellCenter(6, 5), Balance.ElfMaxHp, Balance.ElfMaxHp, Balance.ElfSpeedPerMs, UnitKind.Elf)
+    val state = withResources().copy(creatures = List(nearbyElf), buildings = List(angel))
+    val result = CombatEngine.tick(state, deltaMs = 10.0)
+    val slowedElf = result.state.creatures.find(_.id == 1).get
+    val aloneElf =
+      CombatEngine.tick(withResources().copy(creatures = List(nearbyElf)), deltaMs = 10.0).state.creatures.head
+    val slowedDistance = distanceMoved(nearbyElf.pos, slowedElf.pos)
+    val aloneDistance = distanceMoved(nearbyElf.pos, aloneElf.pos)
+    assertEqualsDouble(slowedDistance, aloneDistance * (1.0 - Balance.AngelSlowFraction), 1e-9)
+  }
+
+  test("an angel's slow does not reach a creature on a non-adjacent cell") {
+    val angel = Building(100, col = 5, row = 5, BuildingKind.Angel, 0.0)
+    val farElf =
+      Creature(1, GridConfig.cellCenter(0, 0), Balance.ElfMaxHp, Balance.ElfMaxHp, Balance.ElfSpeedPerMs, UnitKind.Elf)
+    val state = withResources().copy(creatures = List(farElf), buildings = List(angel))
+    val result = CombatEngine.tick(state, deltaMs = 10.0)
+    val unaffected = result.state.creatures.find(_.id == 1).get
+    val alone =
+      CombatEngine.tick(withResources().copy(creatures = List(farElf)), deltaMs = 10.0).state.creatures.head
+    assertEquals(unaffected.pos, alone.pos)
+  }
+
+  test("a wolf's speed boost and an angel's slow stack multiplicatively") {
+    val angel = Building(100, col = 5, row = 5, BuildingKind.Angel, 0.0)
+    // A Wolf never boosts itself (see effectiveSpeedPerMs: the boost is for *other*
+    // creatures within range) — so the boosted-and-slowed subject here is the Elf, sitting
+    // adjacent to both the Angel (for the slow) and the Wolf (for the boost).
+    val wolf =
+      Creature(1, GridConfig.cellCenter(6, 6), Balance.WolfMaxHp, Balance.WolfMaxHp, Balance.WolfSpeedPerMs, UnitKind.Wolf)
+    val elf =
+      Creature(2, GridConfig.cellCenter(6, 5), Balance.ElfMaxHp, Balance.ElfMaxHp, Balance.ElfSpeedPerMs, UnitKind.Elf)
+    val state = withResources().copy(creatures = List(wolf, elf), buildings = List(angel))
+    val result = CombatEngine.tick(state, deltaMs = 10.0)
+    val boostedAndSlowed = result.state.creatures.find(_.id == 2).get
+    val plainElf =
+      CombatEngine.tick(withResources().copy(creatures = List(elf)), deltaMs = 10.0).state.creatures.head
+    val actualDistance = distanceMoved(elf.pos, boostedAndSlowed.pos)
+    val plainDistance = distanceMoved(elf.pos, plainElf.pos)
+    assertEqualsDouble(
+      actualDistance,
+      plainDistance * Balance.WolfSpeedAuraMultiplier * (1.0 - Balance.AngelSlowFraction),
+      1e-9
+    )
+  }
+
   test("a paladin shields its target from watchtower damage too, not just forest aura") {
     val watchtower = Building(100, col = 5, row = 5, BuildingKind.Watchtower, 0.0)
     val shieldedPos = GridConfig.cellCenter(6, 5)
@@ -566,6 +635,152 @@ class CombatEngineTest extends munit.FunSuite:
     val result = CombatEngine.tick(state, deltaMs = Balance.CorruptionMaxPercent / Balance.ZombieCorruptionPercentPerSec * 1000.0 * 2)
     assertEquals(result.state.buildings, Nil)
     assertEquals(result.corrupted.size, 1)
+  }
+
+  test("a death house emits exactly one necromancer-spawn signal per interval") {
+    val deathHouse = Building(100, col = 5, row = 5, BuildingKind.DeathHouse, Balance.NecromancerSpawnIntervalMs)
+    val state = withResources().copy(buildings = List(deathHouse))
+    val before = CombatEngine.tick(state, deltaMs = Balance.NecromancerSpawnIntervalMs - 1.0)
+    val at = CombatEngine.tick(state, deltaMs = Balance.NecromancerSpawnIntervalMs)
+    assertEquals(before.spawned.getOrElse(UnitKind.Necromancer, 0), 0)
+    assertEquals(at.spawned.getOrElse(UnitKind.Necromancer, 0), 1)
+  }
+
+  test("death houses produce shadow over time") {
+    val deathHouse = Building(100, col = 5, row = 5, BuildingKind.DeathHouse, Balance.NecromancerSpawnIntervalMs)
+    val state = withResources().copy(buildings = List(deathHouse))
+    val result = CombatEngine.tick(state, deltaMs = 2000.0)
+    assertEquals(result.state.resources(Resource.Shadow), Balance.ShadowPerSecPerDeathHouse * 2.0)
+  }
+
+  test("a soul corrupts an adjacent building at the same rate as a zombie") {
+    val grove = Building(100, col = 5, row = 5, BuildingKind.Grove, 0.0)
+    val soul = Creature(1, GridConfig.cellCenter(6, 5), Balance.SoulMaxHp, Balance.SoulMaxHp, 0.0, UnitKind.Soul)
+    val state = withResources().copy(creatures = List(soul), buildings = List(grove))
+    val result = CombatEngine.tick(state, deltaMs = 1000.0)
+    assertEquals(result.state.buildings.head.corruptionPercent, Balance.SoulCorruptionPercentPerSec)
+    assertEquals(Balance.SoulCorruptionPercentPerSec, Balance.ZombieCorruptionPercentPerSec)
+  }
+
+  test("a necromancer invokes a soul every SoulSummonIntervalMs, appearing at its own position") {
+    val necromancer = Creature(
+      1,
+      GridConfig.cellCenter(6, 5),
+      Balance.NecromancerMaxHp,
+      Balance.NecromancerMaxHp,
+      0.0,
+      UnitKind.Necromancer,
+      spawnCountdownMs = Balance.SoulSummonIntervalMs
+    )
+    val state = withResources().copy(creatures = List(necromancer))
+    val before = CombatEngine.tick(state, deltaMs = Balance.SoulSummonIntervalMs - 1.0)
+    assertEquals(before.state.creatures.count(_.kind == UnitKind.Soul), 0)
+    val at = CombatEngine.tick(before.state, deltaMs = 1.0)
+    val souls = at.state.creatures.filter(_.kind == UnitKind.Soul)
+    assertEquals(souls.size, 1)
+    assertEquals(GridConfig.cellOf(souls.head.pos), GridConfig.cellOf(necromancer.pos))
+    assertEquals(souls.head.summonedBy, Some(1L))
+    // The necromancer itself survives (it isn't consumed by summoning) and its own
+    // countdown resets for the next Soul.
+    assertEquals(at.state.creatures.count(_.kind == UnitKind.Necromancer), 1)
+  }
+
+  test("a freshly spawned necromancer's first soul only appears after the full interval, not instantly") {
+    val spec = CreatureSpecs.all(UnitKind.Necromancer)
+    assertEquals(spec.spawns, Some((UnitKind.Soul, Balance.SoulSummonIntervalMs)))
+  }
+
+  test("a soul's corruption heals its summoning necromancer by SoulHealPerSecPerBuilding, capped at max HP") {
+    val grove = Building(100, col = 5, row = 5, BuildingKind.Grove, 0.0)
+    val necromancer = Creature(
+      1,
+      GridConfig.cellCenter(0, 0),
+      hp = Balance.NecromancerMaxHp - 5.0,
+      maxHp = Balance.NecromancerMaxHp,
+      speedPerMs = 0.0,
+      UnitKind.Necromancer
+    )
+    val soul = Creature(
+      2,
+      GridConfig.cellCenter(6, 5),
+      Balance.SoulMaxHp,
+      Balance.SoulMaxHp,
+      speedPerMs = 0.0,
+      UnitKind.Soul,
+      summonedBy = Some(1L)
+    )
+    val state = withResources().copy(creatures = List(necromancer, soul), buildings = List(grove))
+    val result = CombatEngine.tick(state, deltaMs = 1000.0)
+    val healedNecromancer = result.state.creatures.find(_.id == 1).get
+    assertEquals(healedNecromancer.hp, necromancer.hp + Balance.SoulHealPerSecPerBuilding)
+  }
+
+  test("healing never exceeds the necromancer's max HP") {
+    val grove = Building(100, col = 5, row = 5, BuildingKind.Grove, 0.0)
+    val necromancer = Creature(
+      1,
+      GridConfig.cellCenter(0, 0),
+      hp = Balance.NecromancerMaxHp,
+      maxHp = Balance.NecromancerMaxHp,
+      speedPerMs = 0.0,
+      UnitKind.Necromancer
+    )
+    val soul = Creature(
+      2,
+      GridConfig.cellCenter(6, 5),
+      Balance.SoulMaxHp,
+      Balance.SoulMaxHp,
+      speedPerMs = 0.0,
+      UnitKind.Soul,
+      summonedBy = Some(1L)
+    )
+    val state = withResources().copy(creatures = List(necromancer, soul), buildings = List(grove))
+    val result = CombatEngine.tick(state, deltaMs = 1000.0)
+    val healedNecromancer = result.state.creatures.find(_.id == 1).get
+    assertEquals(healedNecromancer.hp, Balance.NecromancerMaxHp)
+  }
+
+  test("a soul adjacent to two buildings at once heals its necromancer twice as much") {
+    val groveA = Building(100, col = 5, row = 5, BuildingKind.Grove, 0.0)
+    val groveB = Building(101, col = 7, row = 5, BuildingKind.Grove, 0.0)
+    val necromancer = Creature(
+      1,
+      GridConfig.cellCenter(0, 0),
+      hp = Balance.NecromancerMaxHp - 10.0,
+      maxHp = Balance.NecromancerMaxHp,
+      speedPerMs = 0.0,
+      UnitKind.Necromancer
+    )
+    val soul = Creature(
+      2,
+      GridConfig.cellCenter(6, 5),
+      Balance.SoulMaxHp,
+      Balance.SoulMaxHp,
+      speedPerMs = 0.0,
+      UnitKind.Soul,
+      summonedBy = Some(1L)
+    )
+    val state = withResources().copy(creatures = List(necromancer, soul), buildings = List(groveA, groveB))
+    val result = CombatEngine.tick(state, deltaMs = 1000.0)
+    val healedNecromancer = result.state.creatures.find(_.id == 1).get
+    assertEquals(healedNecromancer.hp, necromancer.hp + Balance.SoulHealPerSecPerBuilding * 2.0)
+  }
+
+  test("a soul with no living summoning necromancer heals no one") {
+    val grove = Building(100, col = 5, row = 5, BuildingKind.Grove, 0.0)
+    val soul = Creature(
+      2,
+      GridConfig.cellCenter(6, 5),
+      Balance.SoulMaxHp,
+      Balance.SoulMaxHp,
+      speedPerMs = 0.0,
+      UnitKind.Soul,
+      summonedBy = Some(999L) // no creature with this id exists
+    )
+    val state = withResources().copy(creatures = List(soul), buildings = List(grove))
+    val result = CombatEngine.tick(state, deltaMs = 1000.0)
+    // Should not throw, and no creature should have gained hp from nowhere.
+    assertEquals(result.state.creatures.map(c => c.id -> c.hp).toMap, Map(2L -> Balance.SoulMaxHp))
   }
 
   test("a vampire takes half damage from a forest aura") {

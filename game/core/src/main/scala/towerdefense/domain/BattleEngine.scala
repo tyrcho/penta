@@ -157,5 +157,11 @@ object BattleEngine:
   private def spawnCreature(state: MazeState, kind: UnitKind): MazeState =
     val spec = CreatureSpecs.all(kind)
     val spawnPos = GridConfig.cellCenter(GridConfig.spawnCell._1, GridConfig.spawnCell._2)
-    val creature = Creature(state.nextId, spawnPos, spec.maxHp, spec.maxHp, spec.speedPerMs, kind)
+    // A fresh Necromancer starts with a full Soul-summon countdown (spec.spawns' interval),
+    // not 0 — same "starts at the full interval, doesn't fire instantly" choice as a
+    // freshly placed building (see Placement.tryPlaceBuilding). Inert (0.0) for every other
+    // kind, which has no CreatureSpec.spawns at all.
+    val initialCountdown = spec.spawns.map(_._2).getOrElse(0.0)
+    val creature =
+      Creature(state.nextId, spawnPos, spec.maxHp, spec.maxHp, spec.speedPerMs, kind, spawnCountdownMs = initialCountdown)
     state.copy(creatures = creature :: state.creatures, nextId = state.nextId + 1)

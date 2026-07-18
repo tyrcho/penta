@@ -64,7 +64,7 @@ object SpendingPolicy:
   private val chaosBuildingKinds: Set[BuildingKind] =
     Set(BuildingKind.Cave, BuildingKind.Labyrinth)
   private val mortBuildingKinds: Set[BuildingKind] =
-    Set(BuildingKind.Tomb, BuildingKind.BlackCastle)
+    Set(BuildingKind.Tomb, BuildingKind.BlackCastle, BuildingKind.DeathHouse)
 
   private[domain] def counterScore(opponent: MazeState, kind: BuildingKind): Double =
     val natureCount = opponent.buildings.count(b => natureBuildingKinds.contains(b.kind))
@@ -98,7 +98,7 @@ case object PlunderSpending extends SpendingPolicy:
 // Always favors Mort (Tomb/BlackCastle) regardless of the opponent's own faction mix,
 // racing the Mort/corruption victory condition the same way PlunderSpending races Chaos's.
 case object CorruptionSpending extends SpendingPolicy:
-  private val mortKinds = Set(BuildingKind.Tomb, BuildingKind.BlackCastle)
+  private val mortKinds = Set(BuildingKind.Tomb, BuildingKind.BlackCastle, BuildingKind.DeathHouse)
 
   def score(state: MazeState, opponent: MazeState, kind: BuildingKind): Double =
     (if mortKinds.contains(kind) then 1.0 else 0.0) + 0.25 * SpendingPolicy.resourceScore(state, kind)

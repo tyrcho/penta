@@ -21,6 +21,22 @@ class BattleEngineTest extends munit.FunSuite:
     assertEquals(result.ai.creatures.head.kind, UnitKind.Elf)
   }
 
+  test("a death house's Necromancer arrives in the opponent's maze with a full Soul-summon countdown") {
+    val deathHouse = Building(100, col = 5, row = 5, BuildingKind.DeathHouse, Balance.NecromancerSpawnIntervalMs)
+    val battle = BattleState(
+      player = withResources().copy(buildings = List(deathHouse)),
+      ai = withResources()
+    )
+    val result = BattleEngine.tick(battle, deltaMs = Balance.NecromancerSpawnIntervalMs)
+    assertEquals(result.player.creatures, Nil)
+    assertEquals(result.ai.creatures.size, 1)
+    val necromancer = result.ai.creatures.head
+    assertEquals(necromancer.kind, UnitKind.Necromancer)
+    // Starts with the full interval (like a freshly placed building's own spawnCountdownMs
+    // — see Placement.tryPlaceBuilding), not 0 — its first Soul shouldn't appear instantly.
+    assertEquals(necromancer.spawnCountdownMs, Balance.SoulSummonIntervalMs)
+  }
+
   test("the AI builds something once it can afford one, on either side (symmetric)") {
     val battle = BattleState.initial
     val result = BattleEngine.tick(battle, deltaMs = 1.0)

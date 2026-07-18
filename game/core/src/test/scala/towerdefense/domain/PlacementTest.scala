@@ -179,6 +179,22 @@ class PlacementTest extends munit.FunSuite:
     )
   }
 
+  test("rejects an angel without enough light") {
+    val (col, row) = emptyCell
+    assertEquals(
+      Placement.tryPlaceBuilding(withResources(light = 0.0), BuildingKind.Angel, col, row).isLeft,
+      true
+    )
+  }
+
+  test("places an angel and deducts light only (no wood cost)") {
+    val (col, row) = emptyCell
+    val result = Placement.tryPlaceBuilding(richState, BuildingKind.Angel, col, row).toOption.get
+    assertEquals(result.buildings.count(_.kind == BuildingKind.Angel), 1)
+    assertEquals(result.resources(Resource.Light), richState.resources(Resource.Light) - Balance.AngelCostLight)
+    assertEquals(result.resources(Resource.Wood), richState.resources(Resource.Wood))
+  }
+
   test("rejects placement that would seal off the only route to the goal") {
     val corridor = for row <- 0 until GridConfig.rows yield (1, row)
     val withWall = corridor.init.foldLeft(richState) { (state, cell) =>
@@ -310,6 +326,29 @@ class PlacementTest extends munit.FunSuite:
     assertEquals(result.buildings.count(_.kind == BuildingKind.Tomb), 1)
     assertEquals(result.resources(Resource.Wood), richState.resources(Resource.Wood) - Balance.TombCostWood)
     assertEquals(result.resources(Resource.Shadow), richState.resources(Resource.Shadow) - Balance.TombCostShadow)
+  }
+
+  test("rejects a death house without enough wood or shadow") {
+    val (col, row) = emptyCell
+    assertEquals(
+      Placement.tryPlaceBuilding(withResources(wood = 0.0, shadow = 1_000.0), BuildingKind.DeathHouse, col, row).isLeft,
+      true
+    )
+    assertEquals(
+      Placement.tryPlaceBuilding(withResources(wood = 1_000.0, shadow = 0.0), BuildingKind.DeathHouse, col, row).isLeft,
+      true
+    )
+  }
+
+  test("places a death house and deducts both wood and shadow") {
+    val (col, row) = emptyCell
+    val result = Placement.tryPlaceBuilding(richState, BuildingKind.DeathHouse, col, row).toOption.get
+    assertEquals(result.buildings.count(_.kind == BuildingKind.DeathHouse), 1)
+    assertEquals(result.resources(Resource.Wood), richState.resources(Resource.Wood) - Balance.DeathHouseCostWood)
+    assertEquals(
+      result.resources(Resource.Shadow),
+      richState.resources(Resource.Shadow) - Balance.DeathHouseCostShadow
+    )
   }
 
   test("places a black castle and deducts both wood and shadow") {

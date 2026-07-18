@@ -6,16 +6,17 @@ package towerdefense.domain
 // Both sides can build any directly-buildable BuildingKind — see CLAUDE.md, "the game
 // is symmetric" — Forest/Jungle are reached only via maybeUpgrade, never listed here.
 // Tried by descending wood cost (Church 20 = BlackCastle 20 > Labyrinth 10 = Watchtower
-// 10 > Grove 5 = Tomb 5 = LaboNaturel 5 > Cave 0 = the four remaining Labo* kinds 0):
-// each one's wood cost dominates every cheaper building's, so trying it later would make
-// it unreachable — by the time its wood cost is affordable, the cheaper buildings' wood
-// costs always are too (their non-wood requirements are independent currencies and don't
-// create the same trap). Cave joined the zero-wood tier in the same rebalance that made
-// Grove/Tomb/LaboNaturel tie at 5 — it sits ahead of the four Labo* kinds for the same
-// "arbitrary but stable" reason they're ordered among themselves. Every same-wood-cost tie
-// breaks by list position — arbitrary but stable. Kept as an explicit list, not derived by
-// sorting BuildingSpecs at runtime — a re-derived sort risks silently flipping a tie with
-// no test to catch it.
+// 10 = DeathHouse 10 > Grove 5 = Tomb 5 = LaboNaturel 5 > Cave 0 = Angel 0 = the four
+// remaining Labo* kinds 0): each one's wood cost dominates every cheaper building's, so
+// trying it later would make it unreachable — by the time its wood cost is affordable,
+// the cheaper buildings' wood costs always are too (their non-wood requirements are
+// independent currencies and don't create the same trap). Angel costs only Light (no Wood
+// at all, unlike Grove/Tomb/LaboNaturel's shared-Wood trap — see the NOTE below), so it
+// sits in the zero-wood tier alongside Cave/the four Labo* kinds, ordered among them
+// arbitrarily but stably. Cave joined this tier in the same rebalance that made Grove/
+// Tomb/LaboNaturel tie at 5. Every same-wood-cost tie breaks by list position — arbitrary
+// but stable. Kept as an explicit list, not derived by sorting BuildingSpecs at runtime —
+// a re-derived sort risks silently flipping a tie with no test to catch it.
 // NOTE: at the 5-wood tier, Grove's cost (Wood only) is now a strict subset of Tomb's
 // (Wood + Shadow) and LaboNaturel's (Wood + Crystal) — so whenever Tomb or LaboNaturel is
 // affordable, Grove always is too, and being first in that tier, Grove always wins. Under
@@ -31,10 +32,12 @@ object LinearStrategy extends AiStrategy:
     BuildingKind.BlackCastle,
     BuildingKind.Labyrinth,
     BuildingKind.Watchtower,
+    BuildingKind.DeathHouse,
     BuildingKind.Grove,
     BuildingKind.Tomb,
     BuildingKind.LaboNaturel,
     BuildingKind.Cave,
+    BuildingKind.Angel,
     BuildingKind.LaboSombre,
     BuildingKind.LaboDeRecherche,
     BuildingKind.LaboDeLaLoi,

@@ -81,6 +81,11 @@ object BuildingSpecs:
       produces = Map(Resource.Light -> Balance.LightPerSecPerWatchtower),
       spawns = None
     ),
+    BuildingKind.Angel -> BuildingSpec(
+      cost = Map(Resource.Light -> Balance.AngelCostLight),
+      produces = Map(Resource.Light -> Balance.LightPerSecPerAngel),
+      spawns = None
+    ),
     BuildingKind.Tomb -> BuildingSpec(
       cost = Map(Resource.Wood -> Balance.TombCostWood, Resource.Shadow -> Balance.TombCostShadow),
       produces = Map(Resource.Shadow -> Balance.ShadowPerSecPerTomb),
@@ -90,6 +95,11 @@ object BuildingSpecs:
       cost = Map(Resource.Wood -> Balance.BlackCastleCostWood, Resource.Shadow -> Balance.BlackCastleCostShadow),
       produces = Map(Resource.Shadow -> Balance.ShadowPerSecPerBlackCastle),
       spawns = Some(UnitKind.Vampire -> Balance.VampireSpawnIntervalMs)
+    ),
+    BuildingKind.DeathHouse -> BuildingSpec(
+      cost = Map(Resource.Wood -> Balance.DeathHouseCostWood, Resource.Shadow -> Balance.DeathHouseCostShadow),
+      produces = Map(Resource.Shadow -> Balance.ShadowPerSecPerDeathHouse),
+      spawns = Some(UnitKind.Necromancer -> Balance.NecromancerSpawnIntervalMs)
     ),
     BuildingKind.LaboNaturel -> BuildingSpec(
       cost = Map(Resource.Wood -> Balance.LaboNaturelCostWood, Resource.Crystal -> Balance.LaboNaturelCostCrystal),

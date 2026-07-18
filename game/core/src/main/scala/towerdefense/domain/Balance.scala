@@ -82,11 +82,22 @@ object Balance:
   // and deals direct single-target damage instead of a passive adjacency aura.
   val WatchtowerCostWood: Double = 10.0 // "cout en bois: 10"
   val WatchtowerCostLight: Double = 20.0 // "cout en lumiere: 5"
-  val LightPerSecPerWatchtower: Double = 0.1 // Tour de guet.md: "Produit 0.1 Lumiere par seconde"
+  val LightPerSecPerWatchtower: Double = 0.2 // POC tuning: raised from Tour de guet.md's 0.1/sec
   val WatchtowerDamagePerSec: Double = 10.0 // "Inflige 10 degats chaque seconde a une cible"
   // "jusqu'a 2 cases de distance" — Chebyshev (king-move) distance in cells, the usual
   // reading of tower range on a grid: any cell within a 5x5 block centered on the tower.
   val WatchtowerRangeCells: Int = 2
+
+  // Ange.md: Loi's third building — no unit spawn, produces Light like Eglise/Watchtower,
+  // and (like Forest/Jungle's Ent aura) deals passive damage to every adjacent enemy, plus
+  // a slow debuff Forest/Jungle don't have.
+  val AngelCostLight: Double = 50.0 // Ange.md: "cout en lumiere: 50"
+  val LightPerSecPerAngel: Double = 0.5 // Ange.md: "Produit 0.5 Lumiere par seconde"
+  val AngelDamagePerSec: Double = 5.0 // Ange.md: "Inflige 5 degats par seconde aux unites adjacentes"
+  // Ange.md: "ralentit leur vitesse de deplacement de 25%" — a multiplier (0.75x) applied
+  // to any enemy creature adjacent to an Angel, same adjacency rule as its damage (see
+  // CombatEngine.effectiveSpeedPerMs), stacking multiplicatively with Wolf's speed boost.
+  val AngelSlowFraction: Double = 0.25
 
   // ── Mort (Death) ─────────────────────────────────────────────────────────
   val TombCostWood: Double = 5.0 // Tombe.md: "cout en bois: 5"
@@ -117,6 +128,38 @@ object Balance:
   // of (not stacked with) Paladin's shield: a Vampire is excluded from paladinShieldedIds
   // even when standing adjacent to a Paladin.
   val VampireDamageReductionFraction: Double = 0.5
+
+  // Maison de la Mort.md: Mort's third building — no upgrade tier, unlike Tomb/BlackCastle
+  // it sends a *unit that itself spawns another unit* (Necromancien -> Ame) instead of a
+  // single kind directly.
+  val DeathHouseCostWood: Double = 10.0 // "cout en bois: 10"
+  val DeathHouseCostShadow: Double = 40.0 // "cout en ombre: 40"
+  val ShadowPerSecPerDeathHouse: Double = 0.5 // "Produit 0.5 ombre / sec"
+  val NecromancerSpawnIntervalMs: Double = 10_000.0 // "Envoie un Necromancien toutes les 10 secondes"
+
+  val NecromancerMaxHp: Double = 40.0 // Necromancien.md: "PV: 40"
+  // Necromancien.md: "Se deplace lentement... comme un Zombie" — same pace, not just the
+  // same wording, so it stays derived rather than a second copy of the same number.
+  val NecromancerSpeedPerMs: Double = ZombieSpeedPerMs
+  // Necromancien.md: "Toutes les 5 secondes, invoque une Ame" — a *creature* spawning
+  // another creature into the same maze it's currently walking, unlike every other spawn
+  // in the game (always building -> opponent's maze) — see CombatEngine.advanceCreatureSummons.
+  val SoulSummonIntervalMs: Double = 5_000.0
+
+  val SoulMaxHp: Double = 10.0 // Ame.md: "PV: 10"
+  // Ame.md: "Se deplace a vitesse normale (1 case/sec)" — Elf's own pace is the game's
+  // baseline "normal" speed (every other unit is defined relative to it: Zombie is half,
+  // Wolf/Vampire are 1.5x).
+  val SoulSpeedPerMs: Double = ElfSpeedPerMs
+  // Ame.md: "Corrompt les batiments adjacents de 1% par seconde" — same rate as a Zombie,
+  // reusing CombatEngine's existing corruption mechanic (Corruption.md).
+  val SoulCorruptionPercentPerSec: Double = 1.0
+  // Ame.md: "Chaque fois qu'elle corrompt un batiment, elle soigne le Necromancien... de 1
+  // PV... Si sa corruption touche plusieurs batiments a la fois, elle soigne davantage" — a
+  // per-second rate (like the corruption percentage itself) *per building* the Soul is
+  // currently corrupting, credited to the specific Necromancer that summoned it (see
+  // Creature.summonedBy) rather than any Necromancer present in the maze.
+  val SoulHealPerSecPerBuilding: Double = 1.0
 
   val CorruptionMaxPercent: Double = 100.0 // Corruption.md: "corrompu a 100% il disparait"
 
@@ -217,9 +260,10 @@ object Balance:
   val StartingFire: Double = 30.0
 
   // Light has no producer besides the Eglise itself, so without a starting amount at
-  // least EgliseCostLight, the very first Eglise could never be built. POC default:
-  // just enough for exactly one, same relationship as StartingFire to CaveCostFire.
-  val StartingLight: Double = 20.0
+  // least EgliseCostLight, the very first Eglise could never be built. Raised to 50
+  // (project owner's explicit request) so the first Angel (cost 50 Light) is also
+  // immediately affordable, same relationship as StartingFire to CaveCostFire.
+  val StartingLight: Double = 50.0
 
   // Same reasoning as StartingLight: Shadow has no producer besides Tomb itself, which
   // also costs Shadow, so the very first Tomb needs a starting stock — just enough for one.
