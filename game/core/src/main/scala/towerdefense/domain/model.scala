@@ -14,7 +14,7 @@ enum UnitKind derives CanEqual:
 
 // Grove/Forest/Jungle form Nature's upgrade chain (Bosquet.md/Foret.md/Jungle.md) — only
 // Grove is directly buildable; Forest and Jungle are reached by upgrading an existing
-// Grove/Forest in place (see BuildingSpecs.upgradesTo, Placement.tryUpgradeBuilding).
+// Grove/Forest in place (see BuildingSpecs.upgradeOptions, Placement.tryUpgradeBuilding).
 //
 // Tomb/BlackCastle (Tombe.md/Chateau Noir.md) are Mort's pair, mirroring Cave/Labyrinth's
 // shape (two independently-buildable tiers, not an upgrade chain). PassingGate (Portail.md)
@@ -23,13 +23,21 @@ enum UnitKind derives CanEqual:
 // harvesting Shadow from any nearby death regardless of what killed it (see CombatEngine's
 // applyPassingGateHarvest and Building.flashMs).
 //
-// The five Labo* kinds are Science's buildings (Labo Naturel/Sombre/de Recherche/de la
-// Loi/du Chaos) — Crystal producers here; the leveled research tree, its global modifiers,
-// and its victory condition (Recherche fondamentale) all live on MazeState.researchLevels/
-// VictoryConditions instead, see BuildingSpecs' doc.
+// LaboFondamental is Science's only directly-buildable kind — a plain, unspecialized base
+// lab (flat Balance.CrystalPerSecPerLaboFondamental production, no research line of its
+// own). It upgrades into exactly one of the other five Labo* kinds (Labo Naturel/Sombre/de
+// Recherche/de la Loi/du Chaos — see BuildingSpecs.upgradeOptions), each still capped at
+// one per maze (maxPerMaze), so a maze can run several LaboFondamental at once but only
+// ever specialize into a given kind once (until that specific building is lost, freeing
+// the slot for a *different* LaboFondamental to claim it — see Placement.tryUpgradeBuilding).
+// The upgrade itself grants the chosen kind an instant, free research level 1 — "further
+// research is the same as now" (Placement.tryResearch), just starting one level higher.
+// Crystal production here; the leveled research tree, its global modifiers, and Recherche
+// fondamentale's victory condition all live on MazeState.researchLevels/VictoryConditions
+// instead, see BuildingSpecs' doc.
 enum BuildingKind derives CanEqual:
   case Grove, Forest, Jungle, Stonehenge, Cave, Labyrinth, Church, Watchtower, Angel, Tomb, BlackCastle,
-    DeathHouse, PassingGate, LaboNaturel, LaboSombre, LaboDeRecherche, LaboDeLaLoi, LaboDuChaos
+    DeathHouse, PassingGate, LaboFondamental, LaboNaturel, LaboSombre, LaboDeRecherche, LaboDeLaLoi, LaboDuChaos
 
 // A unit currently walking this maze. From this maze owner's point of view it's
 // always hostile — sent by one of the opponent's buildings. See CreatureSpecs for

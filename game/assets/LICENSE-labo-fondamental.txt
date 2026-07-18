@@ -1,0 +1,8 @@
+labo-fondamental.png
+
+Original placeholder graphic, procedurally drawn for this project (a plain
+generic flask, representing the un-specialized base Science lab before it's
+upgraded into one of the five specific labs) — not sourced from any external
+asset pack, so no attribution/license terms apply. Best-effort per
+CLAUDE.md's art asset policy; swap for commissioned/licensed art later if
+this ever needs real production polish.

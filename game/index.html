@@ -230,7 +230,12 @@
     }
     #tooltip-destroy.visible { display: inline-block; }
     #tooltip-destroy:hover { border-color: var(--color-brand); background: var(--color-surface); }
-    #tooltip-upgrade {
+    /* Up to 5 slots (BuildingSpecs.upgradeOptions' longest branch — LaboFondamental's 5
+       specific labs); Grove/Forest's single-option chain only ever shows slot 0. Each is a
+       (preview, button) pair, same look as the old single #tooltip-upgrade/-preview pair
+       this replaces — just addressed by a shared class instead of one fixed id, so
+       GameApp.scala can show/hide/wire as many as the selected building actually has. */
+    .tooltip-upgrade-btn {
       display: none;
       margin-top: 0.4rem;
       margin-left: 0.3rem;
@@ -244,18 +249,18 @@
       cursor: pointer;
       pointer-events: auto;
     }
-    #tooltip-upgrade.visible { display: inline-block; }
-    #tooltip-upgrade:hover { background: var(--color-brand); }
-    #tooltip-upgrade.disabled { opacity: 0.35; cursor: not-allowed; }
-    #tooltip-upgrade.disabled:hover { background: var(--color-bg); }
-    #tooltip-upgrade-preview {
+    .tooltip-upgrade-btn.visible { display: inline-block; }
+    .tooltip-upgrade-btn:hover { background: var(--color-brand); }
+    .tooltip-upgrade-btn.disabled { opacity: 0.35; cursor: not-allowed; }
+    .tooltip-upgrade-btn.disabled:hover { background: var(--color-bg); }
+    .tooltip-upgrade-preview {
       display: none;
       margin-top: 0.3rem;
       font-size: 0.7rem;
       color: var(--color-brand);
       opacity: 0.85;
     }
-    #tooltip-upgrade-preview.visible { display: block; }
+    .tooltip-upgrade-preview.visible { display: block; }
     #tooltip-research {
       display: none;
       margin-top: 0.4rem;
@@ -399,11 +404,14 @@
         <span class="stat progress">Fondamentale: <span id="player-fondamentale">0/0</span><span class="progress-bar"><span class="progress-bar-fill" id="player-fondamentale-bar"></span></span></span>
       </div>
       <div class="concept-buildings">
-        <button class="build-btn" id="build-labo-naturel"><img src="./assets/labo-naturel.png" alt="Labo Naturel"></button>
-        <button class="build-btn" id="build-labo-sombre"><img src="./assets/labo-sombre.png" alt="Labo Sombre"></button>
-        <button class="build-btn" id="build-labo-de-recherche"><img src="./assets/labo-de-recherche.png" alt="Labo de Recherche"></button>
-        <button class="build-btn" id="build-labo-de-la-loi"><img src="./assets/labo-de-la-loi.png" alt="Labo de la Loi"></button>
-        <button class="build-btn" id="build-labo-du-chaos"><img src="./assets/labo-du-chaos.png" alt="Labo du Chaos"></button>
+        <!-- The only Science build button — LaboNaturel/Sombre/DeRecherche/DeLaLoi/DuChaos
+             are reached by upgrading this one, chosen via the tooltip's 5 upgrade buttons
+             (see index.html's #tooltip-upgrade-0..4), never built directly. -->
+        <button class="build-btn" id="build-labo-fondamental"><img src="./assets/labo-fondamental.png" alt="Labo Fondamental"></button>
+        <span class="build-slot-placeholder">?</span>
+        <span class="build-slot-placeholder">?</span>
+        <span class="build-slot-placeholder">?</span>
+        <span class="build-slot-placeholder">?</span>
       </div>
       <div class="concept-side ai-side">
         <span class="stat progress">Fondamentale: <span id="ai-fondamentale">0/0</span><span class="progress-bar"><span class="progress-bar-fill" id="ai-fondamentale-bar"></span></span></span>
@@ -422,8 +430,16 @@
     </div>
     <div id="tooltip">
       <span id="tooltip-text"></span>
-      <span id="tooltip-upgrade-preview"></span>
-      <button id="tooltip-upgrade"></button>
+      <span id="tooltip-upgrade-preview-0" class="tooltip-upgrade-preview"></span>
+      <button id="tooltip-upgrade-0" class="tooltip-upgrade-btn"></button>
+      <span id="tooltip-upgrade-preview-1" class="tooltip-upgrade-preview"></span>
+      <button id="tooltip-upgrade-1" class="tooltip-upgrade-btn"></button>
+      <span id="tooltip-upgrade-preview-2" class="tooltip-upgrade-preview"></span>
+      <button id="tooltip-upgrade-2" class="tooltip-upgrade-btn"></button>
+      <span id="tooltip-upgrade-preview-3" class="tooltip-upgrade-preview"></span>
+      <button id="tooltip-upgrade-3" class="tooltip-upgrade-btn"></button>
+      <span id="tooltip-upgrade-preview-4" class="tooltip-upgrade-preview"></span>
+      <button id="tooltip-upgrade-4" class="tooltip-upgrade-btn"></button>
       <button id="tooltip-research"></button>
       <button id="tooltip-destroy"></button>
     </div>

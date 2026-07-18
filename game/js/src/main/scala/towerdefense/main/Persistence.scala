@@ -264,6 +264,7 @@ private object Persistence:
         case "Tomb"            => BuildingKind.Tomb
         case "BlackCastle"     => BuildingKind.BlackCastle
         case "DeathHouse"      => BuildingKind.DeathHouse
+        case "LaboFondamental" => BuildingKind.LaboFondamental
         case "LaboNaturel"     => BuildingKind.LaboNaturel
         case "LaboSombre"      => BuildingKind.LaboSombre
         case "LaboDeRecherche" => BuildingKind.LaboDeRecherche

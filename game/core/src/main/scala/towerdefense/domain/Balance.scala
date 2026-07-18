@@ -227,10 +227,25 @@ object Balance:
   val MortVictoryCorruptionTarget: Double = 8.0
 
   // ── Science ──────────────────────────────────────────────────────────────
+  // LaboFondamental is the only Science kind buildable from scratch — a cheap, generic
+  // base lab with no research line of its own, upgraded into one of the five specific labs
+  // below (see BuildingSpecs.upgradeOptions/Placement.tryUpgradeBuilding). Its own flat rate
+  // is deliberately the same 0.2/sec as four of the five specific labs (LaboDeRecherche
+  // alone produces more, 0.3/sec) — it's meant to read as "a plain, unspecialized lab", not
+  // a discount version of any one of them.
+  val LaboFondamentalCostCrystal: Double = 10.0
+  val CrystalPerSecPerLaboFondamental: Double = 0.2
+  // Note sur les laboratoires.md's "10% bigger per research level" sizing rule — applies to
+  // a lab's *rendered* size once it's one of the five specific kinds (GameApp.scala reads
+  // this against that kind's own researchLevels entry), not LaboFondamental's own size
+  // (always the unscaled base, i.e. level 0). Level 5 (the max) is 50% bigger than level 0.
+  val LaboSizeGrowthPerResearchLevel: Double = 0.10
+
   // Five labs, one per other faction (Note sur les laboratoires.md: "un seul laboratoire de
-  // chaque type" — see Placement's maxOnePerKind check), each producing Crystal and (not yet
-  // implemented — see BuildingSpecs' doc) unlocking a matching leveled research line. No
-  // UnitKind for Science: the vault defines none, only these five buildings.
+  // chaque type" — see Placement's maxOnePerKind check), each producing Crystal and
+  // unlocking a matching leveled research line — reached only by upgrading a LaboFondamental
+  // (see above), never buildable from scratch (BuildingSpecs.buildableDirectly = false). No
+  // UnitKind for Science: the vault defines none, only these five buildings (plus the base).
   val LaboNaturelCostWood: Double = 5.0 // Labo Naturel.md: "cout en bois: 5"
   val LaboNaturelCostCrystal: Double = 10.0 // Labo Naturel.md: "cout en crystal: 10"
   val CrystalPerSecPerLaboNaturel: Double = 0.2 // Labo Naturel.md: "Produit 0.2 Crystal par sec"

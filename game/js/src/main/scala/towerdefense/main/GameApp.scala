@@ -118,6 +118,10 @@ private object AssetPaths:
   val TombIcon = "./assets/tomb.png"
   val BlackCastleIcon = "./assets/chateau-noir.png"
   val Vampire = "./assets/vampire.png"
+  // Note sur les laboratoires.md's base tier (only Science kind buildable from scratch —
+  // see BuildingSpecs.upgradeOptions) — an original placeholder graphic, see
+  // LICENSE-labo-fondamental.txt.
+  val LaboFondamentalIcon = "./assets/labo-fondamental.png"
   val LaboNaturelIcon = "./assets/labo-naturel.png"
   val LaboSombreIcon = "./assets/labo-sombre.png"
   val LaboDeRechercheIcon = "./assets/labo-de-recherche.png"
@@ -164,8 +168,8 @@ private object AssetPaths:
   val All: List[String] =
     List(
       Grove, Forest, Jungle, CaveRock, LabyrintheIcon, EgliseIcon, WatchtowerIcon, AngelIcon, Minotaur, Paladin,
-      TombIcon, BlackCastleIcon, Vampire, LaboNaturelIcon, LaboSombreIcon, LaboDeRechercheIcon,
-      LaboDeLaLoiIcon, LaboDuChaosIcon, DeathHouseIcon, StonehengeIcon, PassingGateIcon
+      TombIcon, BlackCastleIcon, Vampire, LaboFondamentalIcon, LaboNaturelIcon, LaboSombreIcon,
+      LaboDeRechercheIcon, LaboDeLaLoiIcon, LaboDuChaosIcon, DeathHouseIcon, StonehengeIcon, PassingGateIcon
     ) ++ GoblinFrames.values.flatten ++ ElfFrames.values.flatten ++ Flames ++ Wolf ++ ZombieFrames ++
       NecromancerFrames ++ SoulFrames ++ NecromancerSummonFrames ++ TreeFrames.values.flatten
 
@@ -193,6 +197,7 @@ private object BuildingVisuals:
     BuildingKind.Angel -> BuildingVisual(AssetPaths.AngelIcon, GridConfig.cellSize * 1.1, None),
     BuildingKind.Tomb -> BuildingVisual(AssetPaths.TombIcon, GridConfig.cellSize * 0.9, None),
     BuildingKind.BlackCastle -> BuildingVisual(AssetPaths.BlackCastleIcon, GridConfig.cellSize * 1.1, None),
+    BuildingKind.LaboFondamental -> BuildingVisual(AssetPaths.LaboFondamentalIcon, GridConfig.cellSize * 0.8, None),
     BuildingKind.LaboNaturel -> BuildingVisual(AssetPaths.LaboNaturelIcon, GridConfig.cellSize * 0.8, None),
     BuildingKind.LaboSombre -> BuildingVisual(AssetPaths.LaboSombreIcon, GridConfig.cellSize * 0.8, None),
     BuildingKind.LaboDeRecherche -> BuildingVisual(AssetPaths.LaboDeRechercheIcon, GridConfig.cellSize * 0.8, None),
@@ -221,11 +226,25 @@ private def domSlug(kind: BuildingKind): String = kind match
   case BuildingKind.DeathHouse      => "death-house"
   case BuildingKind.PassingGate     => "passing-gate"
   case BuildingKind.Stonehenge      => "stonehenge"
+  case BuildingKind.LaboFondamental => "labo-fondamental"
   case BuildingKind.LaboNaturel     => "labo-naturel"
   case BuildingKind.LaboSombre      => "labo-sombre"
   case BuildingKind.LaboDeRecherche => "labo-de-recherche"
   case BuildingKind.LaboDeLaLoi     => "labo-de-la-loi"
   case BuildingKind.LaboDuChaos     => "labo-du-chaos"
+
+// A human-readable name for kinds whose enum spelling reads awkwardly without spaces
+// (the five Labo* kinds) — used only in the upgrade button label (see
+// upgradeOptionsInfo); every other reader of BuildingKind already spells its own name out
+// in a hand-written tooltip/hover-text constant, so this doesn't need to cover every kind.
+private def displayName(kind: BuildingKind): String = kind match
+  case BuildingKind.LaboFondamental => "Labo Fondamental"
+  case BuildingKind.LaboNaturel     => "Labo Naturel"
+  case BuildingKind.LaboSombre      => "Labo Sombre"
+  case BuildingKind.LaboDeRecherche => "Labo de Recherche"
+  case BuildingKind.LaboDeLaLoi     => "Labo de la Loi"
+  case BuildingKind.LaboDuChaos     => "Labo du Chaos"
+  case other                        => other.toString
 
 // Only these can be placed fresh via a toolbar button — Forest/Jungle are reached only
 // by upgrading an existing Grove/Forest (see Placement.tryUpgradeBuilding), so they get
@@ -369,7 +388,7 @@ def onReady(app: Application, textures: js.Dictionary[Texture]): Unit =
   wireFullscreenButton()
   wireAiLevelSelect(aiLevelIndex, index => aiLevelIndex = index)
   wireDestroyButton((col, row) => battle = destroyPlayerBuilding(battle, mode, col, row))
-  wireUpgradeButton((col, row) => battle = upgradePlayerBuilding(battle, mode, col, row))
+  wireUpgradeButtons((col, row, targetKind) => battle = upgradePlayerBuilding(battle, mode, col, row, targetKind))
   wireResearchButton((col, row) => battle = researchPlayerBuilding(battle, mode, col, row))
 
   app.stage.eventMode = "static"
@@ -667,25 +686,13 @@ private val DeathHouseTooltip =
     s"+${formatDecimal(Balance.ShadowPerSecPerDeathHouse)} shadow/s, spawns a Necromancer every " +
     s"${(Balance.NecromancerSpawnIntervalMs / 1000).toInt}s"
 
-private val LaboNaturelTooltip =
-  s"Labo Naturel — cost ${Balance.LaboNaturelCostWood.toInt} wood + ${Balance.LaboNaturelCostCrystal.toInt} crystal. " +
-    s"+${formatDecimal(Balance.CrystalPerSecPerLaboNaturel)} crystal/s"
-
-private val LaboSombreTooltip =
-  s"Labo Sombre — cost ${Balance.LaboSombreCostShadow.toInt} shadow + ${Balance.LaboSombreCostCrystal.toInt} crystal. " +
-    s"+${formatDecimal(Balance.CrystalPerSecPerLaboSombre)} crystal/s"
-
-private val LaboDeRechercheTooltip =
-  s"Labo de Recherche — cost ${Balance.LaboDeRechercheCostCrystal.toInt} crystal. " +
-    s"+${formatDecimal(Balance.CrystalPerSecPerLaboDeRecherche)} crystal/s"
-
-private val LaboDeLaLoiTooltip =
-  s"Labo de la Loi — cost ${Balance.LaboDeLaLoiCostLight.toInt} light + ${Balance.LaboDeLaLoiCostCrystal.toInt} crystal. " +
-    s"+${formatDecimal(Balance.CrystalPerSecPerLaboDeLaLoi)} crystal/s"
-
-private val LaboDuChaosTooltip =
-  s"Labo du Chaos — cost ${Balance.LaboDuChaosCostFire.toInt} fire + ${Balance.LaboDuChaosCostCrystal.toInt} crystal. " +
-    s"+${formatDecimal(Balance.CrystalPerSecPerLaboDuChaos)} crystal/s"
+// The only Science build button now — the five specific labs are reached by upgrading
+// this one (see the tooltip-upgrade-N buttons/upgradeOptionsInfo), never built directly.
+private val LaboFondamentalTooltip =
+  s"Labo Fondamental — cost ${Balance.LaboFondamentalCostCrystal.toInt} crystal. " +
+    s"+${formatDecimal(Balance.CrystalPerSecPerLaboFondamental)} crystal/s, no research bonus of its own. " +
+    s"Upgrade it into a specific lab to unlock that lab's own research line (starting at a free level 1) " +
+    s"— only one lab of each specific kind per maze at a time"
 
 private val StonehengeTooltip =
   s"Stonehenge — cost ${Balance.StonehengeCostWood.toInt} wood. Spawns an Arbre Anime every " +
@@ -709,11 +716,7 @@ private val BuildingTooltips: Map[BuildingKind, String] = Map(
   BuildingKind.Tomb -> TombTooltip,
   BuildingKind.BlackCastle -> BlackCastleTooltip,
   BuildingKind.DeathHouse -> DeathHouseTooltip,
-  BuildingKind.LaboNaturel -> LaboNaturelTooltip,
-  BuildingKind.LaboSombre -> LaboSombreTooltip,
-  BuildingKind.LaboDeRecherche -> LaboDeRechercheTooltip,
-  BuildingKind.LaboDeLaLoi -> LaboDeLaLoiTooltip,
-  BuildingKind.LaboDuChaos -> LaboDuChaosTooltip,
+  BuildingKind.LaboFondamental -> LaboFondamentalTooltip,
   BuildingKind.Stonehenge -> StonehengeTooltip,
   BuildingKind.PassingGate -> PassingGateTooltip
 )
@@ -1248,9 +1251,16 @@ private def syncBuildings(
     if !sprites.buildingKinds.get(b.id).contains(b.kind) then
       sprites.buildingKinds(b.id) = b.kind
       g.texture = textures(visual.texturePath)
-      g.width = visual.renderSize
-      g.height = visual.renderSize
       g.tint = visual.tint.getOrElse(0xffffff)
+    // Note sur les laboratoires.md: a specific Science lab (never LaboFondamental itself,
+    // which has no researchLevels entry and so always reads level 0 here) renders 10% bigger
+    // per research level, up to 50% bigger at the max level — read every tick, not just on
+    // a kind change, since research level can advance long after the building last changed
+    // kind (see Balance.LaboSizeGrowthPerResearchLevel's doc).
+    val researchLevel = maze.researchLevels.getOrElse(b.kind, 0)
+    val effectiveSize = visual.renderSize * (1.0 + Balance.LaboSizeGrowthPerResearchLevel * researchLevel)
+    g.width = effectiveSize
+    g.height = effectiveSize
     setPos(g, GridConfig.cellCenter(b.col, b.row))
     // Only a PassingGate ever has a nonzero flashMs (Building.flashMs's doc) — tint it while
     // a nearby death is still being "harvested", and fall back to its normal (untinted)
@@ -1457,9 +1467,12 @@ private def updateTooltip(
 ): Unit =
   val tooltip = document.getElementById("tooltip")
   val destroyBtn = document.getElementById("tooltip-destroy").asInstanceOf[dom.html.Button]
-  val upgradeBtn = document.getElementById("tooltip-upgrade").asInstanceOf[dom.html.Button]
-  val upgradePreview = document.getElementById("tooltip-upgrade-preview")
+  val upgradeBtns = (0 until MaxUpgradeOptions).map(i => document.getElementById(s"tooltip-upgrade-$i").asInstanceOf[dom.html.Button])
+  val upgradePreviews = (0 until MaxUpgradeOptions).map(i => document.getElementById(s"tooltip-upgrade-preview-$i"))
   val researchBtn = document.getElementById("tooltip-research").asInstanceOf[dom.html.Button]
+  def hideAllUpgradeSlots(): Unit =
+    upgradeBtns.foreach(_.classList.remove("visible"))
+    upgradePreviews.foreach(_.classList.remove("visible"))
   target.flatMap(t => hoverText(t, battle).map(text => (t, text))) match
     case Some((target, text)) =>
       document.getElementById("tooltip-text").textContent = text
@@ -1467,8 +1480,8 @@ private def updateTooltip(
       val maze = if target.isPlayer then battle.player else battle.ai
       // Both mazes are AI-driven while Spectating (see CLAUDE.md's symmetry rule — the
       // destroy/upgrade/research affordance is a player action, not a game rule, so it's
-      // withheld here rather than in destroyInfo/upgradeInfo/researchInfo themselves) —
-      // hovering still shows read-only stats, it just can't act on them.
+      // withheld here rather than in destroyInfo/upgradeOptionsInfo/researchInfo
+      // themselves) — hovering still shows read-only stats, it just can't act on them.
       (if mode == Mode.Playing then destroyInfo(target, maze) else None) match
         case Some((col, row, label)) =>
           destroyBtn.textContent = label
@@ -1476,18 +1489,24 @@ private def updateTooltip(
           destroyBtn.setAttribute("data-row", row.toString)
           destroyBtn.classList.add("visible")
         case None => destroyBtn.classList.remove("visible")
-      (if mode == Mode.Playing then upgradeInfo(target, maze) else None) match
-        case Some((col, row, label, affordable, preview)) =>
-          upgradeBtn.textContent = label
-          upgradeBtn.setAttribute("data-col", col.toString)
-          upgradeBtn.setAttribute("data-row", row.toString)
-          upgradeBtn.classList.add("visible")
-          if affordable then upgradeBtn.classList.remove("disabled") else upgradeBtn.classList.add("disabled")
-          upgradePreview.textContent = s"→ $preview"
-          upgradePreview.classList.add("visible")
-        case None =>
-          upgradeBtn.classList.remove("visible")
-          upgradePreview.classList.remove("visible")
+      (if mode == Mode.Playing then upgradeOptionsInfo(target, maze) else None) match
+        case Some((col, row, options)) =>
+          options.zipWithIndex.foreach { case ((kind, label, affordable, preview), i) =>
+            val btn = upgradeBtns(i)
+            btn.textContent = label
+            btn.setAttribute("data-col", col.toString)
+            btn.setAttribute("data-row", row.toString)
+            btn.setAttribute("data-kind", kind.toString)
+            btn.classList.add("visible")
+            if affordable then btn.classList.remove("disabled") else btn.classList.add("disabled")
+            upgradePreviews(i).textContent = s"→ $preview"
+            upgradePreviews(i).classList.add("visible")
+          }
+          (options.size until MaxUpgradeOptions).foreach { i =>
+            upgradeBtns(i).classList.remove("visible")
+            upgradePreviews(i).classList.remove("visible")
+          }
+        case None => hideAllUpgradeSlots()
       (if mode == Mode.Playing then researchInfo(target, maze) else None) match
         case Some((col, row, label, affordable)) =>
           researchBtn.textContent = label
@@ -1500,8 +1519,7 @@ private def updateTooltip(
       if !buttonTooltipActive then
         tooltip.classList.remove("visible")
         destroyBtn.classList.remove("visible")
-        upgradeBtn.classList.remove("visible")
-        upgradePreview.classList.remove("visible")
+        hideAllUpgradeSlots()
         researchBtn.classList.remove("visible")
 
 // Only the player's own buildings are destroyable from the UI (the AI destroying its own
@@ -1545,16 +1563,26 @@ private def destroyPlayerBuilding(battle: BattleState, mode: Mode, col: Int, row
   if mode != Mode.Playing || battle.outcome.isDefined then battle
   else Demolition.tryDestroy(battle.player, col, row).map(p => battle.copy(player = p)).getOrElse(battle)
 
-// Only the player's own Grove/Forest can be upgraded from the UI (the AI upgrades via
-// AiStrategy.maybeUpgrade instead) — mirrors destroyInfo's shape/wiring exactly. The
-// affordable flag drives the button's disabled look (see updateTooltip) — Placement.
-// tryUpgradeBuilding already rejects an unaffordable upgrade server-side regardless, this
-// is purely the same visual affordance the build-<slug> buttons get from canAfford. The
-// preview string is the *next* tier's own hover text (see buildingHoverText) computed
-// against a synthetic just-upgraded Building, so players see what they're buying before
-// they click — reusing Placement.upgradeBuilding's own countdown-reset rule
-// (spec.spawns.map(_._2).getOrElse(0.0)) so "next Elf in Xs" previews the real value.
-private def upgradeInfo(target: HoverTarget, maze: MazeState): Option[(Int, Int, String, Boolean, String)] =
+// Up to this many upgrade options for one building (BuildingSpecs.upgradeOptions' longest
+// branch today — LaboFondamental's 5 specific labs) — see index.html's tooltip-upgrade-N
+// button/preview slots, one per option, hidden when a building has fewer.
+private val MaxUpgradeOptions = 5
+
+// Only the player's own buildings can be upgraded from the UI (the AI upgrades via
+// AiStrategy.maybeUpgrade instead) — mirrors destroyInfo's shape/wiring exactly. One entry
+// per option in BuildingSpecs.upgradeOptions (Grove/Forest's single-option chain — just
+// index 0 — or LaboFondamental's 5 specific labs). The affordable flag drives each button's
+// disabled look (see updateTooltip) — Placement.tryUpgradeBuilding already rejects an
+// unaffordable/already-claimed upgrade server-side regardless, this is purely the same
+// visual affordance the build-<slug> buttons get from canAfford. Each preview string is
+// that option's own hover text (see buildingHoverText) computed against a synthetic
+// just-upgraded Building, so players see what they're buying before they click — reusing
+// Placement.upgradeBuilding's own countdown-reset rule (spec.spawns.map(_._2).getOrElse(0.0))
+// so "next Elf in Xs" previews the real value.
+private def upgradeOptionsInfo(
+    target: HoverTarget,
+    maze: MazeState
+): Option[(Int, Int, List[(BuildingKind, String, Boolean, String)])] =
   if !target.isPlayer then None
   else
     target.kind match
@@ -1562,39 +1590,58 @@ private def upgradeInfo(target: HoverTarget, maze: MazeState): Option[(Int, Int,
       // b.kind, not the pattern-matched kind — see destroyInfo's comment on the same issue.
       case HoverKind.BuildingH(_) =>
         maze.buildings.find(_.id == target.id).flatMap { b =>
-          BuildingSpecs.upgradesTo.get(b.kind).map { nextKind =>
-            val nextSpec = BuildingSpecs.all(nextKind)
-            val costText = nextSpec.cost.toList
-              .sortBy(_._1.ordinal)
-              .map { case (res, amount) => s"${formatDecimal(amount)} ${resourceName(res)}" }
-              .mkString(", ")
-            val previewCountdown = nextSpec.spawns.map(_._2).getOrElse(0.0)
-            val preview =
-              buildingHoverText(nextKind, b.copy(kind = nextKind, spawnCountdownMs = previewCountdown), maze)
-            (
-              b.col,
-              b.row,
-              s"Upgrade to $nextKind ($costText)",
-              Placement.canAfford(maze.resources, nextSpec.cost),
-              preview
+          val options = BuildingSpecs.upgradeOptions.getOrElse(b.kind, Nil)
+          if options.isEmpty then None
+          else
+            Some(
+              (
+                b.col,
+                b.row,
+                options.map { nextKind =>
+                  val nextSpec = BuildingSpecs.all(nextKind)
+                  val costText = nextSpec.cost.toList
+                    .sortBy(_._1.ordinal)
+                    .map { case (res, amount) => s"${formatDecimal(amount)} ${resourceName(res)}" }
+                    .mkString(", ")
+                  val previewCountdown = nextSpec.spawns.map(_._2).getOrElse(0.0)
+                  val preview =
+                    buildingHoverText(nextKind, b.copy(kind = nextKind, spawnCountdownMs = previewCountdown), maze)
+                  // A kind already claimed by another building of this maze (Note sur les
+                  // laboratoires.md: one of each specific kind at a time) greys the button
+                  // out here too, not just an unaffordable cost — Placement.tryUpgradeBuilding
+                  // would reject it either way (MaxCountReached), so this keeps the button's
+                  // disabled look an accurate preview of whether clicking would do anything.
+                  val slotAvailable = nextSpec.maxPerMaze.forall(max => maze.buildings.count(_.kind == nextKind) < max)
+                  (
+                    nextKind,
+                    s"Upgrade to ${displayName(nextKind)} ($costText)",
+                    slotAvailable && Placement.canAfford(maze.resources, nextSpec.cost),
+                    preview
+                  )
+                }
+              )
             )
-          }
         }
 
-private def wireUpgradeButton(onUpgrade: (Int, Int) => Unit): Unit =
-  val btn = document.getElementById("tooltip-upgrade").asInstanceOf[dom.html.Button]
-  btn.addEventListener(
-    "click",
-    (_: dom.Event) => {
-      val col = btn.getAttribute("data-col")
-      val row = btn.getAttribute("data-row")
-      if col != null && row != null && !btn.classList.contains("disabled") then onUpgrade(col.toInt, row.toInt)
-    }
-  )
+private def wireUpgradeButtons(onUpgrade: (Int, Int, BuildingKind) => Unit): Unit =
+  (0 until MaxUpgradeOptions).foreach { slot =>
+    val btn = document.getElementById(s"tooltip-upgrade-$slot").asInstanceOf[dom.html.Button]
+    btn.addEventListener(
+      "click",
+      (_: dom.Event) => {
+        val col = btn.getAttribute("data-col")
+        val row = btn.getAttribute("data-row")
+        val kindName = btn.getAttribute("data-kind")
+        if col != null && row != null && kindName != null && !btn.classList.contains("disabled") then
+          onUpgrade(col.toInt, row.toInt, BuildingKind.valueOf(kindName))
+      }
+    )
+  }
 
-private def upgradePlayerBuilding(battle: BattleState, mode: Mode, col: Int, row: Int): BattleState =
+private def upgradePlayerBuilding(battle: BattleState, mode: Mode, col: Int, row: Int, targetKind: BuildingKind): BattleState =
   if mode != Mode.Playing || battle.outcome.isDefined then battle
-  else Placement.tryUpgradeBuilding(battle.player, col, row).map(p => battle.copy(player = p)).getOrElse(battle)
+  else
+    Placement.tryUpgradeBuilding(battle.player, col, row, Some(targetKind)).map(p => battle.copy(player = p)).getOrElse(battle)
 
 // Only the player's own Science lab can be researched from the UI (the AI researches via
 // AiStrategy.maybeResearch instead) — mirrors upgradeInfo's shape/wiring, but keyed by
@@ -1766,16 +1813,24 @@ private def perKindHoverText(kind: BuildingKind, b: Building, maze: MazeState): 
     val nextNecromancerS = (b.spawnCountdownMs / 1000).ceil.toInt
     s"Maison de la Mort — +${formatDecimal(effectiveRate(maze, kind, Resource.Shadow))} shadow/s, " +
       s"next Necromancer in ${nextNecromancerS}s"
+  case BuildingKind.LaboFondamental =>
+    s"Labo Fondamental — +${formatDecimal(effectiveRate(maze, kind, Resource.Crystal))} crystal/s, " +
+      s"no research bonus — upgrade it into a specific lab below"
   case BuildingKind.LaboNaturel =>
-    s"Labo Naturel — +${formatDecimal(effectiveRate(maze, kind, Resource.Crystal))} crystal/s"
+    s"Labo Naturel — +${formatDecimal(effectiveRate(maze, kind, Resource.Crystal))} crystal/s, " +
+      s"research level ${maze.researchLevels.getOrElse(kind, 0)}/${Balance.MaxResearchLevel}"
   case BuildingKind.LaboSombre =>
-    s"Labo Sombre — +${formatDecimal(effectiveRate(maze, kind, Resource.Crystal))} crystal/s"
+    s"Labo Sombre — +${formatDecimal(effectiveRate(maze, kind, Resource.Crystal))} crystal/s, " +
+      s"research level ${maze.researchLevels.getOrElse(kind, 0)}/${Balance.MaxResearchLevel}"
   case BuildingKind.LaboDeRecherche =>
-    s"Labo de Recherche — +${formatDecimal(effectiveRate(maze, kind, Resource.Crystal))} crystal/s"
+    s"Labo de Recherche — +${formatDecimal(effectiveRate(maze, kind, Resource.Crystal))} crystal/s, " +
+      s"research level ${maze.researchLevels.getOrElse(kind, 0)}/${Balance.MaxResearchLevel}"
   case BuildingKind.LaboDeLaLoi =>
-    s"Labo de la Loi — +${formatDecimal(effectiveRate(maze, kind, Resource.Crystal))} crystal/s"
+    s"Labo de la Loi — +${formatDecimal(effectiveRate(maze, kind, Resource.Crystal))} crystal/s, " +
+      s"research level ${maze.researchLevels.getOrElse(kind, 0)}/${Balance.MaxResearchLevel}"
   case BuildingKind.LaboDuChaos =>
-    s"Labo du Chaos — +${formatDecimal(effectiveRate(maze, kind, Resource.Crystal))} crystal/s"
+    s"Labo du Chaos — +${formatDecimal(effectiveRate(maze, kind, Resource.Crystal))} crystal/s, " +
+      s"research level ${maze.researchLevels.getOrElse(kind, 0)}/${Balance.MaxResearchLevel}"
   case BuildingKind.Stonehenge =>
     val nextTreeS = (b.spawnCountdownMs / 1000).ceil.toInt
     s"Stonehenge — spawns no resource, next Arbre Anime in ${nextTreeS}s"

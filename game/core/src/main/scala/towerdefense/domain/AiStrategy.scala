@@ -17,9 +17,10 @@ trait AiStrategy:
   def maybeDestroy(state: MazeState, opponent: MazeState): MazeState = state
 
   // Default no-op: every strategy shipped so far only builds new cells, never upgrades
-  // an existing Grove/Forest into the next tier (see BuildingSpecs.upgradesTo). Driven
-  // the same way as maybeBuild by BattleEngine.tick, sharing its cooldown (upgrading
-  // compounds the economy just like building does, so it gets paced the same way).
+  // an existing Grove/Forest into the next tier, or a LaboFondamental into a specific lab
+  // (see BuildingSpecs.upgradeOptions). Driven the same way as maybeBuild by
+  // BattleEngine.tick, sharing its cooldown (upgrading compounds the economy just like
+  // building does, so it gets paced the same way).
   def maybeUpgrade(state: MazeState, opponent: MazeState): MazeState = state
 
   // Default no-op, same shape as maybeUpgrade — a strategy that never builds a Science lab
@@ -29,14 +30,20 @@ trait AiStrategy:
 
 object AiStrategy:
   // Shared "first that works" maybeUpgrade body: try each of the strategy's own buildings
-  // in order, upgrade the first one that's both eligible (BuildingSpecs.upgradesTo) and
-  // affordable, leave state untouched if none qualify. No attempt to pick the "best" one
-  // to upgrade — matches maybeBuild's own simplicity in the strategies that use this.
-  // Was duplicated verbatim across LinearStrategy, TemplateStrategy, and CompositeStrategy
-  // before being pulled out here.
+  // in order, and for each, try each of its upgradeOptions in listed order (Grove has just
+  // the one — Forest; LaboFondamental has 5) — upgrade at the first (building, option) pair
+  // that's both eligible and affordable, leave state untouched if none qualify anywhere. No
+  // attempt to pick the "best" building or option — matches maybeBuild's own simplicity in
+  // the strategies that use this. Was duplicated verbatim across LinearStrategy,
+  // TemplateStrategy, and CompositeStrategy before being pulled out here.
   def upgradeAnyAffordable(state: MazeState): MazeState =
     state.buildings.iterator
-      .flatMap(b => Placement.tryUpgradeBuilding(state, b.col, b.row).toOption)
+      .flatMap { b =>
+        BuildingSpecs.upgradeOptions
+          .getOrElse(b.kind, Nil)
+          .iterator
+          .flatMap(target => Placement.tryUpgradeBuilding(state, b.col, b.row, Some(target)).toOption)
+      }
       .nextOption()
       .getOrElse(state)
 

@@ -8,10 +8,14 @@ package towerdefense.domain
 // buildableDirectly: false for Forest/Jungle — Nature's upgrade chain (Bosquet.md/
 // Foret.md/Jungle.md) only lets Grove be placed from scratch; Forest and Jungle are
 // reached by upgrading an existing Grove/Forest via Placement.tryUpgradeBuilding, using
-// `cost` here as the upgrade's cost, not a from-scratch price.
-// maxPerMaze: Some(1) for the five Science labs (Note sur les laboratoires.md: "Il n'est
-// possible de controler qu'un seul laboratoire de chaque type") — every other kind is
-// unlimited (None), see Placement.checkMaxCount.
+// `cost` here as the upgrade's cost, not a from-scratch price. Also false for all five
+// specific Science labs (LaboNaturel/Sombre/DeRecherche/DeLaLoi/DuChaos) — only
+// LaboFondamental is placed from scratch; the five are reached by upgrading one (see
+// upgradeOptions), same shape as Nature's chain but with 5 possible targets from a single
+// source instead of 1.
+// maxPerMaze: Some(1) for the five specific Science labs (Note sur les laboratoires.md:
+// "Il n'est possible de controler qu'un seul laboratoire de chaque type") — every other
+// kind, including LaboFondamental itself, is unlimited (None), see Placement.checkMaxCount.
 //
 // Science's leveled research tree (5 levels/lab, doubling cost per level — Recherches*.md/
 // Recherche fondamentale.md), its global modifiers (building cost reduction, building
@@ -112,40 +116,65 @@ object BuildingSpecs:
       produces = Map.empty,
       spawns = None
     ),
+    // Note sur les laboratoires.md: the only Science kind placed fresh — see Balance's doc.
+    // No maxPerMaze: unlike the five specific kinds below, a maze can run several of these
+    // side by side, each free to specialize into a *different* one (see upgradeOptions).
+    BuildingKind.LaboFondamental -> BuildingSpec(
+      cost = Map(Resource.Crystal -> Balance.LaboFondamentalCostCrystal),
+      produces = Map(Resource.Crystal -> Balance.CrystalPerSecPerLaboFondamental),
+      spawns = None
+    ),
+    // buildableDirectly = false for all five: reached only by upgrading a LaboFondamental
+    // (see upgradeOptions/Placement.tryUpgradeBuilding), never placed from scratch.
     BuildingKind.LaboNaturel -> BuildingSpec(
       cost = Map(Resource.Wood -> Balance.LaboNaturelCostWood, Resource.Crystal -> Balance.LaboNaturelCostCrystal),
       produces = Map(Resource.Crystal -> Balance.CrystalPerSecPerLaboNaturel),
       spawns = None,
+      buildableDirectly = false,
       maxPerMaze = Some(1)
     ),
     BuildingKind.LaboSombre -> BuildingSpec(
       cost = Map(Resource.Shadow -> Balance.LaboSombreCostShadow, Resource.Crystal -> Balance.LaboSombreCostCrystal),
       produces = Map(Resource.Crystal -> Balance.CrystalPerSecPerLaboSombre),
       spawns = None,
+      buildableDirectly = false,
       maxPerMaze = Some(1)
     ),
     BuildingKind.LaboDeRecherche -> BuildingSpec(
       cost = Map(Resource.Crystal -> Balance.LaboDeRechercheCostCrystal),
       produces = Map(Resource.Crystal -> Balance.CrystalPerSecPerLaboDeRecherche),
       spawns = None,
+      buildableDirectly = false,
       maxPerMaze = Some(1)
     ),
     BuildingKind.LaboDeLaLoi -> BuildingSpec(
       cost = Map(Resource.Light -> Balance.LaboDeLaLoiCostLight, Resource.Crystal -> Balance.LaboDeLaLoiCostCrystal),
       produces = Map(Resource.Crystal -> Balance.CrystalPerSecPerLaboDeLaLoi),
       spawns = None,
+      buildableDirectly = false,
       maxPerMaze = Some(1)
     ),
     BuildingKind.LaboDuChaos -> BuildingSpec(
       cost = Map(Resource.Fire -> Balance.LaboDuChaosCostFire, Resource.Crystal -> Balance.LaboDuChaosCostCrystal),
       produces = Map(Resource.Crystal -> Balance.CrystalPerSecPerLaboDuChaos),
       spawns = None,
+      buildableDirectly = false,
       maxPerMaze = Some(1)
     )
   )
 
-  // Grove -> Forest -> Jungle. Absent for every other kind (no upgrade path).
-  val upgradesTo: Map[BuildingKind, BuildingKind] = Map(
-    BuildingKind.Grove -> BuildingKind.Forest,
-    BuildingKind.Forest -> BuildingKind.Jungle
+  // Grove -> Forest -> Jungle (a single-option chain), and LaboFondamental -> one of the
+  // five specific labs (a 5-option branch, the first source with more than one target) —
+  // see Placement.tryUpgradeBuilding for how a caller picks among several. Absent for every
+  // other kind (no upgrade path at all).
+  val upgradeOptions: Map[BuildingKind, List[BuildingKind]] = Map(
+    BuildingKind.Grove -> List(BuildingKind.Forest),
+    BuildingKind.Forest -> List(BuildingKind.Jungle),
+    BuildingKind.LaboFondamental -> List(
+      BuildingKind.LaboNaturel,
+      BuildingKind.LaboSombre,
+      BuildingKind.LaboDeRecherche,
+      BuildingKind.LaboDeLaLoi,
+      BuildingKind.LaboDuChaos
+    )
   )

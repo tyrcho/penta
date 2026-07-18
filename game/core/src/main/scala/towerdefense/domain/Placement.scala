@@ -85,18 +85,43 @@ object Placement:
       case Some(max) => Either.cond(state.buildings.count(_.kind == kind) < max, (), PlacementError.MaxCountReached)
       case None       => Right(())
 
-  // Upgrades whatever building already sits at (col, row) to the next tier in
-  // BuildingSpecs.upgradesTo (Grove -> Forest -> Jungle today) — the only way to reach a
-  // kind with buildableDirectly = false. No reachability check like tryPlaceBuilding's:
+  // Upgrades whatever building already sits at (col, row) to a next tier from
+  // BuildingSpecs.upgradeOptions (Grove -> Forest -> Jungle's single-option chain, or
+  // LaboFondamental's 5-option branch into a specific Science lab) — the only way to reach
+  // a kind with buildableDirectly = false. No reachability check like tryPlaceBuilding's:
   // the building already occupies that cell, so the maze's obstacle footprint doesn't
   // change shape, only which kind sits there.
-  def tryUpgradeBuilding(state: MazeState, col: Int, row: Int): Either[PlacementError, MazeState] =
+  // targetKind: which option to take when a source has more than one (LaboFondamental) —
+  // left as None for a single-option source (Grove/Forest), where the only listed option is
+  // picked automatically; passing None against a multi-option source (or Some of a kind
+  // that isn't actually listed) is rejected as NoUpgradeAvailable rather than guessing.
+  // checkMaxCount runs against the *target* kind here too, not just fresh placement — this
+  // is what actually enforces "only one Nature/Chaos/../Science lab per maze" once a maze
+  // can hold several LaboFondamental at once, each free to specialize differently: a second
+  // one attempting a kind another building of this maze already claimed is rejected the
+  // same way a direct build of a second one would be (rechecked live against
+  // state.buildings, so losing the specific lab — Demolition or corruption — genuinely
+  // frees the slot for a *different* LaboFondamental to claim, per Note sur les
+  // laboratoires.md).
+  def tryUpgradeBuilding(
+      state: MazeState,
+      col: Int,
+      row: Int,
+      targetKind: Option[BuildingKind] = None
+  ): Either[PlacementError, MazeState] =
     for
       building <- state.buildings.find(b => b.col == col && b.row == row).toRight(PlacementError.NoBuildingThere)
-      nextKind <- BuildingSpecs.upgradesTo.get(building.kind).toRight(PlacementError.NoUpgradeAvailable)
-      cost = effectiveCost(state, BuildingSpecs.all(nextKind).cost)
+      options = BuildingSpecs.upgradeOptions.getOrElse(building.kind, Nil)
+      chosenKind <- (targetKind match
+        case Some(kind)          => Option.when(options.contains(kind))(kind)
+        case None if options.size == 1 => options.headOption
+        case None                => None
+      ).toRight(PlacementError.NoUpgradeAvailable)
+      targetSpec = BuildingSpecs.all(chosenKind)
+      _ <- checkMaxCount(state, chosenKind, targetSpec)
+      cost = effectiveCost(state, targetSpec.cost)
       _ <- Either.cond(canAfford(state.resources, cost), (), PlacementError.InsufficientResources)
-    yield upgradeBuilding(state, building, nextKind, cost)
+    yield upgradeBuilding(state, building, chosenKind, cost)
 
   // Researches the next level of `labKind`'s line (ResearchSpecs.all) — requires actually
   // owning that lab (Recherches*.md: "debloque"/"permet de debloquer", read as "the
@@ -157,6 +182,13 @@ object Placement:
   // Same id, same cell, new kind — the timer resets to the new tier's own interval
   // (simplest behavior: an upgrade doesn't inherit a partial countdown from the tier it
   // replaced, since the two tiers can spawn different units at different rates).
+  // Upgrading into a kind with its own research line (LaboNaturel/Sombre/DeRecherche/
+  // DeLaLoi/DuChaos — anything in ResearchSpecs.all) grants it an instant, free level 1 —
+  // "further research is the same as now" (Placement.tryResearch's cost/level-cap logic
+  // is untouched), just starting one level higher. `max` (not a flat overwrite) preserves
+  // a higher level already reached by an earlier instance of this same kind that was later
+  // lost — MazeState.researchLevels' own doc: a level, once reached, persists. Grove/Forest/
+  // Jungle have no ResearchSpecs entry, so this is a no-op for Nature's chain.
   private def upgradeBuilding(
       state: MazeState,
       building: Building,
@@ -165,9 +197,14 @@ object Placement:
   ): MazeState =
     val spawnCountdownMs = BuildingSpecs.all(nextKind).spawns.map(_._2).getOrElse(0.0)
     val upgraded = building.copy(kind = nextKind, spawnCountdownMs = spawnCountdownMs)
+    val researchLevels =
+      if ResearchSpecs.all.contains(nextKind) then
+        state.researchLevels.updated(nextKind, math.max(state.researchLevels.getOrElse(nextKind, 0), 1))
+      else state.researchLevels
     state.copy(
       buildings = upgraded :: state.buildings.filterNot(_.id == building.id),
-      resources = debit(state.resources, cost)
+      resources = debit(state.resources, cost),
+      researchLevels = researchLevels
     )
 
   private def debit(resources: Map[Resource, Double], cost: Map[Resource, Double]): Map[Resource, Double] =
