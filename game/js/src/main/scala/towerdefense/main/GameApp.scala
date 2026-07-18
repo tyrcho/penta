@@ -1447,10 +1447,30 @@ private def setPos(g: Container, pos: Vec2): Unit =
 
 // ── Hover tooltip (building/unit stats — see wireHover) ─────────────────
 
+// Anchors the tooltip on whichever side of (x, y) faces the screen's center, on both axes
+// independently — a building/unit near the right edge gets its tooltip growing leftward
+// (toward center) instead of off the right edge, and same for top/bottom. This matters
+// because the tooltip's own size varies at runtime (a selected building with 5 upgrade
+// options is much taller than a plain hover), so a fixed "always offset down-right" anchor
+// (the old behavior) could push the Destroy/Upgrade/Research buttons off-screen entirely
+// for anything selected near an edge. Toggling left/right and top/bottom (rather than
+// computing the tooltip's own width/height) lets the browser's own box layout grow the
+// element away from the edge no matter how big its content turns out to be.
 private def positionTooltip(x: Double, y: Double): Unit =
   val el = document.getElementById("tooltip").asInstanceOf[dom.html.Element]
-  el.style.left = s"${x + 12}px"
-  el.style.top = s"${y + 12}px"
+  val margin = 12.0
+  if x < dom.window.innerWidth / 2.0 then
+    el.style.left = s"${x + margin}px"
+    el.style.right = "auto"
+  else
+    el.style.right = s"${dom.window.innerWidth - x + margin}px"
+    el.style.left = "auto"
+  if y < dom.window.innerHeight / 2.0 then
+    el.style.top = s"${y + margin}px"
+    el.style.bottom = "auto"
+  else
+    el.style.bottom = s"${dom.window.innerHeight - y + margin}px"
+    el.style.top = "auto"
 
 // Re-reads live stats from the current BattleState every frame, so HP/timers shown in
 // the tooltip stay accurate. `target` is whatever the caller decided takes priority
