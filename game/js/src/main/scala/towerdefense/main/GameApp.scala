@@ -286,6 +286,11 @@ def onReady(app: Application, textures: js.Dictionary[Texture]): Unit =
   battleWorld.addChild(aiWorld)
   playerWorld.addChild(drawGrid())
   aiWorld.addChild(drawGrid())
+  // Only the player's maze is ever tappable/selectable (see the input section's comment),
+  // so the range-preview overlay only ever needs to live on this one side — see
+  // updateAuraOverlay.
+  val auraOverlay = new Graphics()
+  playerWorld.addChild(auraOverlay)
 
   val flameFrames = js.Array(AssetPaths.Flames.map(textures(_))*)
   val wolfFrames = js.Array(AssetPaths.Wolf.map(textures(_))*)
@@ -319,6 +324,11 @@ def onReady(app: Application, textures: js.Dictionary[Texture]): Unit =
   // of reach as the cursor approaches it).
   var selectedTarget: Option[HoverTarget] = None
   var hoveringButton = false
+  // The player maze cell currently under the cursor, tracked independently of
+  // hovered/selectedTarget (those only latch onto an actual creature/building, not blank
+  // cells) — feeds the aura/damage range-preview overlay while a buildable kind is selected
+  // (see updateAuraOverlay). None whenever the cursor is outside the player's grid.
+  var hoveredCell: Option[(Int, Int)] = None
   var speed = new GameSpeed
   var msSinceLastSave = 0.0
   val playerSprites = new MazeSprites
@@ -387,8 +397,13 @@ def onReady(app: Application, textures: js.Dictionary[Texture]): Unit =
       if hovered.isEmpty && selectedTarget.isEmpty then
         val canvasRect = app.canvas.getBoundingClientRect()
         positionTooltip(canvasRect.left + e.globalX, canvasRect.top + e.globalY)
+      // Tracked unconditionally (unlike the tooltip positioning above) — the range-preview
+      // overlay needs to keep following the cursor over blank cells too, not just latch
+      // onto an actual creature/building the way hovered/selectedTarget do.
+      hoveredCell = cellAt(app, e)
     }
   )
+  app.stage.on("pointerleave", (_: FederatedPointerEvent) => hoveredCell = None)
 
   app.ticker.add { t =>
     val wasUnresolved = battle.outcome.isEmpty
@@ -480,6 +495,7 @@ def onReady(app: Application, textures: js.Dictionary[Texture]): Unit =
     )
     applyViewTransform(app, battleWorld, aiWorld)
     updateModeUi(mode)
+    updateAuraOverlay(auraOverlay, battle.player, selectedTarget, selectedBuilding, hoveredCell, mode)
     updateOverlay(battle)
     if mode == Mode.Playing then updateBuildButtonsAffordability(battle.player)
     else disableAllBuildButtons()
@@ -526,6 +542,83 @@ private def cellColor(col: Int, row: Int): Int =
   if cell == GridConfig.spawnCell then 0x22c55e
   else if cell == GridConfig.goalCell then 0xef4444
   else 0x1e2140
+
+// ── Aura/damage range preview ───────────────────────────────────────────
+
+// Purely a rendering categorization (see auraShapeFor's doc) — not a 1:1 mirror of
+// CombatEngine's actual hit-set geometry.
+private enum AuraShape derives CanEqual:
+  case Circle(rangeCells: Int)
+  case Square
+  case Cross
+
+// Which shape (if any) a building's damage/aura reaches, for the range-preview overlay
+// only (see updateAuraOverlay) — mirrors CombatEngine's own two damage-dealing categories,
+// but the shapes themselves are a deliberate visual simplification rather than each kind's
+// literal reachable-cell set: Watchtower picks a single nearest target within a Chebyshev
+// range (CombatEngine.nearestTargetInRange) — shown as a smooth circle rather than the
+// blocky square that distance metric actually describes, since "ranged single-target
+// damage" reads most clearly as a circle. Forest/Jungle/Angel deal passive damage to every
+// enemy on one of the 4 orthogonally-adjacent cells (CombatEngine.auraBuildingKinds/
+// accumulateAuraHits) — shown as the full 3x3-minus-center square, a deliberately broader
+// "std aura" silhouette grouping these three as one visual family. PassingGate's adjacency
+// is mechanically identical to Forest/Jungle/Angel's, but is shown as a cross (its real 4
+// cells, no diagonals) specifically to read as a visually distinct "other aura" kind.
+private def auraShapeFor(kind: BuildingKind): Option[AuraShape] = kind match
+  case BuildingKind.Watchtower                                       => Some(AuraShape.Circle(Balance.WatchtowerRangeCells))
+  case BuildingKind.Forest | BuildingKind.Jungle | BuildingKind.Angel => Some(AuraShape.Square)
+  case BuildingKind.PassingGate                                     => Some(AuraShape.Cross)
+  case _                                                             => None
+
+private val AuraOverlayColor = 0xffffff
+// Set once on the whole Graphics object (Pixi's plain `fill(color: Int)` has no per-call
+// alpha overload in this facade — see Pixi.scala) rather than per shape/cell.
+private val AuraOverlayAlpha = 0.22
+
+// Redrawn every tick from scratch (a 12x12 grid is cheap) rather than diffed — shows at
+// most one shape at a time, by priority: an already-*built* building the player explicitly
+// clicked (selectedTarget) holds still at its own cell; otherwise, while a buildable kind
+// with a shape is chosen from the toolbar (selectedBuilding) and the cursor is over the
+// player's grid, the shape previews at the hovered cell instead, following the mouse ahead
+// of actually placing it. Anything else (nothing selected, a shapeless kind selected, cursor
+// off-grid) clears the overlay entirely — "hide the aura when something else is selected".
+private def updateAuraOverlay(
+    g: Graphics,
+    maze: MazeState,
+    selectedTarget: Option[HoverTarget],
+    selectedBuilding: BuildingKind,
+    hoveredCell: Option[(Int, Int)],
+    mode: Mode
+): Unit =
+  g.clear()
+  g.alpha = AuraOverlayAlpha
+  val builtSelection = selectedTarget.collect { case HoverTarget(true, HoverKind.BuildingH(kind), id) =>
+    maze.buildings.find(_.id == id).map(b => (kind, b.col, b.row))
+  }.flatten
+  val placingPreview =
+    if mode == Mode.Playing then hoveredCell.map { case (col, row) => (selectedBuilding, col, row) } else None
+  builtSelection.orElse(placingPreview).foreach { case (kind, col, row) =>
+    auraShapeFor(kind).foreach(shape => drawAuraShape(g, shape, col, row))
+  }
+
+private def drawAuraShape(g: Graphics, shape: AuraShape, col: Int, row: Int): Unit =
+  shape match
+    case AuraShape.Circle(rangeCells) =>
+      val center = GridConfig.cellCenter(col, row)
+      val radius = (rangeCells + 0.5) * GridConfig.cellSize
+      g.circle(center.x, center.y, radius).fill(AuraOverlayColor)
+    case AuraShape.Square =>
+      for
+        dc <- -1 to 1
+        dr <- -1 to 1
+        if !(dc == 0 && dr == 0)
+      do fillCell(g, col + dc, row + dr)
+    case AuraShape.Cross =>
+      List((col - 1, row), (col + 1, row), (col, row - 1), (col, row + 1)).foreach { case (c, r) => fillCell(g, c, r) }
+
+private def fillCell(g: Graphics, col: Int, row: Int): Unit =
+  if GridConfig.isInBounds(col, row) then
+    g.rect(col * GridConfig.cellSize, row * GridConfig.cellSize, GridConfig.cellSize, GridConfig.cellSize).fill(AuraOverlayColor)
 
 // ── Input (only the left/player maze is tappable; both buildings are available —
 // symmetric game, see CLAUDE.md — so the player picks one via the toolbar buttons) ──
