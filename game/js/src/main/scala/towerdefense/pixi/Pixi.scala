@@ -31,6 +31,7 @@ class Container extends js.Object:
   var rotation: Double = js.native
   var width: Double = js.native
   var height: Double = js.native
+  var alpha: Double = js.native
   var scale: ScaleObj = js.native
   var eventMode: String = js.native
   def on(event: String, handler: js.Function1[FederatedPointerEvent, Unit]): Unit = js.native

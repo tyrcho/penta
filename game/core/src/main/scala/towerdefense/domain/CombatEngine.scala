@@ -419,9 +419,21 @@ object CombatEngine:
   def productionPerSec(state: MazeState, resource: Resource): Double =
     val base = state.buildings
       .groupBy(_.kind)
-      .map { case (kind, bs) => bs.size * BuildingSpecs.all(kind).produces.getOrElse(resource, 0.0) }
+      .map { case (kind, bs) =>
+        bs.size * BuildingSpecs.all(kind).produces.getOrElse(resource, 0.0) *
+          researchProductionMultiplier(state, kind, resource)
+      }
       .sum
     base * (1.0 + engendreBoost(state, resource))
+
+  // Note sur les laboratoires.md: "Chaque amelioration (recherche) dans un labo augmente sa
+  // production de crystal de 75% par rapport au niveau precedent" — a lab's own research
+  // level compounds ONLY its own Crystal output, not any other building's production of any
+  // other resource. Exposed (not private) so GameApp's per-building tooltip (effectiveRate)
+  // shows the exact same number this applies, same reasoning as engendreBoost below.
+  def researchProductionMultiplier(state: MazeState, kind: BuildingKind, resource: Resource): Double =
+    if resource != Resource.Crystal then 1.0
+    else math.pow(1.0 + Balance.LaboCrystalBoostPerResearchLevel, state.researchLevels.getOrElse(kind, 0).toDouble)
 
   // Engendre.md's resource-generation cycle, keyed by *target* — the resource whose
   // producer-buildings boost `resource`'s own production rate (see Balance.

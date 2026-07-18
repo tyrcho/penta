@@ -209,6 +209,14 @@ object Balance:
   val LaboDuChaosCostCrystal: Double = 10.0 // Labo du Chaos.md: "cout en crystal: 10"
   val CrystalPerSecPerLaboDuChaos: Double = 0.2 // Labo du Chaos.md: "Produit 0.2 Crystal par sec"
 
+  // Note sur les laboratoires.md: "Chaque amelioration (recherche) dans un labo augmente sa
+  // production de crystal de 75% par rapport au niveau precedent" — a lab's own research
+  // level compounds ONLY its own Crystal output (CombatEngine.researchProductionMultiplier:
+  // (1+this)^level), separate from that same lab's other researched *effect* (cost
+  // reduction/opponent target/plunder/damage) below, which shares the same researchLevels
+  // entry but is a different number (ResearchSpecs.effectAtLevel).
+  val LaboCrystalBoostPerResearchLevel: Double = 0.75
+
   // Leveled research, one line per lab (ResearchSpecs.all pairs these with their
   // BuildingKind) — 5 levels each, level N costing 2^(N-1) times the level-1 (base) cost
   // below ("Chaque niveau coute le double du precedent", every Recherches*.md file).

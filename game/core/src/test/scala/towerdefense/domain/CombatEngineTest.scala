@@ -206,6 +206,62 @@ class CombatEngineTest extends munit.FunSuite:
     )
   }
 
+  // ── Lab research boosts its own Crystal production ────────────────────
+  // Note sur les laboratoires.md: "Chaque amelioration (recherche) dans un labo augmente
+  // sa production de crystal de 75% par rapport au niveau precedent" — distinct from each
+  // lab's own separately-researched effect (cost reduction/opponent target/plunder/damage),
+  // which reads the exact same researchLevels entry for a different purpose.
+
+  test("an unresearched lab produces Crystal at its plain base rate") {
+    val labo = Building(1, 0, 1, BuildingKind.LaboNaturel, 0.0)
+    val state = withResources().copy(buildings = List(labo))
+    assertEquals(CombatEngine.productionPerSec(state, Resource.Crystal), Balance.CrystalPerSecPerLaboNaturel)
+  }
+
+  test("one research level on a lab increases its own Crystal production by exactly 75%") {
+    val labo = Building(1, 0, 1, BuildingKind.LaboNaturel, 0.0)
+    val state = withResources()
+      .copy(buildings = List(labo), researchLevels = Map(BuildingKind.LaboNaturel -> 1))
+    assertEqualsDouble(
+      CombatEngine.productionPerSec(state, Resource.Crystal),
+      Balance.CrystalPerSecPerLaboNaturel * 1.75,
+      1e-9
+    )
+  }
+
+  test("research boost compounds: level 2 is 75% more than level 1, not just double level 1") {
+    val labo = Building(1, 0, 1, BuildingKind.LaboSombre, 0.0)
+    val state = withResources()
+      .copy(buildings = List(labo), researchLevels = Map(BuildingKind.LaboSombre -> 2))
+    assertEqualsDouble(
+      CombatEngine.productionPerSec(state, Resource.Crystal),
+      Balance.CrystalPerSecPerLaboSombre * 1.75 * 1.75,
+      1e-9
+    )
+  }
+
+  test("a lab's research boost never leaks onto another lab kind's Crystal production") {
+    val naturel = Building(1, 0, 1, BuildingKind.LaboNaturel, 0.0)
+    val sombre = Building(2, 0, 2, BuildingKind.LaboSombre, 0.0)
+    // Only LaboNaturel is researched — LaboSombre must still produce at its plain base rate.
+    val state = withResources()
+      .copy(buildings = List(naturel, sombre), researchLevels = Map(BuildingKind.LaboNaturel -> 3))
+    assertEqualsDouble(
+      CombatEngine.productionPerSec(state, Resource.Crystal),
+      Balance.CrystalPerSecPerLaboNaturel * math.pow(1.75, 3) + Balance.CrystalPerSecPerLaboSombre,
+      1e-9
+    )
+  }
+
+  test("a lab's research level never boosts a *different* resource's production") {
+    // LaboDeLaLoi's research level is keyed the same as Recherches loyales' building-damage
+    // effect — that shouldn't spill over into boosting some other building's Wood output.
+    val grove = Building(1, 0, 1, BuildingKind.Grove, 0.0)
+    val state = withResources()
+      .copy(buildings = List(grove), researchLevels = Map(BuildingKind.LaboDeLaLoi -> 4))
+    assertEquals(CombatEngine.productionPerSec(state, Resource.Wood), Balance.WoodPerSecPerGrove)
+  }
+
   test("a forest emits exactly one elf-spawn signal per interval") {
     val forest = Building(100, col = 5, row = 5, BuildingKind.Forest, Balance.ElfSpawnIntervalMs)
     val state = withResources().copy(buildings = List(forest))

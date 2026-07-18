@@ -39,6 +39,11 @@ private val SpectateRestartDelayMs = 3000.0
 // game-over screen would otherwise just sit there forever with nothing watchable on it.
 private val PlayingIdleToSpectateDelayMs = 30000.0
 
+// How long a building's spawn-preview ghost (see spawnUnitPreview) stays on screen —
+// real wall-clock time, same as the flame burst it replaces (Pixi's own animation
+// ticker, unaffected by GameSpeed's pause/fast-forward).
+private val UnitPreviewDurationMs = 1000.0
+
 private def randomLadderIndex(): Int = Random.nextInt(AiStrategy.ladder.length)
 
 // Picks a random ladder index different from `exclude` (when the ladder has more than one
@@ -839,6 +844,9 @@ private def applyViewTransform(app: Application, battleWorld: Container, aiWorld
   battleWorld.scale.set(vt.scale)
   battleWorld.x = vt.offsetX
   battleWorld.y = vt.offsetY
+  // Mirrors aiWorld's own side-by-side/stacked choice above, so the WON/LOST banners
+  // (see updateGameOverBanner, index.html's .game-over-side) split the same way.
+  document.getElementById("game-container").classList.toggle("layout-portrait", layout.portrait)
 
 // ── Sprite sync (one maze's GameState → its Pixi sprites) ──────────────
 
@@ -876,7 +884,21 @@ private def syncMaze(
     isPlayer,
     setHovered
   )
-  syncBuildings(world, maze, sprites, textures, flames, isPlayer, setHovered)
+  syncBuildings(
+    world,
+    maze,
+    sprites,
+    textures,
+    goblinFrames,
+    elfFrames,
+    wolfFrames,
+    zombieFrames,
+    necromancerFrames,
+    soulFrames,
+    flames,
+    isPlayer,
+    setHovered
+  )
 
 private def syncCreatures(
     world: Container,
@@ -1045,6 +1067,12 @@ private def syncBuildings(
     maze: MazeState,
     sprites: MazeSprites,
     textures: js.Dictionary[Texture],
+    goblinFrames: Map[String, js.Array[Texture]],
+    elfFrames: Map[String, js.Array[Texture]],
+    wolfFrames: js.Array[Texture],
+    zombieFrames: js.Array[Texture],
+    necromancerFrames: js.Array[Texture],
+    soulFrames: js.Array[Texture],
     flames: js.Array[Texture],
     isPlayer: Boolean,
     setHovered: Option[HoverTarget] => Unit
@@ -1075,11 +1103,23 @@ private def syncBuildings(
       g.height = visual.renderSize
       g.tint = visual.tint.getOrElse(0xffffff)
     setPos(g, GridConfig.cellCenter(b.col, b.row))
-    if BuildingSpecs.all(b.kind).spawns.isDefined then
+    BuildingSpecs.all(b.kind).spawns.foreach { (unitKind, _) =>
       val previousCountdown = sprites.buildingTimers.getOrElse(b.id, b.spawnCountdownMs)
       sprites.buildingTimers(b.id) = b.spawnCountdownMs
       if hasWrapped(previousCountdown, b.spawnCountdownMs) then
-        spawnEffect(world, Vec2(g.x, g.y), flames, scale = 0.6)
+        spawnUnitPreview(
+          world,
+          Vec2(g.x, g.y),
+          unitKind,
+          textures,
+          goblinFrames,
+          elfFrames,
+          wolfFrames,
+          zombieFrames,
+          necromancerFrames,
+          soulFrames
+        )
+    }
   }
 
 private def newHoverSprite(
@@ -1172,6 +1212,59 @@ private def spawnEffect(
   fx.onComplete = () => world.removeChild(fx)
   world.addChild(fx)
   fx.play()
+
+// A translucent "ghost" of the unit a building just produced, shown briefly at the
+// building's own position instead of the generic flame burst (spawnEffect above still
+// covers the destroy/death case) — same per-kind texture/frame choice as
+// newCreatureSprite, minus its hover wiring, since this is a transient visual cue, not a
+// real entity worth inspecting.
+private def unitPreviewContainer(
+    kind: UnitKind,
+    textures: js.Dictionary[Texture],
+    goblinFrames: Map[String, js.Array[Texture]],
+    elfFrames: Map[String, js.Array[Texture]],
+    wolfFrames: js.Array[Texture],
+    zombieFrames: js.Array[Texture],
+    necromancerFrames: js.Array[Texture],
+    soulFrames: js.Array[Texture]
+): Container = kind match
+  case UnitKind.Elf         => newAnimatedSprite(elfFrames("front"), GridConfig.cellSize * 0.8)
+  case UnitKind.Minotaur    => newSprite(textures(AssetPaths.Minotaur), GridConfig.cellSize * 1.1)
+  case UnitKind.Paladin     => newSprite(textures(AssetPaths.Paladin), GridConfig.cellSize * 1.0)
+  case UnitKind.Vampire     => newSprite(textures(AssetPaths.Vampire), GridConfig.cellSize * 1.1)
+  case UnitKind.Goblin      => newAnimatedSprite(goblinFrames("front"), GridConfig.cellSize * 0.8)
+  case UnitKind.Wolf        => newAnimatedSprite(wolfFrames, GridConfig.cellSize * 1.0)
+  case UnitKind.Zombie      => newAnimatedSprite(zombieFrames, GridConfig.cellSize * 0.8)
+  case UnitKind.Necromancer => newAnimatedSprite(necromancerFrames, GridConfig.cellSize * 0.9)
+  case UnitKind.Soul        => newAnimatedSprite(soulFrames, GridConfig.cellSize * 0.55)
+
+private def spawnUnitPreview(
+    world: Container,
+    pos: Vec2,
+    kind: UnitKind,
+    textures: js.Dictionary[Texture],
+    goblinFrames: Map[String, js.Array[Texture]],
+    elfFrames: Map[String, js.Array[Texture]],
+    wolfFrames: js.Array[Texture],
+    zombieFrames: js.Array[Texture],
+    necromancerFrames: js.Array[Texture],
+    soulFrames: js.Array[Texture]
+): Unit =
+  val ghost = unitPreviewContainer(
+    kind,
+    textures,
+    goblinFrames,
+    elfFrames,
+    wolfFrames,
+    zombieFrames,
+    necromancerFrames,
+    soulFrames
+  )
+  ghost.x = pos.x
+  ghost.y = pos.y
+  ghost.alpha = 0.5
+  world.addChild(ghost)
+  dom.window.setTimeout(() => world.removeChild(ghost), UnitPreviewDurationMs)
 
 private def addTo[T <: Container](world: Container, s: T): T =
   world.addChild(s)
@@ -1467,7 +1560,9 @@ private def corruptionSuffix(b: Building): String =
 // CombatEngine.productionPerSec itself applies, so this can never silently drift from
 // the actual number the top summary panel and the real tick both use).
 private def effectiveRate(maze: MazeState, kind: BuildingKind, resource: Resource): Double =
-  BuildingSpecs.all(kind).produces.getOrElse(resource, 0.0) * (1.0 + CombatEngine.engendreBoost(maze, resource))
+  BuildingSpecs.all(kind).produces.getOrElse(resource, 0.0) *
+    CombatEngine.researchProductionMultiplier(maze, kind, resource) *
+    (1.0 + CombatEngine.engendreBoost(maze, resource))
 
 private def perKindHoverText(kind: BuildingKind, b: Building, maze: MazeState): String = kind match
   case BuildingKind.Grove =>
@@ -1568,15 +1663,24 @@ private def updateProgressBar(id: String, current: Double, target: Double): Unit
   val pct = if target <= 0 then 100.0 else math.min(100.0, current / target * 100.0)
   document.getElementById(id).asInstanceOf[dom.html.Element].style.width = s"$pct%"
 
+// One WON/LOST banner per maze half (not a single "You win!"/"AI wins!" overlay) —
+// each stays confined to pointer-events: none (see index.html's .game-over-side), so
+// buildings on either side stay hoverable for their info tooltip after the match ends.
 private def updateGameOverBanner(battle: BattleState): Unit =
-  val banner = document.getElementById("game-over")
   battle.outcome match
     case Some(result) =>
-      val title = result match
-        case _: MatchResult.PlayerWins => "You win!"
-        case _: MatchResult.AiWins     => "AI wins!"
-      document.getElementById("game-over-title").textContent = title
-      document.getElementById("game-over-reason").textContent = result.reason
-      banner.classList.add("visible")
+      val playerWon = result.isInstanceOf[MatchResult.PlayerWins]
+      setGameOverSide("player", won = playerWon, result.reason)
+      setGameOverSide("ai", won = !playerWon, result.reason)
     case None =>
-      banner.classList.remove("visible")
+      document.getElementById("game-over-player").classList.remove("visible")
+      document.getElementById("game-over-ai").classList.remove("visible")
+
+private def setGameOverSide(prefix: String, won: Boolean, reason: String): Unit =
+  val title = document.getElementById(s"game-over-$prefix-title")
+  title.textContent = if won then "WON" else "LOST"
+  title.classList.remove("won")
+  title.classList.remove("lost")
+  title.classList.add(if won then "won" else "lost")
+  document.getElementById(s"game-over-$prefix-reason").textContent = reason
+  document.getElementById(s"game-over-$prefix").classList.add("visible")
