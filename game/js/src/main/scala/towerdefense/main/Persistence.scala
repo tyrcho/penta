@@ -58,8 +58,18 @@ private object Persistence:
       buildings = js.Array(m.buildings.map(encodeBuilding)*),
       resources = encodeResources(m.resources),
       resourcesPlundered = m.resourcesPlundered,
+      buildingsCorrupted = m.buildingsCorrupted,
+      researchLevels = encodeResearchLevels(m.researchLevels),
       nextId = m.nextId.toDouble
     )
+
+  // One field per Science lab kind, keyed by its own toString — mirrors encodeResources'
+  // shape (a flat JS object, not an array of pairs) since ResearchSpecs.orderedLabs is a
+  // small, fixed set, same as Resource.values.
+  private def encodeResearchLevels(levels: Map[BuildingKind, Int]): js.Dynamic =
+    val obj = js.Dynamic.literal()
+    ResearchSpecs.orderedLabs.foreach(lab => obj.updateDynamic(lab.toString)(levels.getOrElse(lab, 0)))
+    obj
 
   private def encodeResources(r: Map[Resource, Double]): js.Dynamic =
     js.Dynamic.literal(
@@ -79,11 +89,24 @@ private object Persistence:
       maxHp = c.maxHp,
       speedPerMs = c.speedPerMs,
       kind = c.kind match
-        case UnitKind.Elf      => "Elf"
-        case UnitKind.Goblin   => "Goblin"
-        case UnitKind.Minotaur => "Minotaur"
-        case UnitKind.Paladin  => "Paladin"
-        case UnitKind.Wolf     => "Wolf"
+        case UnitKind.Elf         => "Elf"
+        case UnitKind.Goblin      => "Goblin"
+        case UnitKind.Minotaur    => "Minotaur"
+        case UnitKind.Paladin     => "Paladin"
+        case UnitKind.Wolf        => "Wolf"
+        case UnitKind.Zombie      => "Zombie"
+        case UnitKind.Vampire     => "Vampire"
+        case UnitKind.Necromancer => "Necromancer"
+        case UnitKind.Soul        => "Soul"
+        case UnitKind.Tree        => "Tree",
+      // Only Necromancer/Tree ever have a nonzero countdown/frozenMs (see CreatureSpec.
+      // spawns/spawnFreezeMs), and only a Soul or a cloned Tree has a summonedBy — inert
+      // (0.0/null/1.0) for every other kind, same "cheap to carry" choice as Building's
+      // own spawnCountdownMs.
+      spawnCountdownMs = c.spawnCountdownMs,
+      summonedBy = c.summonedBy.map(_.toDouble).getOrElse(null).asInstanceOf[js.Any],
+      frozenMs = c.frozenMs,
+      sizeFraction = c.sizeFraction
     )
 
   private def encodeBuilding(b: Building): js.Dynamic =
@@ -92,7 +115,9 @@ private object Persistence:
       col = b.col,
       row = b.row,
       kind = b.kind.toString,
-      spawnCountdownMs = b.spawnCountdownMs
+      spawnCountdownMs = b.spawnCountdownMs,
+      corruptionPercent = b.corruptionPercent,
+      flashMs = b.flashMs
     )
 
   private def encodeOutcome(m: MatchResult): js.Dynamic = m match
@@ -126,8 +151,24 @@ private object Persistence:
       buildings = buildings,
       resources = decodeResources(d),
       resourcesPlundered = asDouble(d.resourcesPlundered),
+      // Pre-Mort saves have no buildingsCorrupted field — default to 0.0, same fallback
+      // shape as Shadow/Crystal's decodeResources migration above.
+      buildingsCorrupted = if js.isUndefined(d.buildingsCorrupted) then 0.0 else asDouble(d.buildingsCorrupted),
+      researchLevels = decodeResearchLevels(d.researchLevels),
       nextId = asDouble(d.nextId).toLong
     )
+
+  // Pre-Science saves have no researchLevels field at all — every lab defaults to 0
+  // (unresearched), same fallback shape as buildingsCorrupted above.
+  private def decodeResearchLevels(d: js.Dynamic): Map[BuildingKind, Int] =
+    if js.isUndefined(d) then Map.empty
+    else
+      ResearchSpecs.orderedLabs
+        .flatMap { lab =>
+          val level = d.selectDynamic(lab.toString)
+          if js.isUndefined(level) then None else Some(lab -> asDouble(level).toInt)
+        }
+        .toMap
 
   // Pre-refactor saves have flat wood/fire/light fields, not a `resources` object — light
   // has no Shadow/Crystal history to migrate (those factions don't exist yet), so a
@@ -185,11 +226,26 @@ private object Persistence:
       maxHp = asDouble(d.maxHp),
       speedPerMs = asDouble(d.speedPerMs),
       kind = d.kind.asInstanceOf[String] match
-        case "Elf"      => UnitKind.Elf
-        case "Minotaur" => UnitKind.Minotaur
-        case "Paladin"  => UnitKind.Paladin
-        case "Wolf"     => UnitKind.Wolf
-        case _          => UnitKind.Goblin
+        case "Elf"         => UnitKind.Elf
+        case "Minotaur"    => UnitKind.Minotaur
+        case "Paladin"     => UnitKind.Paladin
+        case "Wolf"        => UnitKind.Wolf
+        case "Zombie"      => UnitKind.Zombie
+        case "Vampire"     => UnitKind.Vampire
+        case "Necromancer" => UnitKind.Necromancer
+        case "Soul"        => UnitKind.Soul
+        case "Tree"        => UnitKind.Tree
+        case _             => UnitKind.Goblin,
+      // Pre-Necromancer saves have none of these fields — default to 0.0/None, same
+      // fallback shape as buildingsCorrupted/researchLevels' migration elsewhere in this file.
+      spawnCountdownMs = if js.isUndefined(d.spawnCountdownMs) then 0.0 else asDouble(d.spawnCountdownMs),
+      summonedBy =
+        if js.isUndefined(d.summonedBy) || d.summonedBy == null then None
+        else Some(asDouble(d.summonedBy).toLong),
+      frozenMs = if js.isUndefined(d.frozenMs) then 0.0 else asDouble(d.frozenMs),
+      // Pre-Stonehenge saves have no sizeFraction at all — default to 1.0 (full size),
+      // same fallback shape as spawnCountdownMs/frozenMs above.
+      sizeFraction = if js.isUndefined(d.sizeFraction) then 1.0 else asDouble(d.sizeFraction)
     )
 
   private def decodeBuilding(d: js.Dynamic): Building =
@@ -198,15 +254,31 @@ private object Persistence:
       col = asDouble(d.col).toInt,
       row = asDouble(d.row).toInt,
       kind = d.kind.asInstanceOf[String] match
-        case "Grove"      => BuildingKind.Grove
-        case "Forest"     => BuildingKind.Forest
-        case "Jungle"     => BuildingKind.Jungle
-        case "Cave"       => BuildingKind.Cave
-        case "Labyrinth"  => BuildingKind.Labyrinth
-        case "Eglise"     => BuildingKind.Church
-        case "Church"     => BuildingKind.Church
-        case _            => BuildingKind.Watchtower,
-      spawnCountdownMs = if js.isUndefined(d.spawnCountdownMs) then 0.0 else asDouble(d.spawnCountdownMs)
+        case "Grove"           => BuildingKind.Grove
+        case "Forest"          => BuildingKind.Forest
+        case "Jungle"          => BuildingKind.Jungle
+        case "Cave"            => BuildingKind.Cave
+        case "Labyrinth"       => BuildingKind.Labyrinth
+        case "Eglise"          => BuildingKind.Church
+        case "Church"          => BuildingKind.Church
+        case "Tomb"            => BuildingKind.Tomb
+        case "BlackCastle"     => BuildingKind.BlackCastle
+        case "DeathHouse"      => BuildingKind.DeathHouse
+        case "LaboFondamental" => BuildingKind.LaboFondamental
+        case "LaboNaturel"     => BuildingKind.LaboNaturel
+        case "LaboSombre"      => BuildingKind.LaboSombre
+        case "LaboDeRecherche" => BuildingKind.LaboDeRecherche
+        case "LaboDeLaLoi"     => BuildingKind.LaboDeLaLoi
+        case "LaboDuChaos"     => BuildingKind.LaboDuChaos
+        case "Angel"           => BuildingKind.Angel
+        case "Stonehenge"      => BuildingKind.Stonehenge
+        case "PassingGate"     => BuildingKind.PassingGate
+        case _                 => BuildingKind.Watchtower,
+      spawnCountdownMs = if js.isUndefined(d.spawnCountdownMs) then 0.0 else asDouble(d.spawnCountdownMs),
+      corruptionPercent = if js.isUndefined(d.corruptionPercent) then 0.0 else asDouble(d.corruptionPercent),
+      // Pre-PassingGate saves have no flashMs at all — default to 0.0 (no flash), same
+      // fallback shape as sizeFraction above.
+      flashMs = if js.isUndefined(d.flashMs) then 0.0 else asDouble(d.flashMs)
     )
 
   private def decodeOutcome(d: js.Dynamic): Option[MatchResult] =

@@ -7,9 +7,21 @@ class AiStrategyTest extends munit.FunSuite:
 
   private val noOpponent = MazeState.initial
 
-  private def withResources(wood: Double = 0.0, fire: Double = 0.0, light: Double = 0.0): MazeState =
+  private def withResources(
+      wood: Double = 0.0,
+      fire: Double = 0.0,
+      light: Double = 0.0,
+      shadow: Double = 0.0,
+      crystal: Double = 0.0
+  ): MazeState =
     MazeState.initial.copy(
-      resources = Map(Resource.Wood -> wood, Resource.Fire -> fire, Resource.Light -> light)
+      resources = Map(
+        Resource.Wood -> wood,
+        Resource.Fire -> fire,
+        Resource.Light -> light,
+        Resource.Shadow -> shadow,
+        Resource.Crystal -> crystal
+      )
     )
 
   private def count(state: MazeState, kind: BuildingKind): Int = state.buildings.count(_.kind == kind)
@@ -39,6 +51,31 @@ class AiStrategyTest extends munit.FunSuite:
     assertEquals(count(result, BuildingKind.Labyrinth), 1)
     assertEquals(count(result, BuildingKind.Forest), 0)
     assertEquals(count(result, BuildingKind.Cave), 0)
+  }
+
+  // A recent rebalance dropped GroveCostWood to equal TombCostWood exactly (5 each), and
+  // Grove costs nothing else — so Grove's cost is now a strict subset of Tomb's. Any
+  // resource level that affords a Tomb necessarily affords a Grove too, and Grove sits
+  // earlier in buildOrder, so LinearStrategy (fixed priority, never reconsiders) always
+  // picks Grove over Tomb now. "Only afford a tomb" is no longer constructible.
+  test("Grove wins the tie over Tomb (subsumed cost, earlier in buildOrder) even when shadow only helps Tomb") {
+    val state = withResources(wood = Balance.TombCostWood, shadow = Balance.TombCostShadow)
+    val result = LinearStrategy.maybeBuild(state, noOpponent)
+    assertEquals(count(result, BuildingKind.Grove), 1)
+    assertEquals(count(result, BuildingKind.Tomb), 0)
+  }
+
+  test("builds a black castle when it can only afford one, over cheaper buildings tied on wood") {
+    val state = withResources(wood = Balance.BlackCastleCostWood, shadow = Balance.BlackCastleCostShadow)
+    val result = LinearStrategy.maybeBuild(state, noOpponent)
+    assertEquals(count(result, BuildingKind.BlackCastle), 1)
+    assertEquals(count(result, BuildingKind.Labyrinth), 0)
+  }
+
+  test("builds a fondamental lab when it can only afford one (zero wood cost, tried last)") {
+    val state = withResources(wood = 0.0, crystal = Balance.LaboFondamentalCostCrystal)
+    val result = LinearStrategy.maybeBuild(state, noOpponent)
+    assertEquals(count(result, BuildingKind.LaboFondamental), 1)
   }
 
   test("builds an eglise over any cheaper building once it can afford one") {
@@ -102,28 +139,57 @@ class AiStrategyTest extends munit.FunSuite:
   // towerdefense.sim.tournament 3) after splitting AiStrategy into LayoutPolicy x
   // SpendingPolicy combinations — see AiStrategy.ladder's doc and docs/adr/0010. Linear
   // (the deterministic, non-reactive baseline) is always first.
-  test("the ladder is ordered weakest to strongest by measured win rate, linear first") {
+  test("the ladder is ordered weakest to strongest by measured win rate") {
+    // Re-measured after the manual Balance.scala rebalance (commit "balance") — see
+    // AiStrategy.ladder's doc for the full tournament run and why the order reshuffled far
+    // more violently than the earlier Death/Science re-measurement did.
     assertEquals(
       AiStrategy.ladder.map(_._1),
       Seq(
-        "linear",
-        "maze-only",
-        "comb",
         "comb-vertical",
+        "comb",
+        "linear",
         "counter-only",
         "resource-only",
         "maze-counter",
-        "comb-vertical-resource",
-        "comb-resource",
+        "resource-maze",
         "balanced",
+        "maze-plunder",
         "comb-plunder",
         "comb-vertical-plunder",
-        "maze-plunder",
-        "resource-maze"
+        "maze-only",
+        "comb-resource",
+        "comb-vertical-resource",
+        "comb-corruption",
+        "maze-corruption"
       )
     )
   }
 
   test("all is exactly the ladder's entries, so both stay in sync") {
     assertEquals(AiStrategy.all, AiStrategy.ladder.toMap)
+  }
+
+  // buildCooldownMs (see AiStrategy's doc): a trait-level default so every existing
+  // strategy keeps today's exact pacing with zero code changes, overridable per-instance
+  // via RateLimited for anything that wants to tune "how fast" independently of "what".
+  test("buildCooldownMs defaults to Balance.AiBuildCooldownMs for any strategy that doesn't override it") {
+    assertEquals(LinearStrategy.buildCooldownMs, Balance.AiBuildCooldownMs)
+    assertEquals(ComposedStrategy(NoLayoutPreference, GrovePriority).buildCooldownMs, Balance.AiBuildCooldownMs)
+  }
+
+  test("RateLimited overrides buildCooldownMs but delegates every decision to the wrapped strategy") {
+    val fast = RateLimited(LinearStrategy, buildCooldownMs = 500.0)
+    assertEquals(fast.buildCooldownMs, 500.0)
+    val state = withResources(wood = Balance.GroveCostWood)
+    assertEquals(fast.maybeBuild(state, noOpponent), LinearStrategy.maybeBuild(state, noOpponent))
+  }
+
+  test("RateLimited forwards maybeUpgrade/maybeResearch/maybeDestroy to the wrapped strategy too") {
+    val rich = withResources(wood = 1_000.0)
+    val withGrove = Placement.tryPlaceBuilding(rich, BuildingKind.Grove, 5, 5).toOption.get
+    val fast = RateLimited(LinearStrategy, buildCooldownMs = 500.0)
+    assertEquals(fast.maybeUpgrade(withGrove, noOpponent), LinearStrategy.maybeUpgrade(withGrove, noOpponent))
+    assertEquals(fast.maybeResearch(withGrove, noOpponent), LinearStrategy.maybeResearch(withGrove, noOpponent))
+    assertEquals(fast.maybeDestroy(withGrove, noOpponent), LinearStrategy.maybeDestroy(withGrove, noOpponent))
   }

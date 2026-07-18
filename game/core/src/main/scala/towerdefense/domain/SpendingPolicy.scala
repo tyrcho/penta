@@ -52,21 +52,31 @@ object SpendingPolicy:
     val existingCount = state.buildings.count(_.kind == kind)
     (rawMargin(state, kind) + growthBonus(state, kind)) / (1.0 + existingCount)
 
-  // Mirrors whichever of Nature (Grove/Forest/Jungle) or Chaos (Cave/Labyrinth) the
-  // opponent invests in more — moved verbatim from CompositeStrategy.counterScore. Loi
-  // (Church/Watchtower) never scores: it feeds neither VictoryConditions target.
+  // Mirrors whichever of Nature (Grove/Forest/Jungle), Chaos (Cave/Labyrinth), or Mort
+  // (Tomb/BlackCastle) the opponent invests in more — moved verbatim from
+  // CompositeStrategy.counterScore, now with Mort added alongside the original two once
+  // its own victory condition (buildingsCorrupted) existed to counter. Loi (Church/
+  // Watchtower) never scores here: it feeds no VictoryConditions target (still a genuinely
+  // unwired gap — see BuildingSpecs' doc). Science (the five Labo* kinds) is also excluded,
+  // even though Recherche fondamentale IS a real victory condition now: countering it means
+  // researching your OWN labs' levels, not building more copies of a maxPerMaze: Some(1)
+  // building, so it doesn't fit this "build more of what they're building" heuristic.
   private val natureBuildingKinds: Set[BuildingKind] =
-    Set(BuildingKind.Grove, BuildingKind.Forest, BuildingKind.Jungle)
+    Set(BuildingKind.Grove, BuildingKind.Forest, BuildingKind.Jungle, BuildingKind.Stonehenge)
   private val chaosBuildingKinds: Set[BuildingKind] =
     Set(BuildingKind.Cave, BuildingKind.Labyrinth)
+  private val mortBuildingKinds: Set[BuildingKind] =
+    Set(BuildingKind.Tomb, BuildingKind.BlackCastle, BuildingKind.DeathHouse)
 
   private[domain] def counterScore(opponent: MazeState, kind: BuildingKind): Double =
     val natureCount = opponent.buildings.count(b => natureBuildingKinds.contains(b.kind))
     val chaosCount = opponent.buildings.count(b => chaosBuildingKinds.contains(b.kind))
-    val leaderCount = natureCount.max(chaosCount)
+    val mortCount = opponent.buildings.count(b => mortBuildingKinds.contains(b.kind))
+    val leaderCount = natureCount.max(chaosCount).max(mortCount)
     val ownFactionCount =
       if natureBuildingKinds.contains(kind) then Some(natureCount)
       else if chaosBuildingKinds.contains(kind) then Some(chaosCount)
+      else if mortBuildingKinds.contains(kind) then Some(mortCount)
       else None
     if ownFactionCount.contains(leaderCount) then 1.0 else 0.0
 
@@ -86,6 +96,14 @@ case object PlunderSpending extends SpendingPolicy:
 
   def score(state: MazeState, opponent: MazeState, kind: BuildingKind): Double =
     (if chaosKinds.contains(kind) then 1.0 else 0.0) + 0.25 * SpendingPolicy.resourceScore(state, kind)
+
+// Always favors Mort (Tomb/BlackCastle) regardless of the opponent's own faction mix,
+// racing the Mort/corruption victory condition the same way PlunderSpending races Chaos's.
+case object CorruptionSpending extends SpendingPolicy:
+  private val mortKinds = Set(BuildingKind.Tomb, BuildingKind.BlackCastle, BuildingKind.DeathHouse)
+
+  def score(state: MazeState, opponent: MazeState, kind: BuildingKind): Double =
+    (if mortKinds.contains(kind) then 1.0 else 0.0) + 0.25 * SpendingPolicy.resourceScore(state, kind)
 
 // Prefers Grove outright (Nature's only directly-buildable tier — see BuildingSpecs.
 // buildableDirectly) whenever it's a candidate at all, falling back to plain affordability

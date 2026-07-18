@@ -19,8 +19,8 @@ import towerdefense.domain.*
 object MatchLog:
 
   def diff(tick: Int, before: BattleState, after: BattleState, events: TickEvents): Seq[String] =
-    sideLines(tick, "a", before.player, after.player, events.playerDeaths, events.playerArrivals) ++
-      sideLines(tick, "b", before.ai, after.ai, events.aiDeaths, events.aiArrivals)
+    sideLines(tick, "a", before.player, after.player, events.playerDeaths, events.playerArrivals, events.playerCorrupted) ++
+      sideLines(tick, "b", before.ai, after.ai, events.aiDeaths, events.aiArrivals, events.aiCorrupted)
 
   private def sideLines(
       tick: Int,
@@ -28,18 +28,34 @@ object MatchLog:
       before: MazeState,
       after: MazeState,
       deaths: List[Death],
-      arrivals: List[UnitKind]
+      arrivals: List[UnitKind],
+      corrupted: List[Corrosion]
   ): Seq[String] =
-    buildingLines(tick, side, before, after) ++
+    buildingLines(tick, side, before, after, corrupted) ++
       plunderLine(tick, side, before, after) ++
+      corruptedTallyLine(tick, side, before, after) ++
+      researchLines(tick, side, before, after) ++
       deaths.map(deathLine(tick, side, _)) ++
+      corrupted.map(corruptLine(tick, side, _)) ++
       arrivals.filter(k => CreatureSpecs.all(k).plunder.isEmpty).map(arriveLine(tick, side, _))
 
-  private def buildingLines(tick: Int, side: String, before: MazeState, after: MazeState): Seq[String] =
+  // `corrupted` (from TickEvents, not diffed) tells builtIds/destroyedIds apart from a
+  // plain demolish: a corrupted-to-death building would otherwise look identical to a
+  // Demolition in the before/after id diff alone, but refunds its full cost to the
+  // *opponent* rather than half back to this side — see corruptLine, not the generic
+  // DESTROY line, for those ids.
+  private def buildingLines(
+      tick: Int,
+      side: String,
+      before: MazeState,
+      after: MazeState,
+      corrupted: List[Corrosion]
+  ): Seq[String] =
     val beforeById = before.buildings.map(b => b.id -> b).toMap
     val afterById = after.buildings.map(b => b.id -> b).toMap
+    val corruptedIds = corrupted.map(_.buildingId).toSet
     val builtIds = (afterById.keySet -- beforeById.keySet).toSeq.sorted
-    val destroyedIds = (beforeById.keySet -- afterById.keySet).toSeq.sorted
+    val destroyedIds = (beforeById.keySet -- afterById.keySet -- corruptedIds).toSeq.sorted
     val upgradedIds = afterById.keySet
       .intersect(beforeById.keySet)
       .filter(id => afterById(id).kind != beforeById(id).kind)
@@ -68,6 +84,32 @@ object MatchLog:
     }
     built ++ upgraded ++ destroyed
 
+  // Corrosion.cost is already the full building cost, refunded to the *opponent* (the
+  // corrupting creature's owner) — unlike DESTROY's half-cost self-refund above.
+  private def corruptLine(tick: Int, side: String, corrosion: Corrosion): String =
+    formatLine(
+      tick,
+      side,
+      "CORRUPT",
+      s"${corrosion.kind} (${corrosion.col},${corrosion.row}) corrupted to dust, " +
+        s"opponent refunded ${fmtResources(corrosion.cost)}"
+    )
+
+  private def corruptedTallyLine(tick: Int, side: String, before: MazeState, after: MazeState): Option[String] =
+    val delta = after.buildingsCorrupted - before.buildingsCorrupted
+    if delta <= 0.0 then None
+    else Some(formatLine(tick, side, "CORRUPTED_TOTAL", f"+${delta.toInt} (total ${after.buildingsCorrupted.toInt})"))
+
+  // Science's research levels (MazeState.researchLevels) aren't in `buildings`, so they
+  // need their own diff, one line per lab whose level increased this tick.
+  private def researchLines(tick: Int, side: String, before: MazeState, after: MazeState): Seq[String] =
+    ResearchSpecs.orderedLabs.flatMap { lab =>
+      val beforeLevel = before.researchLevels.getOrElse(lab, 0)
+      val afterLevel = after.researchLevels.getOrElse(lab, 0)
+      if afterLevel <= beforeLevel then None
+      else Some(formatLine(tick, side, "RESEARCH", s"$lab level $beforeLevel→$afterLevel"))
+    }
+
   private def plunderLine(tick: Int, side: String, before: MazeState, after: MazeState): Option[String] =
     val delta = after.resourcesPlundered - before.resourcesPlundered
     if delta <= 0.0 then None
@@ -94,12 +136,17 @@ object MatchLog:
     s"tick $tick  SNAPSHOT  a: $a | b: $b"
 
   private def sideSummary(state: MazeState, opponent: MazeState): String =
-    val forests = VictoryConditions.forestCount(state)
-    val forestTarget = VictoryConditions.forestTarget(opponent).toInt
+    val forests = VictoryConditions.forestCount(state, opponent)
+    val forestTarget = VictoryConditions.forestTarget(state, opponent).toInt
     val plunderTarget = VictoryConditions.plunderTarget(opponent).toInt
     val plundered = state.resourcesPlundered
+    val corrupted = state.buildingsCorrupted.toInt
+    val corruptionTarget = VictoryConditions.corruptionTarget(opponent).toInt
     val resources = fmtResources(state.resources)
-    f"forests $forests/$forestTarget  plunder $plundered%.1f/$plunderTarget  $resources"
+    val research = ResearchSpecs.orderedLabs
+      .flatMap(lab => state.researchLevels.get(lab).filter(_ > 0).map(level => s"$lab:$level"))
+      .mkString(",")
+    f"forests $forests/$forestTarget  plunder $plundered%.1f/$plunderTarget  corrupted $corrupted/$corruptionTarget  research [$research]  $resources"
 
   def finalLine(tick: Int, outcome: MatchResult): String =
     val winnerSide = outcome match

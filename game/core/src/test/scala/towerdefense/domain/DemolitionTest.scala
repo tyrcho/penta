@@ -51,8 +51,9 @@ class DemolitionTest extends munit.FunSuite:
 
   test("destroys an eglise and refunds half its wood and light cost") {
     val (col, row) = (5, 5)
+    val rich = MazeState.initial.copy(resources = Map(Resource.Wood -> 1_000.0, Resource.Light -> 1_000.0))
     val withEglise =
-      Placement.tryPlaceBuilding(MazeState.initial, BuildingKind.Church, col, row).toOption.get
+      Placement.tryPlaceBuilding(rich, BuildingKind.Church, col, row).toOption.get
     val result = Demolition.tryDestroy(withEglise, col, row).toOption.get
     assertEquals(result.buildings.count(_.kind == BuildingKind.Church), 0)
     assertEquals(
@@ -78,6 +79,40 @@ class DemolitionTest extends munit.FunSuite:
     assertEquals(
       result.resources(Resource.Light),
       withWatchtower.resources(Resource.Light) + Balance.WatchtowerCostLight * Balance.DemolishRefundFraction
+    )
+  }
+
+  test("destroys a tomb and refunds half its wood and shadow cost") {
+    val (col, row) = (5, 5)
+    val withTomb = Placement.tryPlaceBuilding(MazeState.initial, BuildingKind.Tomb, col, row).toOption.get
+    val result = Demolition.tryDestroy(withTomb, col, row).toOption.get
+    assertEquals(result.buildings.count(_.kind == BuildingKind.Tomb), 0)
+    assertEquals(
+      result.resources(Resource.Wood),
+      withTomb.resources(Resource.Wood) + Balance.TombCostWood * Balance.DemolishRefundFraction
+    )
+    assertEquals(
+      result.resources(Resource.Shadow),
+      withTomb.resources(Resource.Shadow) + Balance.TombCostShadow * Balance.DemolishRefundFraction
+    )
+  }
+
+  test("destroys a Science lab and refunds half its upgrade cost, freeing up the max-one-per-kind slot") {
+    val (col, row) = (5, 5)
+    val rich = MazeState.initial.copy(resources = Map(Resource.Wood -> 1_000.0, Resource.Crystal -> 1_000.0))
+    val withBase = Placement.tryPlaceBuilding(rich, BuildingKind.LaboFondamental, col, row).toOption.get
+    val withLab = Placement.tryUpgradeBuilding(withBase, col, row, Some(BuildingKind.LaboNaturel)).toOption.get
+    val result = Demolition.tryDestroy(withLab, col, row).toOption.get
+    assertEquals(result.buildings.count(_.kind == BuildingKind.LaboNaturel), 0)
+    assertEquals(
+      result.resources(Resource.Crystal),
+      withLab.resources(Resource.Crystal) + Balance.LaboNaturelCostCrystal * Balance.DemolishRefundFraction
+    )
+    // Rebuilding after demolishing is allowed — maxPerMaze counts current buildings only.
+    val withNewBase = Placement.tryPlaceBuilding(result, BuildingKind.LaboFondamental, col, row).toOption.get
+    assertEquals(
+      Placement.tryUpgradeBuilding(withNewBase, col, row, Some(BuildingKind.LaboNaturel)).isRight,
+      true
     )
   }
 

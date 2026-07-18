@@ -4,25 +4,43 @@ package towerdefense.domain
 // first buildable cell in row-major order. Deterministic (easy to test), no
 // randomness — a reasonable POC default since the vault doesn't specify AI behavior.
 // Both sides can build any directly-buildable BuildingKind — see CLAUDE.md, "the game
-// is symmetric" — Forest/Jungle are reached only via maybeUpgrade, never listed here.
-// Tried by descending wood cost (Church 40 > Labyrinth 20 > Watchtower 10 = Grove 10 >
-// Cave 5): each one's wood cost dominates every cheaper building's, so trying it later
-// would make it unreachable — by the time its wood cost is affordable, the cheaper
-// buildings' wood costs always are too (their fire/light requirements are independent
-// currencies and don't create the same trap). Watchtower and Grove tie on wood cost;
-// Watchtower is tried first, an arbitrary but stable tie-break. Kept as an explicit
-// list, not derived by sorting BuildingSpecs at runtime — a re-derived sort risks
-// silently flipping that tie with no test to catch it.
+// is symmetric" — Forest/Jungle (and, since the Science redesign, the five specific labs)
+// are reached only via maybeUpgrade, never listed here.
+// Tried by descending wood cost (Stonehenge 150 > Church 20 = BlackCastle 20 >
+// Labyrinth 10 = Watchtower 10 = DeathHouse 10 > Grove 5 = Tomb 5 >
+// Cave 0 = Angel 0 = PassingGate 0 = LaboFondamental 0): each one's wood cost dominates
+// every cheaper building's, so trying it later would make it unreachable — by the time
+// its wood cost is affordable, the cheaper buildings' wood costs always are too (their
+// non-wood requirements are independent currencies and don't create the same trap). Angel
+// costs only Light, PassingGate costs Shadow+Light, and LaboFondamental costs only Crystal
+// (no Wood at all, unlike Grove/Tomb's shared-Wood trap — see the NOTE below), so all three
+// sit in the zero-wood tier alongside Cave, ordered among them arbitrarily but stably. Cave
+// joined this tier in the same rebalance that made Grove/Tomb tie at 5. Every same-wood-cost
+// tie breaks by list position — arbitrary but stable. Kept as an explicit list, not derived
+// by sorting BuildingSpecs at runtime — a re-derived sort risks silently flipping a tie
+// with no test to catch it.
+// NOTE: at the 5-wood tier, Grove's cost (Wood only) is now a strict subset of Tomb's
+// (Wood + Shadow) — so whenever Tomb is affordable, Grove always is too, and being first
+// in that tier, Grove always wins. Under this strategy specifically, Tomb is effectively
+// unreachable as long as any Wood income exists (see AiStrategyTest). Worth revisiting if
+// LinearStrategy is meant to exercise Death at all.
 // Kept as the fixed baseline other AiStrategy implementations (e.g. CompositeStrategy)
 // are measured against — it never reads `opponent`.
 object LinearStrategy extends AiStrategy:
 
   private val buildOrder: Seq[BuildingKind] = Seq(
+    BuildingKind.Stonehenge,
     BuildingKind.Church,
+    BuildingKind.BlackCastle,
     BuildingKind.Labyrinth,
     BuildingKind.Watchtower,
+    BuildingKind.DeathHouse,
     BuildingKind.Grove,
-    BuildingKind.Cave
+    BuildingKind.Tomb,
+    BuildingKind.Cave,
+    BuildingKind.Angel,
+    BuildingKind.PassingGate,
+    BuildingKind.LaboFondamental
   )
 
   def maybeBuild(state: MazeState, opponent: MazeState): MazeState =
@@ -32,6 +50,11 @@ object LinearStrategy extends AiStrategy:
   // see AiStrategy.upgradeAnyAffordable, shared with every other strategy that upgrades.
   override def maybeUpgrade(state: MazeState, opponent: MazeState): MazeState =
     AiStrategy.upgradeAnyAffordable(state)
+
+  // Researches the first affordable next level among owned Science labs — see
+  // AiStrategy.researchAnyAffordable, shared with every other strategy.
+  override def maybeResearch(state: MazeState, opponent: MazeState): MazeState =
+    AiStrategy.researchAnyAffordable(state)
 
   private def tryBuildOneOf(state: MazeState, kind: BuildingKind): Option[MazeState] =
     GridConfig.allCells.iterator

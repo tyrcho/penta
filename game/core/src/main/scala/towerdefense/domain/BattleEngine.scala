@@ -18,18 +18,23 @@ case class BattleState(
 object BattleState:
   val initial: BattleState = BattleState(MazeState.initial, MazeState.initial)
 
-// Deaths/arrivals from both sides' CombatEngine.tick calls this BattleEngine.tick
-// otherwise discards — purely observational (see MatchLog in the sim module, the one
-// consumer), so it's returned alongside BattleState rather than folded into it.
+// Deaths/arrivals/corruptions from both sides' CombatEngine.tick calls this
+// BattleEngine.tick otherwise discards — purely observational (see MatchLog in the sim
+// module, the one consumer), so it's returned alongside BattleState rather than folded
+// into it. playerCorrupted/aiCorrupted are buildings destroyed *in* that side's own maze
+// this tick (by the opponent's Zombie/Vampire) — same "named after the maze it happened
+// in" convention as playerDeaths/aiDeaths.
 case class TickEvents(
     playerDeaths: List[Death],
     aiDeaths: List[Death],
     playerArrivals: List[UnitKind],
-    aiArrivals: List[UnitKind]
+    aiArrivals: List[UnitKind],
+    playerCorrupted: List[Corrosion] = Nil,
+    aiCorrupted: List[Corrosion] = Nil
 )
 
 object TickEvents:
-  val empty: TickEvents = TickEvents(Nil, Nil, Nil, Nil)
+  val empty: TickEvents = TickEvents(Nil, Nil, Nil, Nil, Nil, Nil)
 
 object BattleEngine:
 
@@ -57,8 +62,10 @@ object BattleEngine:
   ): (BattleState, TickEvents) =
     if battle.outcome.isDefined then (battle, TickEvents.empty)
     else
-      val playerResult = CombatEngine.tick(battle.player, deltaMs)
-      val aiResult = CombatEngine.tick(battle.ai, deltaMs)
+      // Each side's creatures walking the *other* maze carry their owner's chaotiques
+      // bonus with them — see CombatEngine.tick's attackerResearchLevels doc.
+      val playerResult = CombatEngine.tick(battle.player, deltaMs, battle.ai.researchLevels)
+      val aiResult = CombatEngine.tick(battle.ai, deltaMs, battle.player.researchLevels)
 
       val aiAfterDestroy = aiStrategy.maybeDestroy(aiResult.state, playerResult.state)
       val (aiBuilt, aiNextCooldown) = maybeActThrottled(
@@ -78,28 +85,34 @@ object BattleEngine:
           )
         case None => (playerResult.state, 0.0)
 
-      val aiFinal = deliverUnits(creditPlunder(aiBuilt, playerResult.stolen), playerResult.spawned)
-      val playerFinal = deliverUnits(creditPlunder(playerBuilt, aiResult.stolen), aiResult.spawned)
+      val aiCredited = creditCorruption(creditPlunder(aiBuilt, playerResult.stolen), playerResult.corrupted)
+      val playerCredited = creditCorruption(creditPlunder(playerBuilt, aiResult.stolen), aiResult.corrupted)
+      val aiFinal = deliverUnits(aiCredited, playerResult.spawned)
+      val playerFinal = deliverUnits(playerCredited, aiResult.spawned)
 
       val next = BattleState(playerFinal, aiFinal, aiNextCooldown, playerNextCooldown)
       val events = TickEvents(
         playerDeaths = playerResult.deaths,
         aiDeaths = aiResult.deaths,
         playerArrivals = playerResult.arrivals,
-        aiArrivals = aiResult.arrivals
+        aiArrivals = aiResult.arrivals,
+        playerCorrupted = playerResult.corrupted,
+        aiCorrupted = aiResult.corrupted
       )
       (next.copy(outcome = VictoryConditions.evaluate(next)), events)
 
   // Wood/fire production compounds with building count, so without a pace limit a side
   // can tile its whole maze within seconds — capping it to at most one *attempt* per
-  // Balance.AiBuildCooldownMs keeps it roughly as fast as a human tapping. The cooldown
-  // resets whether or not the attempt actually did anything: a strategy's scan is a
-  // Placement.tryPlace*/tryUpgradeBuilding call (with its own checks) per candidate cell,
-  // and retrying that scan every tick while broke — rather than once per cooldown
-  // window — is wasted work with no gameplay benefit, since resources barely move tick
-  // to tick. Upgrade shares this same cooldown/slot with build (tried first) rather than
-  // getting its own: upgrading compounds the economy just as building does, so pacing it
-  // separately would just let a side do both every tick instead of one or the other.
+  // strategy.buildCooldownMs (Balance.AiBuildCooldownMs by default — see AiStrategy's doc,
+  // and RateLimited for overriding it per-strategy) keeps it roughly as fast as a human
+  // tapping. The cooldown resets whether or not the attempt actually did anything: a
+  // strategy's scan is a Placement.tryPlace*/tryUpgradeBuilding call (with its own checks)
+  // per candidate cell, and retrying that scan every tick while broke — rather than once
+  // per cooldown window — is wasted work with no gameplay benefit, since resources barely
+  // move tick to tick. Upgrade and research share this same cooldown/slot with build (tried
+  // in that order) rather than getting their own: each compounds a maze's economy/defense
+  // just as building does, so pacing them separately would just let a side do all three
+  // every tick instead of one.
   private def maybeActThrottled(
       state: MazeState,
       opponent: MazeState,
@@ -109,7 +122,8 @@ object BattleEngine:
     if cooldownMs > 0 then (state, cooldownMs)
     else
       val upgraded = strategy.maybeUpgrade(state, opponent)
-      (strategy.maybeBuild(upgraded, opponent), Balance.AiBuildCooldownMs)
+      val researched = strategy.maybeResearch(upgraded, opponent)
+      (strategy.maybeBuild(researched, opponent), strategy.buildCooldownMs)
 
   // Resources a Goblin plundered from the opponent land in the attacker's own economy
   // (Chaos.md: "arracher ses ressources"), and count toward the Chaos victory tally.
@@ -122,6 +136,20 @@ object BattleEngine:
       resourcesPlundered = state.resourcesPlundered + stolen.values.sum
     )
 
+  // A corrupted-to-death building's full cost (Corruption.md) lands in the corrupting
+  // creature's owner's economy — the same "attacker's own state gets credited" shape as
+  // creditPlunder, plus one point per building toward this side's own Mort victory tally
+  // (buildingsCorrupted, symmetric to resourcesPlundered).
+  private def creditCorruption(state: MazeState, corrupted: List[Corrosion]): MazeState =
+    if corrupted.isEmpty then state
+    else
+      val credited = corrupted.foldLeft(state.resources) { case (acc, corrosion) =>
+        corrosion.cost.foldLeft(acc) { case (acc2, (res, amount)) =>
+          acc2.updated(res, acc2.getOrElse(res, 0.0) + amount)
+        }
+      }
+      state.copy(resources = credited, buildingsCorrupted = state.buildingsCorrupted + corrupted.size)
+
   private def deliverUnits(state: MazeState, spawned: Map[UnitKind, Int]): MazeState =
     spawned.foldLeft(state) { case (s, (kind, count)) =>
       (0 until count).foldLeft(s)((s2, _) => spawnCreature(s2, kind))
@@ -130,5 +158,11 @@ object BattleEngine:
   private def spawnCreature(state: MazeState, kind: UnitKind): MazeState =
     val spec = CreatureSpecs.all(kind)
     val spawnPos = GridConfig.cellCenter(GridConfig.spawnCell._1, GridConfig.spawnCell._2)
-    val creature = Creature(state.nextId, spawnPos, spec.maxHp, spec.maxHp, spec.speedPerMs, kind)
+    // A fresh Necromancer starts with a full Soul-summon countdown (spec.spawns' interval),
+    // not 0 — same "starts at the full interval, doesn't fire instantly" choice as a
+    // freshly placed building (see Placement.tryPlaceBuilding). Inert (0.0) for every other
+    // kind, which has no CreatureSpec.spawns at all.
+    val initialCountdown = spec.spawns.map(_._2).getOrElse(0.0)
+    val creature =
+      Creature(state.nextId, spawnPos, spec.maxHp, spec.maxHp, spec.speedPerMs, kind, spawnCountdownMs = initialCountdown)
     state.copy(creatures = creature :: state.creatures, nextId = state.nextId + 1)

@@ -2,8 +2,7 @@ package towerdefense.domain
 
 class BattleEngineTest extends munit.FunSuite:
 
-  private def buildingCount(m: MazeState): Int =
-    m.buildings.count(_.kind != BuildingKind.Watchtower)
+  private def buildingCount(m: MazeState): Int = m.buildings.size
 
   private def withResources(wood: Double = 0.0, fire: Double = 0.0, light: Double = 0.0): MazeState =
     MazeState.initial.copy(
@@ -20,6 +19,41 @@ class BattleEngineTest extends munit.FunSuite:
     assertEquals(result.player.creatures, Nil)
     assertEquals(result.ai.creatures.size, 1)
     assertEquals(result.ai.creatures.head.kind, UnitKind.Elf)
+  }
+
+  test("a death house's Necromancer arrives in the opponent's maze with a full Soul-summon countdown") {
+    val deathHouse = Building(100, col = 5, row = 5, BuildingKind.DeathHouse, Balance.NecromancerSpawnIntervalMs)
+    val battle = BattleState(
+      player = withResources().copy(buildings = List(deathHouse)),
+      ai = withResources()
+    )
+    val result = BattleEngine.tick(battle, deltaMs = Balance.NecromancerSpawnIntervalMs)
+    assertEquals(result.player.creatures, Nil)
+    assertEquals(result.ai.creatures.size, 1)
+    val necromancer = result.ai.creatures.head
+    assertEquals(necromancer.kind, UnitKind.Necromancer)
+    // Starts with the full interval (like a freshly placed building's own spawnCountdownMs
+    // — see Placement.tryPlaceBuilding), not 0 — its first Soul shouldn't appear instantly.
+    assertEquals(necromancer.spawnCountdownMs, Balance.SoulSummonIntervalMs)
+  }
+
+  // Stonehenge.md/Arbre Anime.md: unlike every other spawner (Elf/Necromancer above), a
+  // Tree stays in its OWNER's maze instead of crossing into the opponent's — Stonehenge's
+  // whole point is growing this maze's own forest tally through units, not raiders.
+  test("a stonehenge's Tree arrives in the opponent's maze, same as every other spawner") {
+    val stonehenge = Building(100, col = 5, row = 5, BuildingKind.Stonehenge, Balance.StonehengeSpawnIntervalMs)
+    val battle = BattleState(
+      player = withResources().copy(buildings = List(stonehenge)),
+      ai = withResources()
+    )
+    val result = BattleEngine.tick(battle, deltaMs = Balance.StonehengeSpawnIntervalMs)
+    assertEquals(result.player.creatures, Nil)
+    assertEquals(result.ai.creatures.size, 1)
+    val tree = result.ai.creatures.head
+    assertEquals(tree.kind, UnitKind.Tree)
+    // Starts with the full clone interval, like the Necromancer's first Soul countdown
+    // above — its first clone shouldn't appear instantly.
+    assertEquals(tree.spawnCountdownMs, Balance.TreeCloneIntervalMs)
   }
 
   test("the AI builds something once it can afford one, on either side (symmetric)") {
@@ -41,7 +75,13 @@ class BattleEngineTest extends munit.FunSuite:
 
   test("the default AiStrategy.maybeDestroy is a no-op, so existing strategies never tear anything down") {
     val forest = Building(1, col = 5, row = 5, BuildingKind.Forest, Balance.ElfSpawnIntervalMs)
-    val battle = BattleState.initial.copy(ai = MazeState.initial.copy(buildings = List(forest)))
+    // No Wood at all: isolates the destroy no-op check from LinearStrategy's own
+    // maybeUpgrade step (which runs unconditionally before maybeBuild/maybeDestroy would
+    // matter here) — with StartingWood, this Forest would be affordably upgraded into a
+    // Jungle the same tick, masking whether maybeDestroy left it alone.
+    val battle = BattleState.initial.copy(
+      ai = MazeState.initial.copy(buildings = List(forest), resources = Map(Resource.Wood -> 0.0))
+    )
     val result = BattleEngine.tick(battle, deltaMs = 1.0, aiStrategy = LinearStrategy)
     assertEquals(result.ai.buildings.count(_.kind == BuildingKind.Forest), 1)
   }
@@ -102,6 +142,24 @@ class BattleEngineTest extends munit.FunSuite:
     assertEquals(buildingCount(cooldownElapsed.ai), 2)
   }
 
+  // RateLimited (see AiStrategy.buildCooldownMs's doc) lets a strategy's own build/upgrade/
+  // research pace be tuned independently of what/where it builds — BattleEngine must
+  // actually read the *strategy's* cooldown, not always fall back to the shared constant.
+  test("a RateLimited strategy resets its cooldown to its own buildCooldownMs, not the shared default") {
+    val fast = RateLimited(LinearStrategy, buildCooldownMs = 10.0)
+    val battle = BattleState.initial.copy(ai = withResources(wood = 10_000.0, fire = 10_000.0))
+    val afterFirstBuild = BattleEngine.tick(battle, deltaMs = 1.0, aiStrategy = fast)
+    assertEquals(buildingCount(afterFirstBuild.ai), 1)
+    assertEquals(afterFirstBuild.aiBuildCooldownMs, 10.0)
+
+    // Its short 10ms cooldown clears well before Balance.AiBuildCooldownMs (3000ms) would —
+    // a second building appears almost immediately, unlike the default-cooldown test above.
+    val secondBuild = BattleEngine.tick(afterFirstBuild, deltaMs = 9.0, aiStrategy = fast)
+    assertEquals(buildingCount(secondBuild.ai), 1) // 9ms < 10ms, still cooling down
+    val thirdTick = BattleEngine.tick(secondBuild, deltaMs = 1.0, aiStrategy = fast)
+    assertEquals(buildingCount(thirdTick.ai), 2)
+  }
+
   test("a goblin pillaging the player credits the stolen resources and tally to the AI") {
     val goalPos = GridConfig.cellCenter(GridConfig.goalCell._1, GridConfig.goalCell._2)
     val incomingGoblin =
@@ -138,6 +196,28 @@ class BattleEngineTest extends munit.FunSuite:
     assertEquals(result.ai.resources(Resource.Wood), Balance.MinotaurPlunderPerUnit)
     assertEquals(result.ai.resources(Resource.Fire), Balance.MinotaurPlunderPerUnit)
     assertEquals(result.ai.resourcesPlundered, 2 * Balance.MinotaurPlunderPerUnit)
+  }
+
+  test("a zombie corrupting a building to destruction credits the full cost and tally to the AI") {
+    val almostCorrupted = Building(
+      1,
+      col = 5,
+      row = 5,
+      BuildingKind.Grove,
+      spawnCountdownMs = 0.0,
+      corruptionPercent = Balance.CorruptionMaxPercent - Balance.ZombieCorruptionPercentPerSec
+    )
+    val incomingZombie =
+      Creature(1, GridConfig.cellCenter(6, 5), Balance.ZombieMaxHp, Balance.ZombieMaxHp, 0.0, UnitKind.Zombie)
+    val battle = BattleState(
+      player = withResources().copy(buildings = List(almostCorrupted), creatures = List(incomingZombie)),
+      ai = withResources() // isolates the corruption-credit effect from production
+    )
+    val result = BattleEngine.tick(battle, deltaMs = 1000.0)
+    assertEquals(result.player.buildings, Nil)
+    assertEquals(result.player.buildingsCorrupted, 0.0) // this side lost the building, didn't corrupt one
+    assertEquals(result.ai.resources(Resource.Wood), Balance.GroveCostWood)
+    assertEquals(result.ai.buildingsCorrupted, 1.0)
   }
 
   test("the battle freezes once the player reaches the Nature victory target") {

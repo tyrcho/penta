@@ -13,9 +13,15 @@ class MatchLogTest extends munit.FunSuite:
   private def maze(
       buildings: List[Building] = Nil,
       resources: Map[Resource, Double] = Map.empty,
-      resourcesPlundered: Double = 0.0
+      resourcesPlundered: Double = 0.0,
+      buildingsCorrupted: Double = 0.0
   ): MazeState =
-    MazeState.initial.copy(buildings = buildings, resources = resources, resourcesPlundered = resourcesPlundered)
+    MazeState.initial.copy(
+      buildings = buildings,
+      resources = resources,
+      resourcesPlundered = resourcesPlundered,
+      buildingsCorrupted = buildingsCorrupted
+    )
 
   private def battle(player: MazeState, ai: MazeState): BattleState =
     BattleState.initial.copy(player = player, ai = ai)
@@ -106,12 +112,35 @@ class MatchLogTest extends munit.FunSuite:
     )
   }
 
+  test("a corrupted-to-death building on side a produces a CORRUPT line, not a DESTROY line") {
+    val grove = Building(1, 3, 5, BuildingKind.Grove, 0.0)
+    val before = battle(maze(buildings = List(grove)), maze())
+    val after = battle(maze(buildingsCorrupted = 0.0), maze())
+    val corrosion = Corrosion(1, BuildingKind.Grove, 3, 5, BuildingSpecs.all(BuildingKind.Grove).cost)
+    val events = TickEvents(Nil, Nil, Nil, Nil, playerCorrupted = List(corrosion), aiCorrupted = Nil)
+    val lines = MatchLog.diff(tick = 80, before, after, events)
+    assertEquals(
+      lines,
+      Seq(
+        s"tick 80  a  CORRUPT  Grove (3,5) corrupted to dust, opponent refunded " +
+          s"${MatchLog.fmtResources(BuildingSpecs.all(BuildingKind.Grove).cost)}"
+      )
+    )
+  }
+
+  test("an increase in buildingsCorrupted on side b produces a CORRUPTED_TOTAL line") {
+    val before = battle(maze(), maze(buildingsCorrupted = 1.0))
+    val after = battle(maze(), maze(buildingsCorrupted = 2.0))
+    val lines = MatchLog.diff(tick = 85, before, after, noEvents)
+    assertEquals(lines, Seq("tick 85  b  CORRUPTED_TOTAL  +1 (total 2)"))
+  }
+
   test("snapshotLine reports both sides' forest/plunder progress and resources") {
     val forest = Building(1, 3, 5, BuildingKind.Forest, 0.0)
     val playerState = maze(buildings = List(forest), resources = Map(Resource.Wood -> 45.0), resourcesPlundered = 0.0)
     val aiState = maze(resources = Map(Resource.Fire -> 30.0), resourcesPlundered = 12.0)
     val line = MatchLog.snapshotLine(tick = 500, battle(playerState, aiState))
-    val playerForestTarget = VictoryConditions.forestTarget(aiState)
+    val playerForestTarget = VictoryConditions.forestTarget(playerState, aiState)
     val aiPlunderTarget = VictoryConditions.plunderTarget(playerState)
     assert(line.startsWith("tick 500  SNAPSHOT  "), line)
     assert(line.contains(s"a: forests 1/${playerForestTarget.toInt}"), line)

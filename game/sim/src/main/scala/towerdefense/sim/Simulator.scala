@@ -106,14 +106,20 @@ object Simulator:
   // Elo is the "who did those wins come against" signal win rate can't give. Standings
   // still rank by win rate, not Elo, to keep today's ranking behavior unchanged; Elo
   // rides along as an extra column (see formatStandingsTable) rather than replacing it.
+  // resolve: how to turn a name into a strategy — defaults to the canonical AiStrategy.all
+  // (today's exact behavior), but overridable so a caller can run a tournament over
+  // strategies that aren't (and shouldn't be) registered on the real ladder — e.g.
+  // rateTournament's RateLimited-wrapped variants, a one-off comparison rather than a
+  // permanent addition to AiStrategy.all.
   def tournamentStandings(
       names: Seq[String],
       matchesPerPairing: Int,
       maxTicks: Int,
       deltaMs: Double,
-      onPairingDone: Int => Unit = _ => ()
+      onPairingDone: Int => Unit = _ => (),
+      resolve: String => AiStrategy = AiStrategy.all
   ): Seq[Standing] =
-    val strategies = names.map(n => n -> AiStrategy.all(n)).toMap
+    val strategies = names.map(n => n -> resolve(n)).toMap
     val records = scala.collection.mutable.Map.empty[String, (Int, Int, Int)].withDefaultValue((0, 0, 0))
     val ratings = scala.collection.mutable.Map.from(names.map(_ -> EloRating.InitialRating))
     names.combinations(2).zipWithIndex.foreach { case (Seq(nameA, nameB), idx) =>
@@ -265,6 +271,39 @@ object Simulator:
     val reporter = new ProgressReporter("tournament", names.combinations(2).size)
     val standings = tournamentStandings(names, matchesPerPairing, maxTicks, deltaMs, reporter.tick)
     println(s"Tournament: ${names.mkString(", ")} ($matchesPerPairing matches/pairing):")
+    println(formatStandingsTable(standings))
+
+  // One-off comparison of build *speed* (RateLimited.buildCooldownMs) crossed with a
+  // handful of existing ladder strategies, all in one round-robin — not a permanent ladder
+  // addition (AiStrategy.all is untouched; these names only exist inside this run, via
+  // tournamentStandings' resolve override). Rates are builds/upgrades per second, converted
+  // to the cooldown RateLimited actually stores (buildCooldownMs = 1000/rate).
+  // matchesPerPairing = 1 ("single win" per pairing, not averaged over many).
+  //
+  // baseNames defaults to 5 strategies spanning the full ladder's measured strength (see
+  // AiStrategy.ladder's own doc): "linear" (bottom), "resource-maze" and "balanced" (mid),
+  // "comb-corruption" and "maze-corruption" (top) — not the entire 16-entry ladder, since
+  // 16 x 5 rates = 80 names -> C(80,2) = 3160 single matches, which timing (~10s/match
+  // observed via `sim/run linear balanced 3`) puts at several hours; 5 x 5 = 25 names ->
+  // C(25,2) = 300 matches is a comparable-effort, comparable-signal stand-in. Pass a
+  // comma-separated 3rd arg to override which base strategies are included.
+  @main def rateTournament(args: String*): Unit =
+    val maxTicks = args.lift(0).map(_.toInt).getOrElse(3_000)
+    val deltaMs = args.lift(1).map(_.toDouble).getOrElse(100.0)
+    val baseNames = args
+      .lift(2)
+      .map(_.split(",").toSeq)
+      .getOrElse(Seq("linear", "resource-maze", "balanced", "comb-corruption", "maze-corruption"))
+    val ratesPerSec = Seq(1, 2, 3, 5, 8)
+    val variants: Map[String, AiStrategy] = (for
+      baseName <- baseNames
+      baseStrategy = AiStrategy.all(baseName)
+      rate <- ratesPerSec
+    yield s"$baseName@${rate}bps" -> RateLimited(baseStrategy, buildCooldownMs = 1000.0 / rate)).toMap
+    val names = variants.keys.toSeq
+    val reporter = new ProgressReporter("rateTournament", names.combinations(2).size)
+    val standings = tournamentStandings(names, matchesPerPairing = 1, maxTicks, deltaMs, reporter.tick, variants)
+    println(s"Rate tournament: ${names.size} strategy/rate combinations (${baseNames.mkString(", ")} x $ratesPerSec bps), 1 match/pairing:")
     println(formatStandingsTable(standings))
 
   @main def tune(args: String*): Unit =

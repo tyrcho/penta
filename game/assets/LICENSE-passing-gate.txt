@@ -1,0 +1,8 @@
+passing-gate.png
+
+Original placeholder graphic, procedurally drawn for this project (simple stone
+archway with a glowing purple void, matching Portail.md's "gateway that reaps
+nearby deaths" theme) — not sourced from any external asset pack, so no
+attribution/license terms apply. Best-effort per CLAUDE.md's art asset policy;
+swap for commissioned/licensed art later if this ever needs real production
+polish.

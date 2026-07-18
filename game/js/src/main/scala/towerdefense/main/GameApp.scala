@@ -39,6 +39,11 @@ private val SpectateRestartDelayMs = 3000.0
 // game-over screen would otherwise just sit there forever with nothing watchable on it.
 private val PlayingIdleToSpectateDelayMs = 30000.0
 
+// How long a building's spawn-preview ghost (see spawnUnitPreview) stays on screen —
+// real wall-clock time, same as the flame burst it replaces (Pixi's own animation
+// ticker, unaffected by GameSpeed's pause/fast-forward).
+private val UnitPreviewDurationMs = 1000.0
+
 private def randomLadderIndex(): Int = Random.nextInt(AiStrategy.ladder.length)
 
 // Picks a random ladder index different from `exclude` (when the ladder has more than one
@@ -77,6 +82,10 @@ private class MazeSprites:
   // Which of a directional creature's (Goblin, Elf) 4 frame sets is currently applied —
   // avoids resetting the walk-cycle animation every tick, only when the facing changes.
   val directionalFacing = mutable.Map.empty[Long, String]
+  // Necromancer ids currently showing the sheet's "Summon" animation (Creature.frozenMs >
+  // 0) rather than their normal walk cycle — same "only swap textures on an actual state
+  // change" guard as directionalFacing, avoiding restarting the animation every tick.
+  val necromancerSummoning = mutable.Set.empty[Long]
   val buildings = mutable.Map.empty[Long, Sprite]
   // Only populated for kinds with a spawn timer (BuildingSpecs.all(_).spawns.isDefined) —
   // Watchtower is naturally absent, no special-casing needed.
@@ -97,11 +106,51 @@ private object AssetPaths:
   val LabyrintheIcon = "./assets/labyrinthe.png"
   val EgliseIcon = "./assets/eglise.png"
   val WatchtowerIcon = "./assets/watchtower.png"
+  // Ange.md's own reference image, supplied directly by the project owner — see
+  // LICENSE-angel.txt.
+  val AngelIcon = "./assets/angel.png"
   val Minotaur = "./assets/minotaur.png"
   val Paladin = "./assets/paladin.png"
+  // Mort/Science buildings and Vampire have no dedicated art pack — these are the vault
+  // design docs' own embedded reference images (Tombe.md/Chateau Noir.md/Vampire.md/
+  // Labo *.md), downscaled to sprite size, same "reuse the doc's own image" fallback
+  // already used for Nature's *-reference.png assets.
+  val TombIcon = "./assets/tomb.png"
+  val BlackCastleIcon = "./assets/chateau-noir.png"
+  val Vampire = "./assets/vampire.png"
+  // Note sur les laboratoires.md's base tier (only Science kind buildable from scratch —
+  // see BuildingSpecs.upgradeOptions) — an original placeholder graphic, see
+  // LICENSE-labo-fondamental.txt.
+  val LaboFondamentalIcon = "./assets/labo-fondamental.png"
+  val LaboNaturelIcon = "./assets/labo-naturel.png"
+  val LaboSombreIcon = "./assets/labo-sombre.png"
+  val LaboDeRechercheIcon = "./assets/labo-de-recherche.png"
+  val LaboDeLaLoiIcon = "./assets/labo-de-la-loi.png"
+  val LaboDuChaosIcon = "./assets/labo-du-chaos.png"
+  // Maison de la Mort.md's own reference image, supplied directly by the project owner —
+  // see LICENSE-death-house.txt.
+  val DeathHouseIcon = "./assets/death-house.png"
+  // Stonehenge.md's own reference image, supplied directly by the project owner — see
+  // LICENSE-stonehenge.txt.
+  val StonehengeIcon = "./assets/stonehenge.png"
+  // Portail.md: an original placeholder graphic (no external asset pack) — see
+  // LICENSE-passing-gate.txt.
+  val PassingGateIcon = "./assets/passing-gate.png"
   val Flames =
     List("./assets/flame1.png", "./assets/flame2.png", "./assets/flame3.png", "./assets/flame4.png")
   val Wolf = List("./assets/wolf/run-0.png", "./assets/wolf/run-1.png", "./assets/wolf/run-2.png")
+  // Single-facing 10-frame walk cycle (see LICENSE-zombie.txt: supplied directly, no
+  // source page) — animated like Wolf, not direction-swapped like Goblin/Elf's 4 sets.
+  val ZombieFrames: List[String] = (0 until 10).map(i => f"./assets/zombie/walk-$i%02d.png").toList
+  // Necromancien.md/Ame.md: cropped from a labeled reference sheet supplied directly by
+  // the project owner (see LICENSE-necromancer.txt) — single-facing walk cycles, same
+  // rotate-to-face treatment as Wolf/Zombie. Necromancer's frames are the sheet's "Idle"
+  // row (per the project owner's instruction), Soul's are its "Soul: Walk" row.
+  val NecromancerFrames: List[String] = (0 until 6).map(i => f"./assets/necromancer/walk-$i%02d.png").toList
+  val SoulFrames: List[String] = (0 until 5).map(i => f"./assets/soul/walk-$i%02d.png").toList
+  // The sheet's "Summon" row — shown instead of NecromancerFrames while
+  // Creature.frozenMs > 0 (Necromancien.md: rooted in place for 1s while it invokes an Ame).
+  val NecromancerSummonFrames: List[String] = (0 until 8).map(i => f"./assets/necromancer/summon-$i%02d.png").toList
   private val Directions = List("front", "back", "left", "right")
   // 4-direction walk-cycle frame sets, keyed by direction — shared shape for any
   // creature animated this way (see newDirectionalFrames/syncCreatures' facing logic).
@@ -111,11 +160,24 @@ private object AssetPaths:
   // See LICENSE-elf.txt: cropped from CraftPix's Free Base 4-Direction Male Character
   // Pixel Art pack's unarmed walk-cycle sheet (6 frames per direction).
   val ElfFrames: Map[String, List[String]] = directionalFrames("elf", frameCount = 6)
+  // Arbre Anime.md: cropped from a labeled "WALK" reference sheet supplied directly by
+  // the project owner (see LICENSE-tree.txt) — the sheet's 4 rows are 4 distinct facings
+  // of the same tree-ent (row 1 has a visible face = front, row 2 = back, rows 3/4 = the
+  // two side angles), direction-swapped same as Goblin/Elf rather than rotate-to-face.
+  val TreeFrames: Map[String, List[String]] = directionalFrames("tree", frameCount = 6)
   val All: List[String] =
-    List(Grove, Forest, Jungle, CaveRock, LabyrintheIcon, EgliseIcon, WatchtowerIcon, Minotaur, Paladin) ++
-      GoblinFrames.values.flatten ++ ElfFrames.values.flatten ++ Flames ++ Wolf
+    List(
+      Grove, Forest, Jungle, CaveRock, LabyrintheIcon, EgliseIcon, WatchtowerIcon, AngelIcon, Minotaur, Paladin,
+      TombIcon, BlackCastleIcon, Vampire, LaboFondamentalIcon, LaboNaturelIcon, LaboSombreIcon,
+      LaboDeRechercheIcon, LaboDeLaLoiIcon, LaboDuChaosIcon, DeathHouseIcon, StonehengeIcon, PassingGateIcon
+    ) ++ GoblinFrames.values.flatten ++ ElfFrames.values.flatten ++ Flames ++ Wolf ++ ZombieFrames ++
+      NecromancerFrames ++ SoulFrames ++ NecromancerSummonFrames ++ TreeFrames.values.flatten
 
 private val CaveTint = 0xff7a45 // warm/fiery recolor for an otherwise cool-gray rock tile
+// Bright purple kill-flash for a PassingGate while Building.flashMs > 0 (see syncBuildings) —
+// the user asked for the flash to show only on an actual nearby death, not continuously like
+// an idle-animation glow would.
+private val PassingGateFlashTint = 0xd9a3ff
 
 // Per-BuildingKind rendering data — the JS-side mirror of BuildingSpecs, driving the one
 // generic syncBuildings instead of what used to be 5 near-identical sync functions.
@@ -131,7 +193,19 @@ private object BuildingVisuals:
     BuildingKind.Cave -> BuildingVisual(AssetPaths.CaveRock, GridConfig.cellSize * 0.9, Some(CaveTint)),
     BuildingKind.Labyrinth -> BuildingVisual(AssetPaths.LabyrintheIcon, GridConfig.cellSize * 0.9, None),
     BuildingKind.Church -> BuildingVisual(AssetPaths.EgliseIcon, GridConfig.cellSize * 0.9, None),
-    BuildingKind.Watchtower -> BuildingVisual(AssetPaths.WatchtowerIcon, GridConfig.cellSize * 0.9, None)
+    BuildingKind.Watchtower -> BuildingVisual(AssetPaths.WatchtowerIcon, GridConfig.cellSize * 0.9, None),
+    BuildingKind.Angel -> BuildingVisual(AssetPaths.AngelIcon, GridConfig.cellSize * 1.1, None),
+    BuildingKind.Tomb -> BuildingVisual(AssetPaths.TombIcon, GridConfig.cellSize * 0.9, None),
+    BuildingKind.BlackCastle -> BuildingVisual(AssetPaths.BlackCastleIcon, GridConfig.cellSize * 1.1, None),
+    BuildingKind.LaboFondamental -> BuildingVisual(AssetPaths.LaboFondamentalIcon, GridConfig.cellSize * 0.8, None),
+    BuildingKind.LaboNaturel -> BuildingVisual(AssetPaths.LaboNaturelIcon, GridConfig.cellSize * 0.8, None),
+    BuildingKind.LaboSombre -> BuildingVisual(AssetPaths.LaboSombreIcon, GridConfig.cellSize * 0.8, None),
+    BuildingKind.LaboDeRecherche -> BuildingVisual(AssetPaths.LaboDeRechercheIcon, GridConfig.cellSize * 0.8, None),
+    BuildingKind.LaboDeLaLoi -> BuildingVisual(AssetPaths.LaboDeLaLoiIcon, GridConfig.cellSize * 0.8, None),
+    BuildingKind.LaboDuChaos -> BuildingVisual(AssetPaths.LaboDuChaosIcon, GridConfig.cellSize * 0.8, None),
+    BuildingKind.DeathHouse -> BuildingVisual(AssetPaths.DeathHouseIcon, GridConfig.cellSize * 1.1, None),
+    BuildingKind.Stonehenge -> BuildingVisual(AssetPaths.StonehengeIcon, GridConfig.cellSize * 1.1, None),
+    BuildingKind.PassingGate -> BuildingVisual(AssetPaths.PassingGateIcon, GridConfig.cellSize * 1.0, None)
   )
 
 // DOM id suffix per kind (index.html's #build-<slug> buttons and #<prefix>-<slug>
@@ -139,13 +213,38 @@ private object BuildingVisuals:
 // ("labyrinthe") diverges from the enum case spelling. Forest/Jungle have no build button
 // (see buildableKinds — they're upgrade-only) but still need a slug for consistency.
 private def domSlug(kind: BuildingKind): String = kind match
-  case BuildingKind.Grove      => "grove"
-  case BuildingKind.Forest     => "forest"
-  case BuildingKind.Jungle     => "jungle"
-  case BuildingKind.Cave       => "cave"
-  case BuildingKind.Labyrinth  => "labyrinthe"
-  case BuildingKind.Church     => "eglise"
-  case BuildingKind.Watchtower => "watchtower"
+  case BuildingKind.Grove           => "grove"
+  case BuildingKind.Forest          => "forest"
+  case BuildingKind.Jungle          => "jungle"
+  case BuildingKind.Cave            => "cave"
+  case BuildingKind.Labyrinth       => "labyrinthe"
+  case BuildingKind.Church          => "eglise"
+  case BuildingKind.Watchtower      => "watchtower"
+  case BuildingKind.Angel           => "angel"
+  case BuildingKind.Tomb            => "tomb"
+  case BuildingKind.BlackCastle     => "chateau-noir"
+  case BuildingKind.DeathHouse      => "death-house"
+  case BuildingKind.PassingGate     => "passing-gate"
+  case BuildingKind.Stonehenge      => "stonehenge"
+  case BuildingKind.LaboFondamental => "labo-fondamental"
+  case BuildingKind.LaboNaturel     => "labo-naturel"
+  case BuildingKind.LaboSombre      => "labo-sombre"
+  case BuildingKind.LaboDeRecherche => "labo-de-recherche"
+  case BuildingKind.LaboDeLaLoi     => "labo-de-la-loi"
+  case BuildingKind.LaboDuChaos     => "labo-du-chaos"
+
+// A human-readable name for kinds whose enum spelling reads awkwardly without spaces
+// (the five Labo* kinds) — used only in the upgrade button label (see
+// upgradeOptionsInfo); every other reader of BuildingKind already spells its own name out
+// in a hand-written tooltip/hover-text constant, so this doesn't need to cover every kind.
+private def displayName(kind: BuildingKind): String = kind match
+  case BuildingKind.LaboFondamental => "Labo Fondamental"
+  case BuildingKind.LaboNaturel     => "Labo Naturel"
+  case BuildingKind.LaboSombre      => "Labo Sombre"
+  case BuildingKind.LaboDeRecherche => "Labo de Recherche"
+  case BuildingKind.LaboDeLaLoi     => "Labo de la Loi"
+  case BuildingKind.LaboDuChaos     => "Labo du Chaos"
+  case other                        => other.toString
 
 // Only these can be placed fresh via a toolbar button — Forest/Jungle are reached only
 // by upgrading an existing Grove/Forest (see Placement.tryUpgradeBuilding), so they get
@@ -206,13 +305,24 @@ def onReady(app: Application, textures: js.Dictionary[Texture]): Unit =
   battleWorld.addChild(aiWorld)
   playerWorld.addChild(drawGrid())
   aiWorld.addChild(drawGrid())
+  // Only the player's maze is ever tappable/selectable (see the input section's comment),
+  // so the range-preview overlay only ever needs to live on this one side — see
+  // updateAuraOverlay.
+  val auraOverlay = new Graphics()
+  playerWorld.addChild(auraOverlay)
 
   val flameFrames = js.Array(AssetPaths.Flames.map(textures(_))*)
   val wolfFrames = js.Array(AssetPaths.Wolf.map(textures(_))*)
+  val zombieFrames = js.Array(AssetPaths.ZombieFrames.map(textures(_))*)
+  val necromancerFrames = js.Array(AssetPaths.NecromancerFrames.map(textures(_))*)
+  val soulFrames = js.Array(AssetPaths.SoulFrames.map(textures(_))*)
+  val necromancerSummonFrames = js.Array(AssetPaths.NecromancerSummonFrames.map(textures(_))*)
   val goblinFrames: Map[String, js.Array[Texture]] =
     AssetPaths.GoblinFrames.map { case (dir, paths) => dir -> js.Array(paths.map(textures(_))*) }
   val elfFrames: Map[String, js.Array[Texture]] =
     AssetPaths.ElfFrames.map { case (dir, paths) => dir -> js.Array(paths.map(textures(_))*) }
+  val treeFrames: Map[String, js.Array[Texture]] =
+    AssetPaths.TreeFrames.map { case (dir, paths) => dir -> js.Array(paths.map(textures(_))*) }
   // No saved game (first-ever visit, or a cleared one) means there's nothing to resume
   // the player into — default to the attract-mode AI duel instead of an empty player-
   // controlled maze. A saved game always resumes straight into Playing.
@@ -233,6 +343,11 @@ def onReady(app: Application, textures: js.Dictionary[Texture]): Unit =
   // of reach as the cursor approaches it).
   var selectedTarget: Option[HoverTarget] = None
   var hoveringButton = false
+  // The player maze cell currently under the cursor, tracked independently of
+  // hovered/selectedTarget (those only latch onto an actual creature/building, not blank
+  // cells) — feeds the aura/damage range-preview overlay while a buildable kind is selected
+  // (see updateAuraOverlay). None whenever the cursor is outside the player's grid.
+  var hoveredCell: Option[(Int, Int)] = None
   var speed = new GameSpeed
   var msSinceLastSave = 0.0
   val playerSprites = new MazeSprites
@@ -257,7 +372,14 @@ def onReady(app: Application, textures: js.Dictionary[Texture]): Unit =
   updateModeUi(mode)
 
   wireBuildingButtons(
-    choice => if mode == Mode.Playing then selectedBuilding = choice,
+    choice =>
+      if mode == Mode.Playing then
+        selectedBuilding = choice
+        // A previously clicked building's tooltip (with its Destroy/Upgrade/Research
+        // buttons) otherwise stays stuck on screen after the player picks a different
+        // building to place next — clearing it here lets the ticker's hover self-heal
+        // fall back to whatever the cursor is actually over (or nothing).
+        selectedTarget = None,
     choice => mode == Mode.Playing && canAfford(battle.player, choice),
     active => hoveringButton = active
   )
@@ -266,7 +388,8 @@ def onReady(app: Application, textures: js.Dictionary[Texture]): Unit =
   wireFullscreenButton()
   wireAiLevelSelect(aiLevelIndex, index => aiLevelIndex = index)
   wireDestroyButton((col, row) => battle = destroyPlayerBuilding(battle, mode, col, row))
-  wireUpgradeButton((col, row) => battle = upgradePlayerBuilding(battle, mode, col, row))
+  wireUpgradeButtons((col, row, targetKind) => battle = upgradePlayerBuilding(battle, mode, col, row, targetKind))
+  wireResearchButton((col, row) => battle = researchPlayerBuilding(battle, mode, col, row))
 
   app.stage.eventMode = "static"
   app.stage.on(
@@ -293,8 +416,13 @@ def onReady(app: Application, textures: js.Dictionary[Texture]): Unit =
       if hovered.isEmpty && selectedTarget.isEmpty then
         val canvasRect = app.canvas.getBoundingClientRect()
         positionTooltip(canvasRect.left + e.globalX, canvasRect.top + e.globalY)
+      // Tracked unconditionally (unlike the tooltip positioning above) — the range-preview
+      // overlay needs to keep following the cursor over blank cells too, not just latch
+      // onto an actual creature/building the way hovered/selectedTarget do.
+      hoveredCell = cellAt(app, e)
     }
   )
+  app.stage.on("pointerleave", (_: FederatedPointerEvent) => hoveredCell = None)
 
   app.ticker.add { t =>
     val wasUnresolved = battle.outcome.isEmpty
@@ -358,6 +486,11 @@ def onReady(app: Application, textures: js.Dictionary[Texture]): Unit =
       goblinFrames,
       elfFrames,
       wolfFrames,
+      zombieFrames,
+      necromancerFrames,
+      soulFrames,
+      necromancerSummonFrames,
+      treeFrames,
       flameFrames,
       isPlayer = true,
       h => hovered = h
@@ -370,12 +503,18 @@ def onReady(app: Application, textures: js.Dictionary[Texture]): Unit =
       goblinFrames,
       elfFrames,
       wolfFrames,
+      zombieFrames,
+      necromancerFrames,
+      soulFrames,
+      necromancerSummonFrames,
+      treeFrames,
       flameFrames,
       isPlayer = false,
       h => hovered = h
     )
     applyViewTransform(app, battleWorld, aiWorld)
     updateModeUi(mode)
+    updateAuraOverlay(auraOverlay, battle.player, selectedTarget, selectedBuilding, hoveredCell, mode)
     updateOverlay(battle)
     if mode == Mode.Playing then updateBuildButtonsAffordability(battle.player)
     else disableAllBuildButtons()
@@ -423,6 +562,83 @@ private def cellColor(col: Int, row: Int): Int =
   else if cell == GridConfig.goalCell then 0xef4444
   else 0x1e2140
 
+// ── Aura/damage range preview ───────────────────────────────────────────
+
+// Purely a rendering categorization (see auraShapeFor's doc) — not a 1:1 mirror of
+// CombatEngine's actual hit-set geometry.
+private enum AuraShape derives CanEqual:
+  case Circle(rangeCells: Int)
+  case Square
+  case Cross
+
+// Which shape (if any) a building's damage/aura reaches, for the range-preview overlay
+// only (see updateAuraOverlay) — mirrors CombatEngine's own two damage-dealing categories,
+// but the shapes themselves are a deliberate visual simplification rather than each kind's
+// literal reachable-cell set: Watchtower picks a single nearest target within a Chebyshev
+// range (CombatEngine.nearestTargetInRange) — shown as a smooth circle rather than the
+// blocky square that distance metric actually describes, since "ranged single-target
+// damage" reads most clearly as a circle. Forest/Jungle/Angel deal passive damage to every
+// enemy on one of the 4 orthogonally-adjacent cells (CombatEngine.auraBuildingKinds/
+// accumulateAuraHits) — shown as the full 3x3-minus-center square, a deliberately broader
+// "std aura" silhouette grouping these three as one visual family. PassingGate's adjacency
+// is mechanically identical to Forest/Jungle/Angel's, but is shown as a cross (its real 4
+// cells, no diagonals) specifically to read as a visually distinct "other aura" kind.
+private def auraShapeFor(kind: BuildingKind): Option[AuraShape] = kind match
+  case BuildingKind.Watchtower                                       => Some(AuraShape.Circle(Balance.WatchtowerRangeCells))
+  case BuildingKind.Forest | BuildingKind.Jungle | BuildingKind.Angel => Some(AuraShape.Square)
+  case BuildingKind.PassingGate                                     => Some(AuraShape.Cross)
+  case _                                                             => None
+
+private val AuraOverlayColor = 0xffffff
+// Set once on the whole Graphics object (Pixi's plain `fill(color: Int)` has no per-call
+// alpha overload in this facade — see Pixi.scala) rather than per shape/cell.
+private val AuraOverlayAlpha = 0.22
+
+// Redrawn every tick from scratch (a 12x12 grid is cheap) rather than diffed — shows at
+// most one shape at a time, by priority: an already-*built* building the player explicitly
+// clicked (selectedTarget) holds still at its own cell; otherwise, while a buildable kind
+// with a shape is chosen from the toolbar (selectedBuilding) and the cursor is over the
+// player's grid, the shape previews at the hovered cell instead, following the mouse ahead
+// of actually placing it. Anything else (nothing selected, a shapeless kind selected, cursor
+// off-grid) clears the overlay entirely — "hide the aura when something else is selected".
+private def updateAuraOverlay(
+    g: Graphics,
+    maze: MazeState,
+    selectedTarget: Option[HoverTarget],
+    selectedBuilding: BuildingKind,
+    hoveredCell: Option[(Int, Int)],
+    mode: Mode
+): Unit =
+  g.clear()
+  g.alpha = AuraOverlayAlpha
+  val builtSelection = selectedTarget.collect { case HoverTarget(true, HoverKind.BuildingH(kind), id) =>
+    maze.buildings.find(_.id == id).map(b => (kind, b.col, b.row))
+  }.flatten
+  val placingPreview =
+    if mode == Mode.Playing then hoveredCell.map { case (col, row) => (selectedBuilding, col, row) } else None
+  builtSelection.orElse(placingPreview).foreach { case (kind, col, row) =>
+    auraShapeFor(kind).foreach(shape => drawAuraShape(g, shape, col, row))
+  }
+
+private def drawAuraShape(g: Graphics, shape: AuraShape, col: Int, row: Int): Unit =
+  shape match
+    case AuraShape.Circle(rangeCells) =>
+      val center = GridConfig.cellCenter(col, row)
+      val radius = (rangeCells + 0.5) * GridConfig.cellSize
+      g.circle(center.x, center.y, radius).fill(AuraOverlayColor)
+    case AuraShape.Square =>
+      for
+        dc <- -1 to 1
+        dr <- -1 to 1
+        if !(dc == 0 && dr == 0)
+      do fillCell(g, col + dc, row + dr)
+    case AuraShape.Cross =>
+      List((col - 1, row), (col + 1, row), (col, row - 1), (col, row + 1)).foreach { case (c, r) => fillCell(g, c, r) }
+
+private def fillCell(g: Graphics, col: Int, row: Int): Unit =
+  if GridConfig.isInBounds(col, row) then
+    g.rect(col * GridConfig.cellSize, row * GridConfig.cellSize, GridConfig.cellSize, GridConfig.cellSize).fill(AuraOverlayColor)
+
 // ── Input (only the left/player maze is tappable; both buildings are available —
 // symmetric game, see CLAUDE.md — so the player picks one via the toolbar buttons) ──
 
@@ -435,28 +651,78 @@ private val CaveTooltip =
   s"Cave — cost ${Balance.CaveCostWood.toInt} wood + ${Balance.CaveCostFire.toInt} fire. " +
     s"+${formatDecimal(Balance.FirePerSecPerCave)} fire/s, spawns a Goblin every ${(Balance.GoblinSpawnIntervalMs / 1000).toInt}s"
 
+// The unit's own ability (plunder amount, shield, etc.) is appended generically via
+// spawnAbilitySuffix when this is shown (see BuildingTooltips/buildingHoverText), so this
+// string itself only needs cost/production/spawn-interval.
 private val LabyrintheTooltip =
   s"Labyrinthe — cost ${Balance.LabyrintheCostWood.toInt} wood + ${Balance.LabyrintheCostFire.toInt} fire. " +
-    s"Spawns a Minotaur every ${(Balance.MinotaurSpawnIntervalMs / 1000).toInt}s, " +
-    s"which plunders ${Balance.MinotaurPlunderPerUnit.toInt} wood + ${Balance.MinotaurPlunderPerUnit.toInt} fire on arrival"
+    s"Spawns a Minotaur every ${(Balance.MinotaurSpawnIntervalMs / 1000).toInt}s"
 
 private val EgliseTooltip =
   s"Eglise — cost ${Balance.EgliseCostWood.toInt} wood + ${Balance.EgliseCostLight.toInt} light. " +
-    s"+${formatDecimal(Balance.LightPerSecPerEglise)} light/s, spawns a Paladin every ${(Balance.PaladinSpawnIntervalMs / 1000).toInt}s, " +
-    s"which shields adjacent allies from ${Balance.PaladinAuraDamageReductionPerSec.toInt} dmg/s (doesn't plunder itself)"
+    s"+${formatDecimal(Balance.LightPerSecPerEglise)} light/s, spawns a Paladin every ${(Balance.PaladinSpawnIntervalMs / 1000).toInt}s"
 
 private val WatchtowerTooltip =
   s"Tour de guet — cost ${Balance.WatchtowerCostWood.toInt} wood + ${Balance.WatchtowerCostLight.toInt} light. " +
     s"+${formatDecimal(Balance.LightPerSecPerWatchtower)} light/s, spawns no unit — instead inflicts " +
     s"${Balance.WatchtowerDamagePerSec.toInt} dmg/s to the nearest enemy within ${Balance.WatchtowerRangeCells} cells"
 
+private val AngelTooltip =
+  s"Ange — cost ${Balance.AngelCostLight.toInt} light. +${formatDecimal(Balance.LightPerSecPerAngel)} light/s, " +
+    s"spawns no unit — instead inflicts ${Balance.AngelDamagePerSec.toInt} dmg/s to adjacent enemies and " +
+    s"slows them by ${(Balance.AngelSlowFraction * 100).toInt}%"
+
+private val TombTooltip =
+  s"Tombe — cost ${Balance.TombCostWood.toInt} wood + ${Balance.TombCostShadow.toInt} shadow. " +
+    s"+${formatDecimal(Balance.ShadowPerSecPerTomb)} shadow/s, spawns a Zombie every " +
+    s"${(Balance.ZombieSpawnIntervalMs / 1000).toInt}s"
+
+private val BlackCastleTooltip =
+  s"Château Noir — cost ${Balance.BlackCastleCostWood.toInt} wood + ${Balance.BlackCastleCostShadow.toInt} shadow. " +
+    s"+${formatDecimal(Balance.ShadowPerSecPerBlackCastle)} shadow/s, spawns a Vampire every " +
+    s"${(Balance.VampireSpawnIntervalMs / 1000).toInt}s"
+
+private val DeathHouseTooltip =
+  s"Maison de la Mort — cost ${Balance.DeathHouseCostWood.toInt} wood + ${Balance.DeathHouseCostShadow.toInt} shadow. " +
+    s"+${formatDecimal(Balance.ShadowPerSecPerDeathHouse)} shadow/s, spawns a Necromancer every " +
+    s"${(Balance.NecromancerSpawnIntervalMs / 1000).toInt}s"
+
+// The only Science build button now — the five specific labs are reached by upgrading
+// this one (see the tooltip-upgrade-N buttons/upgradeOptionsInfo), never built directly.
+private val LaboFondamentalTooltip =
+  s"Labo Fondamental — cost ${Balance.LaboFondamentalCostCrystal.toInt} crystal. " +
+    s"+${formatDecimal(Balance.CrystalPerSecPerLaboFondamental)} crystal/s, no research bonus of its own. " +
+    s"Upgrade it into a specific lab to unlock that lab's own research line (starting at a free level 1) " +
+    s"— only one lab of each specific kind per maze at a time"
+
+private val StonehengeTooltip =
+  s"Stonehenge — cost ${Balance.StonehengeCostWood.toInt} wood. Spawns an Arbre Anime every " +
+    s"${(Balance.StonehengeSpawnIntervalMs / 1000).toInt}s"
+
+private val PassingGateTooltip =
+  s"Portail — cost ${Balance.PassingGateCostShadow.toInt} shadow + ${Balance.PassingGateCostLight.toInt} light. " +
+    s"Spawns no unit — inflicts ${Balance.PassingGateDamagePerSec.toInt} dmg/s to enemies on its 4 adjacent " +
+    s"cells, and harvests ${(Balance.PassingGateDeathShadowFraction * 100).toInt}% of your own total " +
+    s"resources as bonus shadow whenever any creature dies on one of those cells"
+
+// spawnAbilitySuffix appended uniformly here (rather than baked into each *Tooltip val
+// above) — every kind that spawns a unit states what that unit does, before it's even
+// placed, without each constant needing to spell it out (and risk drifting from
+// unitAbilitySummary's own numbers).
 private val BuildingTooltips: Map[BuildingKind, String] = Map(
   BuildingKind.Grove -> GroveTooltip,
   BuildingKind.Cave -> CaveTooltip,
   BuildingKind.Labyrinth -> LabyrintheTooltip,
   BuildingKind.Church -> EgliseTooltip,
-  BuildingKind.Watchtower -> WatchtowerTooltip
-)
+  BuildingKind.Watchtower -> WatchtowerTooltip,
+  BuildingKind.Angel -> AngelTooltip,
+  BuildingKind.Tomb -> TombTooltip,
+  BuildingKind.BlackCastle -> BlackCastleTooltip,
+  BuildingKind.DeathHouse -> DeathHouseTooltip,
+  BuildingKind.LaboFondamental -> LaboFondamentalTooltip,
+  BuildingKind.Stonehenge -> StonehengeTooltip,
+  BuildingKind.PassingGate -> PassingGateTooltip
+).map { case (kind, text) => kind -> (text + spawnAbilitySuffix(kind)) }
 
 // canAfford is read at click time (not baked into the closure) since the player's
 // wood/fire change every tick — see updateBuildButtonsAffordability for the matching
@@ -714,6 +980,9 @@ private def applyViewTransform(app: Application, battleWorld: Container, aiWorld
   battleWorld.scale.set(vt.scale)
   battleWorld.x = vt.offsetX
   battleWorld.y = vt.offsetY
+  // Mirrors aiWorld's own side-by-side/stacked choice above, so the WON/LOST banners
+  // (see updateGameOverBanner, index.html's .game-over-side) split the same way.
+  document.getElementById("game-container").classList.toggle("layout-portrait", layout.portrait)
 
 // ── Sprite sync (one maze's GameState → its Pixi sprites) ──────────────
 
@@ -725,6 +994,11 @@ private def syncMaze(
     goblinFrames: Map[String, js.Array[Texture]],
     elfFrames: Map[String, js.Array[Texture]],
     wolfFrames: js.Array[Texture],
+    zombieFrames: js.Array[Texture],
+    necromancerFrames: js.Array[Texture],
+    soulFrames: js.Array[Texture],
+    necromancerSummonFrames: js.Array[Texture],
+    treeFrames: Map[String, js.Array[Texture]],
     flames: js.Array[Texture],
     isPlayer: Boolean,
     setHovered: Option[HoverTarget] => Unit
@@ -738,12 +1012,32 @@ private def syncMaze(
     goblinFrames,
     elfFrames,
     wolfFrames,
+    zombieFrames,
+    necromancerFrames,
+    soulFrames,
+    necromancerSummonFrames,
+    treeFrames,
     flames,
     blocked,
     isPlayer,
     setHovered
   )
-  syncBuildings(world, maze, sprites, textures, flames, isPlayer, setHovered)
+  syncBuildings(
+    world,
+    maze,
+    sprites,
+    textures,
+    goblinFrames,
+    elfFrames,
+    wolfFrames,
+    zombieFrames,
+    necromancerFrames,
+    soulFrames,
+    treeFrames,
+    flames,
+    isPlayer,
+    setHovered
+  )
 
 private def syncCreatures(
     world: Container,
@@ -753,6 +1047,11 @@ private def syncCreatures(
     goblinFrames: Map[String, js.Array[Texture]],
     elfFrames: Map[String, js.Array[Texture]],
     wolfFrames: js.Array[Texture],
+    zombieFrames: js.Array[Texture],
+    necromancerFrames: js.Array[Texture],
+    soulFrames: js.Array[Texture],
+    necromancerSummonFrames: js.Array[Texture],
+    treeFrames: Map[String, js.Array[Texture]],
     flames: js.Array[Texture],
     blocked: Set[(Int, Int)],
     isPlayer: Boolean,
@@ -761,16 +1060,22 @@ private def syncCreatures(
   val liveIds = maze.creatures.map(_.id).toSet
   removeStaleWithEffect(world, sprites.creatures, liveIds, flames)
   sprites.directionalFacing.filterInPlace((id, _) => liveIds.contains(id))
+  sprites.necromancerSummoning.filterInPlace(liveIds.contains)
   maze.creatures.foreach { c =>
     val g = sprites.creatures.getOrElseUpdate(
       c.id,
       newCreatureSprite(
         world,
         c.kind,
+        c.sizeFraction,
         textures,
         goblinFrames,
         elfFrames,
         wolfFrames,
+        zombieFrames,
+        necromancerFrames,
+        soulFrames,
+        treeFrames,
         HoverTarget(isPlayer, HoverKind.EnemyH, c.id),
         setHovered
       )
@@ -778,13 +1083,37 @@ private def syncCreatures(
     setPos(g, c.pos)
     val angle = creatureFacingAngle(c, blocked)
     c.kind match
-      case UnitKind.Minotaur | UnitKind.Paladin | UnitKind.Wolf =>
+      case UnitKind.Necromancer =>
+        angle.foreach(a => g.rotation = a)
+        applyNecromancerAnimation(sprites, c.id, g, isSummoning = c.frozenMs > 0, necromancerFrames, necromancerSummonFrames)
+      case UnitKind.Minotaur | UnitKind.Paladin | UnitKind.Wolf | UnitKind.Vampire | UnitKind.Zombie | UnitKind.Soul =>
         angle.foreach(a => g.rotation = a)
       case UnitKind.Goblin =>
         applyFacing(sprites, c.id, g, angle, goblinFrames)
       case UnitKind.Elf =>
         applyFacing(sprites, c.id, g, angle, elfFrames)
+      case UnitKind.Tree =>
+        applyFacing(sprites, c.id, g, angle, treeFrames)
   }
+
+// Swaps the Necromancer's AnimatedSprite between its normal walk cycle and the sheet's
+// "Summon" row (Necromancien.md: rooted in place for 1s while it invokes an Ame — see
+// Creature.frozenMs), only when that state actually changes — same "avoid resetting the
+// animation every tick" guard as applyFacing below.
+private def applyNecromancerAnimation(
+    sprites: MazeSprites,
+    id: Long,
+    g: Container,
+    isSummoning: Boolean,
+    walkFrames: js.Array[Texture],
+    summonFrames: js.Array[Texture]
+): Unit =
+  val wasSummoning = sprites.necromancerSummoning.contains(id)
+  if isSummoning != wasSummoning then
+    if isSummoning then sprites.necromancerSummoning.add(id) else sprites.necromancerSummoning.remove(id)
+    val anim = g.asInstanceOf[AnimatedSprite]
+    anim.textures = if isSummoning then summonFrames else walkFrames
+    anim.play()
 
 // Swaps a directional creature's AnimatedSprite to the frame set matching its current
 // facing, only when the facing actually changes — avoids resetting the walk-cycle
@@ -808,10 +1137,15 @@ private def applyFacing(
 private def newCreatureSprite(
     world: Container,
     kind: UnitKind,
+    sizeFraction: Double,
     textures: js.Dictionary[Texture],
     goblinFrames: Map[String, js.Array[Texture]],
     elfFrames: Map[String, js.Array[Texture]],
     wolfFrames: js.Array[Texture],
+    zombieFrames: js.Array[Texture],
+    necromancerFrames: js.Array[Texture],
+    soulFrames: js.Array[Texture],
+    treeFrames: Map[String, js.Array[Texture]],
     target: HoverTarget,
     setHovered: Option[HoverTarget] => Unit
 ): Container = kind match
@@ -830,6 +1164,10 @@ private def newCreatureSprite(
     )
   case UnitKind.Paladin =>
     newHoverSprite(world, textures(AssetPaths.Paladin), GridConfig.cellSize * 1.0, target, setHovered)
+  case UnitKind.Vampire =>
+    // Single static reference image (Vampire.md), same treatment as Minotaur/Paladin —
+    // heavier raider than the Zombie (Vampire.md: 50 HP vs 15), a bigger sprite reflects that.
+    newHoverSprite(world, textures(AssetPaths.Vampire), GridConfig.cellSize * 1.1, target, setHovered)
   case UnitKind.Goblin =>
     val s = newAnimatedSprite(goblinFrames("front"), GridConfig.cellSize * 0.8)
     wireHover(s, target, setHovered)
@@ -839,6 +1177,33 @@ private def newCreatureSprite(
     // first row) — rotated to face its movement direction, same as the single-icon
     // Minotaur/Paladin sprites, rather than direction-swapped like the Goblin/Elf's 4 sets.
     val s = newAnimatedSprite(wolfFrames, GridConfig.cellSize * 1.0)
+    wireHover(s, target, setHovered)
+    addTo(world, s)
+  case UnitKind.Zombie =>
+    // Single-facing 10-frame walk cycle (see AssetPaths.ZombieFrames) — same
+    // rotate-to-face treatment as Wolf, not direction-swapped like Goblin/Elf.
+    val s = newAnimatedSprite(zombieFrames, GridConfig.cellSize * 0.8)
+    wireHover(s, target, setHovered)
+    addTo(world, s)
+  case UnitKind.Necromancer =>
+    // Single-facing 6-frame walk cycle (see AssetPaths.NecromancerFrames) — same
+    // rotate-to-face treatment as Wolf/Zombie.
+    val s = newAnimatedSprite(necromancerFrames, GridConfig.cellSize * 0.9)
+    wireHover(s, target, setHovered)
+    addTo(world, s)
+  case UnitKind.Soul =>
+    // Single-facing 5-frame walk cycle (see AssetPaths.SoulFrames) — small, floating
+    // spectral minion (Ame.md: 10 HP vs the Necromancer's 40), same rotate-to-face
+    // treatment as Wolf/Zombie/Necromancer.
+    val s = newAnimatedSprite(soulFrames, GridConfig.cellSize * 0.55)
+    wireHover(s, target, setHovered)
+    addTo(world, s)
+  case UnitKind.Tree =>
+    // 4-direction walk cycle (see AssetPaths.TreeFrames — the sheet's 4 rows are 4
+    // facings of the same tree-ent), same direction-swapped treatment as Goblin/Elf.
+    // A self-cloned Tree renders smaller (Arbre Anime.md: each clone is
+    // Balance.TreeCloneSizeStepFraction smaller than its parent) — see Creature.sizeFraction.
+    val s = newAnimatedSprite(treeFrames("front"), GridConfig.cellSize * 1.0 * sizeFraction)
     wireHover(s, target, setHovered)
     addTo(world, s)
 
@@ -856,6 +1221,13 @@ private def syncBuildings(
     maze: MazeState,
     sprites: MazeSprites,
     textures: js.Dictionary[Texture],
+    goblinFrames: Map[String, js.Array[Texture]],
+    elfFrames: Map[String, js.Array[Texture]],
+    wolfFrames: js.Array[Texture],
+    zombieFrames: js.Array[Texture],
+    necromancerFrames: js.Array[Texture],
+    soulFrames: js.Array[Texture],
+    treeFrames: Map[String, js.Array[Texture]],
     flames: js.Array[Texture],
     isPlayer: Boolean,
     setHovered: Option[HoverTarget] => Unit
@@ -882,15 +1254,40 @@ private def syncBuildings(
     if !sprites.buildingKinds.get(b.id).contains(b.kind) then
       sprites.buildingKinds(b.id) = b.kind
       g.texture = textures(visual.texturePath)
-      g.width = visual.renderSize
-      g.height = visual.renderSize
       g.tint = visual.tint.getOrElse(0xffffff)
+    // Note sur les laboratoires.md: a specific Science lab (never LaboFondamental itself,
+    // which has no researchLevels entry and so always reads level 0 here) renders 10% bigger
+    // per research level, up to 50% bigger at the max level — read every tick, not just on
+    // a kind change, since research level can advance long after the building last changed
+    // kind (see Balance.LaboSizeGrowthPerResearchLevel's doc).
+    val researchLevel = maze.researchLevels.getOrElse(b.kind, 0)
+    val effectiveSize = visual.renderSize * (1.0 + Balance.LaboSizeGrowthPerResearchLevel * researchLevel)
+    g.width = effectiveSize
+    g.height = effectiveSize
     setPos(g, GridConfig.cellCenter(b.col, b.row))
-    if BuildingSpecs.all(b.kind).spawns.isDefined then
+    // Only a PassingGate ever has a nonzero flashMs (Building.flashMs's doc) — tint it while
+    // a nearby death is still being "harvested", and fall back to its normal (untinted)
+    // look the rest of the time, instead of a continuous idle glow.
+    if b.kind == BuildingKind.PassingGate then
+      g.tint = if b.flashMs > 0 then PassingGateFlashTint else visual.tint.getOrElse(0xffffff)
+    BuildingSpecs.all(b.kind).spawns.foreach { (unitKind, _) =>
       val previousCountdown = sprites.buildingTimers.getOrElse(b.id, b.spawnCountdownMs)
       sprites.buildingTimers(b.id) = b.spawnCountdownMs
       if hasWrapped(previousCountdown, b.spawnCountdownMs) then
-        spawnEffect(world, Vec2(g.x, g.y), flames, scale = 0.6)
+        spawnUnitPreview(
+          world,
+          Vec2(g.x, g.y),
+          unitKind,
+          textures,
+          goblinFrames,
+          elfFrames,
+          wolfFrames,
+          zombieFrames,
+          necromancerFrames,
+          soulFrames,
+          treeFrames
+        )
+    }
   }
 
 private def newHoverSprite(
@@ -984,6 +1381,65 @@ private def spawnEffect(
   world.addChild(fx)
   fx.play()
 
+// A translucent "ghost" of the unit a building just produced, shown briefly at the
+// building's own position instead of the generic flame burst (spawnEffect above still
+// covers the destroy/death case) — same per-kind texture/frame choice as
+// newCreatureSprite, minus its hover wiring, since this is a transient visual cue, not a
+// real entity worth inspecting.
+private def unitPreviewContainer(
+    kind: UnitKind,
+    textures: js.Dictionary[Texture],
+    goblinFrames: Map[String, js.Array[Texture]],
+    elfFrames: Map[String, js.Array[Texture]],
+    wolfFrames: js.Array[Texture],
+    zombieFrames: js.Array[Texture],
+    necromancerFrames: js.Array[Texture],
+    soulFrames: js.Array[Texture],
+    treeFrames: Map[String, js.Array[Texture]]
+): Container = kind match
+  case UnitKind.Elf         => newAnimatedSprite(elfFrames("front"), GridConfig.cellSize * 0.8)
+  case UnitKind.Minotaur    => newSprite(textures(AssetPaths.Minotaur), GridConfig.cellSize * 1.1)
+  case UnitKind.Paladin     => newSprite(textures(AssetPaths.Paladin), GridConfig.cellSize * 1.0)
+  case UnitKind.Vampire     => newSprite(textures(AssetPaths.Vampire), GridConfig.cellSize * 1.1)
+  case UnitKind.Goblin      => newAnimatedSprite(goblinFrames("front"), GridConfig.cellSize * 0.8)
+  case UnitKind.Wolf        => newAnimatedSprite(wolfFrames, GridConfig.cellSize * 1.0)
+  case UnitKind.Zombie      => newAnimatedSprite(zombieFrames, GridConfig.cellSize * 0.8)
+  case UnitKind.Necromancer => newAnimatedSprite(necromancerFrames, GridConfig.cellSize * 0.9)
+  case UnitKind.Soul        => newAnimatedSprite(soulFrames, GridConfig.cellSize * 0.55)
+  // Always the full-size original — only Stonehenge (a building) ever triggers this
+  // preview, and the original Tree it spawns always starts at sizeFraction 1.0.
+  case UnitKind.Tree => newAnimatedSprite(treeFrames("front"), GridConfig.cellSize * 1.0)
+
+private def spawnUnitPreview(
+    world: Container,
+    pos: Vec2,
+    kind: UnitKind,
+    textures: js.Dictionary[Texture],
+    goblinFrames: Map[String, js.Array[Texture]],
+    elfFrames: Map[String, js.Array[Texture]],
+    wolfFrames: js.Array[Texture],
+    zombieFrames: js.Array[Texture],
+    necromancerFrames: js.Array[Texture],
+    soulFrames: js.Array[Texture],
+    treeFrames: Map[String, js.Array[Texture]]
+): Unit =
+  val ghost = unitPreviewContainer(
+    kind,
+    textures,
+    goblinFrames,
+    elfFrames,
+    wolfFrames,
+    zombieFrames,
+    necromancerFrames,
+    soulFrames,
+    treeFrames
+  )
+  ghost.x = pos.x
+  ghost.y = pos.y
+  ghost.alpha = 0.5
+  world.addChild(ghost)
+  dom.window.setTimeout(() => world.removeChild(ghost), UnitPreviewDurationMs)
+
 private def addTo[T <: Container](world: Container, s: T): T =
   world.addChild(s)
   s
@@ -994,10 +1450,30 @@ private def setPos(g: Container, pos: Vec2): Unit =
 
 // ── Hover tooltip (building/unit stats — see wireHover) ─────────────────
 
+// Anchors the tooltip on whichever side of (x, y) faces the screen's center, on both axes
+// independently — a building/unit near the right edge gets its tooltip growing leftward
+// (toward center) instead of off the right edge, and same for top/bottom. This matters
+// because the tooltip's own size varies at runtime (a selected building with 5 upgrade
+// options is much taller than a plain hover), so a fixed "always offset down-right" anchor
+// (the old behavior) could push the Destroy/Upgrade/Research buttons off-screen entirely
+// for anything selected near an edge. Toggling left/right and top/bottom (rather than
+// computing the tooltip's own width/height) lets the browser's own box layout grow the
+// element away from the edge no matter how big its content turns out to be.
 private def positionTooltip(x: Double, y: Double): Unit =
   val el = document.getElementById("tooltip").asInstanceOf[dom.html.Element]
-  el.style.left = s"${x + 12}px"
-  el.style.top = s"${y + 12}px"
+  val margin = 12.0
+  if x < dom.window.innerWidth / 2.0 then
+    el.style.left = s"${x + margin}px"
+    el.style.right = "auto"
+  else
+    el.style.right = s"${dom.window.innerWidth - x + margin}px"
+    el.style.left = "auto"
+  if y < dom.window.innerHeight / 2.0 then
+    el.style.top = s"${y + margin}px"
+    el.style.bottom = "auto"
+  else
+    el.style.bottom = s"${dom.window.innerHeight - y + margin}px"
+    el.style.top = "auto"
 
 // Re-reads live stats from the current BattleState every frame, so HP/timers shown in
 // the tooltip stay accurate. `target` is whatever the caller decided takes priority
@@ -1014,17 +1490,21 @@ private def updateTooltip(
 ): Unit =
   val tooltip = document.getElementById("tooltip")
   val destroyBtn = document.getElementById("tooltip-destroy").asInstanceOf[dom.html.Button]
-  val upgradeBtn = document.getElementById("tooltip-upgrade").asInstanceOf[dom.html.Button]
-  val upgradePreview = document.getElementById("tooltip-upgrade-preview")
+  val upgradeBtns = (0 until MaxUpgradeOptions).map(i => document.getElementById(s"tooltip-upgrade-$i").asInstanceOf[dom.html.Button])
+  val upgradePreviews = (0 until MaxUpgradeOptions).map(i => document.getElementById(s"tooltip-upgrade-preview-$i"))
+  val researchBtn = document.getElementById("tooltip-research").asInstanceOf[dom.html.Button]
+  def hideAllUpgradeSlots(): Unit =
+    upgradeBtns.foreach(_.classList.remove("visible"))
+    upgradePreviews.foreach(_.classList.remove("visible"))
   target.flatMap(t => hoverText(t, battle).map(text => (t, text))) match
     case Some((target, text)) =>
       document.getElementById("tooltip-text").textContent = text
       tooltip.classList.add("visible")
       val maze = if target.isPlayer then battle.player else battle.ai
       // Both mazes are AI-driven while Spectating (see CLAUDE.md's symmetry rule — the
-      // destroy/upgrade affordance is a player action, not a game rule, so it's withheld
-      // here rather than in destroyInfo/upgradeInfo themselves) — hovering still shows
-      // read-only stats, it just can't act on them.
+      // destroy/upgrade/research affordance is a player action, not a game rule, so it's
+      // withheld here rather than in destroyInfo/upgradeOptionsInfo/researchInfo
+      // themselves) — hovering still shows read-only stats, it just can't act on them.
       (if mode == Mode.Playing then destroyInfo(target, maze) else None) match
         case Some((col, row, label)) =>
           destroyBtn.textContent = label
@@ -1032,24 +1512,38 @@ private def updateTooltip(
           destroyBtn.setAttribute("data-row", row.toString)
           destroyBtn.classList.add("visible")
         case None => destroyBtn.classList.remove("visible")
-      (if mode == Mode.Playing then upgradeInfo(target, maze) else None) match
-        case Some((col, row, label, affordable, preview)) =>
-          upgradeBtn.textContent = label
-          upgradeBtn.setAttribute("data-col", col.toString)
-          upgradeBtn.setAttribute("data-row", row.toString)
-          upgradeBtn.classList.add("visible")
-          if affordable then upgradeBtn.classList.remove("disabled") else upgradeBtn.classList.add("disabled")
-          upgradePreview.textContent = s"→ $preview"
-          upgradePreview.classList.add("visible")
-        case None =>
-          upgradeBtn.classList.remove("visible")
-          upgradePreview.classList.remove("visible")
+      (if mode == Mode.Playing then upgradeOptionsInfo(target, maze) else None) match
+        case Some((col, row, options)) =>
+          options.zipWithIndex.foreach { case ((kind, label, affordable, preview), i) =>
+            val btn = upgradeBtns(i)
+            btn.textContent = label
+            btn.setAttribute("data-col", col.toString)
+            btn.setAttribute("data-row", row.toString)
+            btn.setAttribute("data-kind", kind.toString)
+            btn.classList.add("visible")
+            if affordable then btn.classList.remove("disabled") else btn.classList.add("disabled")
+            upgradePreviews(i).textContent = s"→ $preview"
+            upgradePreviews(i).classList.add("visible")
+          }
+          (options.size until MaxUpgradeOptions).foreach { i =>
+            upgradeBtns(i).classList.remove("visible")
+            upgradePreviews(i).classList.remove("visible")
+          }
+        case None => hideAllUpgradeSlots()
+      (if mode == Mode.Playing then researchInfo(target, maze) else None) match
+        case Some((col, row, label, affordable)) =>
+          researchBtn.textContent = label
+          researchBtn.setAttribute("data-col", col.toString)
+          researchBtn.setAttribute("data-row", row.toString)
+          researchBtn.classList.add("visible")
+          if affordable then researchBtn.classList.remove("disabled") else researchBtn.classList.add("disabled")
+        case None => researchBtn.classList.remove("visible")
     case None =>
       if !buttonTooltipActive then
         tooltip.classList.remove("visible")
         destroyBtn.classList.remove("visible")
-        upgradeBtn.classList.remove("visible")
-        upgradePreview.classList.remove("visible")
+        hideAllUpgradeSlots()
+        researchBtn.classList.remove("visible")
 
 // Only the player's own buildings are destroyable from the UI (the AI destroying its own
 // is driven by AiStrategy.maybeDestroy instead, not this hover affordance) — see
@@ -1092,16 +1586,26 @@ private def destroyPlayerBuilding(battle: BattleState, mode: Mode, col: Int, row
   if mode != Mode.Playing || battle.outcome.isDefined then battle
   else Demolition.tryDestroy(battle.player, col, row).map(p => battle.copy(player = p)).getOrElse(battle)
 
-// Only the player's own Grove/Forest can be upgraded from the UI (the AI upgrades via
-// AiStrategy.maybeUpgrade instead) — mirrors destroyInfo's shape/wiring exactly. The
-// affordable flag drives the button's disabled look (see updateTooltip) — Placement.
-// tryUpgradeBuilding already rejects an unaffordable upgrade server-side regardless, this
-// is purely the same visual affordance the build-<slug> buttons get from canAfford. The
-// preview string is the *next* tier's own hover text (see buildingHoverText) computed
-// against a synthetic just-upgraded Building, so players see what they're buying before
-// they click — reusing Placement.upgradeBuilding's own countdown-reset rule
-// (spec.spawns.map(_._2).getOrElse(0.0)) so "next Elf in Xs" previews the real value.
-private def upgradeInfo(target: HoverTarget, maze: MazeState): Option[(Int, Int, String, Boolean, String)] =
+// Up to this many upgrade options for one building (BuildingSpecs.upgradeOptions' longest
+// branch today — LaboFondamental's 5 specific labs) — see index.html's tooltip-upgrade-N
+// button/preview slots, one per option, hidden when a building has fewer.
+private val MaxUpgradeOptions = 5
+
+// Only the player's own buildings can be upgraded from the UI (the AI upgrades via
+// AiStrategy.maybeUpgrade instead) — mirrors destroyInfo's shape/wiring exactly. One entry
+// per option in BuildingSpecs.upgradeOptions (Grove/Forest's single-option chain — just
+// index 0 — or LaboFondamental's 5 specific labs). The affordable flag drives each button's
+// disabled look (see updateTooltip) — Placement.tryUpgradeBuilding already rejects an
+// unaffordable/already-claimed upgrade server-side regardless, this is purely the same
+// visual affordance the build-<slug> buttons get from canAfford. Each preview string is
+// that option's own hover text (see buildingHoverText) computed against a synthetic
+// just-upgraded Building, so players see what they're buying before they click — reusing
+// Placement.upgradeBuilding's own countdown-reset rule (spec.spawns.map(_._2).getOrElse(0.0))
+// so "next Elf in Xs" previews the real value.
+private def upgradeOptionsInfo(
+    target: HoverTarget,
+    maze: MazeState
+): Option[(Int, Int, List[(BuildingKind, String, Boolean, String)])] =
   if !target.isPlayer then None
   else
     target.kind match
@@ -1109,38 +1613,151 @@ private def upgradeInfo(target: HoverTarget, maze: MazeState): Option[(Int, Int,
       // b.kind, not the pattern-matched kind — see destroyInfo's comment on the same issue.
       case HoverKind.BuildingH(_) =>
         maze.buildings.find(_.id == target.id).flatMap { b =>
-          BuildingSpecs.upgradesTo.get(b.kind).map { nextKind =>
-            val nextSpec = BuildingSpecs.all(nextKind)
-            val costText = nextSpec.cost.toList
-              .sortBy(_._1.ordinal)
-              .map { case (res, amount) => s"${formatDecimal(amount)} ${resourceName(res)}" }
-              .mkString(", ")
-            val previewCountdown = nextSpec.spawns.map(_._2).getOrElse(0.0)
-            val preview = buildingHoverText(nextKind, b.copy(kind = nextKind, spawnCountdownMs = previewCountdown))
-            (
-              b.col,
-              b.row,
-              s"Upgrade to $nextKind ($costText)",
-              Placement.canAfford(maze.resources, nextSpec.cost),
-              preview
+          val options = BuildingSpecs.upgradeOptions.getOrElse(b.kind, Nil)
+          if options.isEmpty then None
+          else
+            Some(
+              (
+                b.col,
+                b.row,
+                options.map { nextKind =>
+                  val nextSpec = BuildingSpecs.all(nextKind)
+                  val costText = nextSpec.cost.toList
+                    .sortBy(_._1.ordinal)
+                    .map { case (res, amount) => s"${formatDecimal(amount)} ${resourceName(res)}" }
+                    .mkString(", ")
+                  val previewCountdown = nextSpec.spawns.map(_._2).getOrElse(0.0)
+                  // Upgrading always grants at least research level 1 for free (see
+                  // Placement.upgradeBuilding's doc) — the preview reflects that immediately,
+                  // rather than showing "no bonus yet" for a lab the click is about to unlock.
+                  val previewMaze =
+                    if ResearchSpecs.all.contains(nextKind) then
+                      maze.copy(researchLevels =
+                        maze.researchLevels.updated(nextKind, math.max(maze.researchLevels.getOrElse(nextKind, 0), 1))
+                      )
+                    else maze
+                  val preview = buildingHoverText(
+                    nextKind,
+                    b.copy(kind = nextKind, spawnCountdownMs = previewCountdown),
+                    previewMaze
+                  )
+                  // A kind already claimed by another building of this maze (Note sur les
+                  // laboratoires.md: one of each specific kind at a time) greys the button
+                  // out here too, not just an unaffordable cost — Placement.tryUpgradeBuilding
+                  // would reject it either way (MaxCountReached), so this keeps the button's
+                  // disabled look an accurate preview of whether clicking would do anything.
+                  val slotAvailable = nextSpec.maxPerMaze.forall(max => maze.buildings.count(_.kind == nextKind) < max)
+                  (
+                    nextKind,
+                    s"Upgrade to ${displayName(nextKind)} ($costText)",
+                    slotAvailable && Placement.canAfford(maze.resources, nextSpec.cost),
+                    preview
+                  )
+                }
+              )
             )
+        }
+
+private def wireUpgradeButtons(onUpgrade: (Int, Int, BuildingKind) => Unit): Unit =
+  (0 until MaxUpgradeOptions).foreach { slot =>
+    val btn = document.getElementById(s"tooltip-upgrade-$slot").asInstanceOf[dom.html.Button]
+    btn.addEventListener(
+      "click",
+      (_: dom.Event) => {
+        val col = btn.getAttribute("data-col")
+        val row = btn.getAttribute("data-row")
+        val kindName = btn.getAttribute("data-kind")
+        if col != null && row != null && kindName != null && !btn.classList.contains("disabled") then
+          onUpgrade(col.toInt, row.toInt, BuildingKind.valueOf(kindName))
+      }
+    )
+  }
+
+private def upgradePlayerBuilding(battle: BattleState, mode: Mode, col: Int, row: Int, targetKind: BuildingKind): BattleState =
+  if mode != Mode.Playing || battle.outcome.isDefined then battle
+  else
+    Placement.tryUpgradeBuilding(battle.player, col, row, Some(targetKind)).map(p => battle.copy(player = p)).getOrElse(battle)
+
+// The concrete magnitude a lab's research level actually gives — same numbers
+// VictoryConditions/CombatEngine/Placement.effectiveCost themselves read (Balance.*ByLevel
+// via ResearchSpecs.effectAtLevel), so this can't silently drift from what leveling up
+// really does. Recherche fondamentale has no numeric effectByLevel (its own doc: "the
+// victory check itself") — described instead via Balance.FondamentaleRequiredOtherLabLevel,
+// the same list VictoryConditions.hasWonViaFondamentale compares against.
+private def researchEffectSummary(labKind: BuildingKind, level: Int): String =
+  val spec = ResearchSpecs.all(labKind)
+  labKind match
+    case BuildingKind.LaboNaturel => s"-${(spec.effectAtLevel(level) * 100).toInt}% building cost"
+    case BuildingKind.LaboSombre  => s"+${(spec.effectAtLevel(level) * 100).toInt}% opponent's victory targets"
+    case BuildingKind.LaboDuChaos => s"+${formatDecimal(spec.effectAtLevel(level))} plunder per resource, every unit"
+    case BuildingKind.LaboDeLaLoi => s"+${(spec.effectAtLevel(level) * 100).toInt}% building damage"
+    case BuildingKind.LaboDeRecherche =>
+      s"wins outright once every other lab reaches level ${Balance.FondamentaleRequiredOtherLabLevel(level - 1)}+"
+    case _ => ""
+
+// A specific lab's own live hover text (perKindHoverText) — current level plus what it's
+// actually buying, or an explicit "no bonus yet" at level 0 rather than researchEffectSummary's
+// level-0 numbers (which read oddly, e.g. "-0% building cost").
+private def researchLevelText(maze: MazeState, kind: BuildingKind): String =
+  val level = maze.researchLevels.getOrElse(kind, 0)
+  if level <= 0 then s"research level 0/${Balance.MaxResearchLevel} (no bonus yet)"
+  else s"research level $level/${Balance.MaxResearchLevel} (${researchEffectSummary(kind, level)})"
+
+// Only the player's own Science lab can be researched from the UI (the AI researches via
+// AiStrategy.maybeResearch instead) — mirrors upgradeInfo's shape/wiring, but keyed by
+// BuildingKind rather than cell/id: ResearchSpecs.all has no entry for non-lab kinds, and
+// Placement.tryResearch itself operates on "the maze's one building of this kind" (labs
+// are capped at 1 — see BuildingSpecs' maxPerMaze), not a specific building instance.
+// None once maxed (Balance.MaxResearchLevel), same as upgradeInfo's None once there's no
+// further tier.
+private def researchInfo(target: HoverTarget, maze: MazeState): Option[(Int, Int, String, Boolean)] =
+  if !target.isPlayer then None
+  else
+    target.kind match
+      case HoverKind.EnemyH => None
+      // b.kind, not the pattern-matched kind — see destroyInfo's comment on the same issue.
+      case HoverKind.BuildingH(_) =>
+        maze.buildings.find(_.id == target.id).flatMap { b =>
+          ResearchSpecs.all.get(b.kind).flatMap { spec =>
+            val currentLevel = maze.researchLevels.getOrElse(b.kind, 0)
+            if currentLevel >= Balance.MaxResearchLevel then None
+            else
+              val nextLevel = currentLevel + 1
+              val cost = spec.costAtLevel(nextLevel)
+              val costText = cost.toList
+                .sortBy(_._1.ordinal)
+                .map { case (res, amount) => s"${formatDecimal(amount)} ${resourceName(res)}" }
+                .mkString(", ")
+              Some(
+                (
+                  b.col,
+                  b.row,
+                  s"Research level $nextLevel/${Balance.MaxResearchLevel} ($costText) " +
+                    s"→ ${researchEffectSummary(b.kind, nextLevel)}",
+                  Placement.canAfford(maze.resources, cost)
+                )
+              )
           }
         }
 
-private def wireUpgradeButton(onUpgrade: (Int, Int) => Unit): Unit =
-  val btn = document.getElementById("tooltip-upgrade").asInstanceOf[dom.html.Button]
+private def wireResearchButton(onResearch: (Int, Int) => Unit): Unit =
+  val btn = document.getElementById("tooltip-research").asInstanceOf[dom.html.Button]
   btn.addEventListener(
     "click",
     (_: dom.Event) => {
       val col = btn.getAttribute("data-col")
       val row = btn.getAttribute("data-row")
-      if col != null && row != null && !btn.classList.contains("disabled") then onUpgrade(col.toInt, row.toInt)
+      if col != null && row != null && !btn.classList.contains("disabled") then onResearch(col.toInt, row.toInt)
     }
   )
 
-private def upgradePlayerBuilding(battle: BattleState, mode: Mode, col: Int, row: Int): BattleState =
+private def researchPlayerBuilding(battle: BattleState, mode: Mode, col: Int, row: Int): BattleState =
   if mode != Mode.Playing || battle.outcome.isDefined then battle
-  else Placement.tryUpgradeBuilding(battle.player, col, row).map(p => battle.copy(player = p)).getOrElse(battle)
+  else
+    battle.player.buildings.find(b => b.col == col && b.row == row) match
+      case None => battle
+      case Some(b) =>
+        Placement.tryResearch(battle.player, b.kind).map(p => battle.copy(player = p)).getOrElse(battle)
 
 private def hoverText(target: HoverTarget, battle: BattleState): Option[String] =
   val maze = if target.isPlayer then battle.player else battle.ai
@@ -1154,6 +1771,26 @@ private def hoverText(target: HoverTarget, battle: BattleState): Option[String] 
           case UnitKind.Wolf =>
             s"Wolf — HP ${c.hp.toInt}/${c.maxHp.toInt}, doesn't plunder; speeds up allies within " +
               s"${Balance.WolfSpeedAuraRangeCells} cells by ${((Balance.WolfSpeedAuraMultiplier - 1) * 100).toInt}%"
+          case UnitKind.Zombie =>
+            s"Zombie — HP ${c.hp.toInt}/${c.maxHp.toInt}, doesn't plunder; corrupts adjacent enemy " +
+              s"buildings by ${Balance.ZombieCorruptionPercentPerSec.toInt}%/s"
+          case UnitKind.Vampire =>
+            s"Vampire — HP ${c.hp.toInt}/${c.maxHp.toInt}, doesn't plunder; corrupts adjacent enemy " +
+              s"buildings by ${Balance.VampireCorruptionPercentPerSec.toInt}%/s, takes " +
+              s"${(Balance.VampireDamageReductionFraction * 100).toInt}% less damage (not shielded by Paladins)"
+          case UnitKind.Necromancer =>
+            s"Necromancien — HP ${c.hp.toInt}/${c.maxHp.toInt}, doesn't plunder; invokes an Ame every " +
+              s"${(Balance.SoulSummonIntervalMs / 1000).toInt}s"
+          case UnitKind.Soul =>
+            s"Ame — HP ${c.hp.toInt}/${c.maxHp.toInt}, doesn't plunder; corrupts adjacent enemy buildings " +
+              s"by ${Balance.SoulCorruptionPercentPerSec.toInt}%/s, healing its Necromancien " +
+              s"${Balance.SoulHealPerSecPerBuilding.toInt} HP/s per building corrupted"
+          case UnitKind.Tree =>
+            val sizeNote = if c.sizeFraction < 1.0 then s" (${(c.sizeFraction * 100).toInt}% size)" else ""
+            s"Arbre Anime$sizeNote — HP ${c.hp.toInt}/${c.maxHp.toInt}, doesn't plunder; every " +
+              s"${(Balance.TreeCloneIntervalMs / 1000).toInt}s stops for ${(Balance.TreeCloneFreezeMs / 1000).toInt}s " +
+              s"and clones a smaller copy of itself (down to ${(Balance.TreeMinCloneSizeFraction * 100).toInt}% size); " +
+              s"counts toward its owner's forest victory the whole time"
           case _ =>
             val (name, plunders) = c.kind match
               case UnitKind.Elf => ("Elf", s"${Balance.PlunderPerUnit.toInt} wood")
@@ -1171,34 +1808,138 @@ private def hoverText(target: HoverTarget, battle: BattleState): Option[String] 
       }
     // b.kind, not the pattern-matched kind — see destroyInfo's comment on the same issue.
     case HoverKind.BuildingH(_) =>
-      maze.buildings.find(_.id == target.id).map(b => buildingHoverText(b.kind, b))
+      maze.buildings.find(_.id == target.id).map(b => buildingHoverText(b.kind, b, maze))
 
 // Kept as hand-written per-kind text (not derived from BuildingSpecs), same as the
 // tooltip constants above — the ability sentences (Forest's aura, Watchtower's ranged
 // damage) describe combat behavior that lives outside BuildingSpec by design (see the
 // refactor's confirmed scope), so there's nothing generic left to derive them from.
-private def buildingHoverText(kind: BuildingKind, b: Building): String = kind match
+// `maze` is needed (not just `b`) so every "+X resource/s" line can show the *live*
+// Engendre-boosted rate (see effectiveRate) rather than the flat Balance constant, which
+// understates production once any Engendre-source building exists on the board.
+// corruptionSuffix is appended after the per-kind text below (see its doc) — every
+// building kind is a fair corruption target (Corruption.md gives no kind restriction),
+// so it isn't part of the per-kind match itself.
+private def buildingHoverText(kind: BuildingKind, b: Building, maze: MazeState): String =
+  perKindHoverText(kind, b, maze) + spawnAbilitySuffix(kind) + corruptionSuffix(b)
+
+// A short ability fragment for a creature kind — same numbers as hoverText's own EnemyH
+// branch (kept in sync by construction: both read the same Balance constants), but without
+// the HP prefix, since this is meant to be appended to a *building's* tooltip/hover text,
+// not shown on the creature itself. Every building that spawns a unit gets this appended
+// (see spawnAbilitySuffix) so its tooltip states not just "spawns a Goblin" but what a
+// Goblin actually does once it arrives.
+private def unitAbilitySummary(kind: UnitKind): String = kind match
+  case UnitKind.Elf => s"plunders ${Balance.PlunderPerUnit.toInt} wood on arrival"
+  case UnitKind.Goblin =>
+    s"plunders ${Balance.PlunderPerUnit.toInt} wood + ${Balance.PlunderPerUnit.toInt} fire on arrival"
+  case UnitKind.Minotaur =>
+    s"plunders ${Balance.MinotaurPlunderPerUnit.toInt} wood + ${Balance.MinotaurPlunderPerUnit.toInt} fire on arrival"
+  case UnitKind.Paladin =>
+    s"doesn't plunder — shields adjacent allies from ${Balance.PaladinAuraDamageReductionPerSec.toInt} dmg/s"
+  case UnitKind.Wolf =>
+    s"doesn't plunder — speeds up allies within ${Balance.WolfSpeedAuraRangeCells} cells by " +
+      s"${((Balance.WolfSpeedAuraMultiplier - 1) * 100).toInt}%"
+  case UnitKind.Zombie =>
+    s"doesn't plunder — corrupts adjacent enemy buildings by ${Balance.ZombieCorruptionPercentPerSec.toInt}%/s"
+  case UnitKind.Vampire =>
+    s"doesn't plunder — corrupts adjacent enemy buildings by ${Balance.VampireCorruptionPercentPerSec.toInt}%/s, " +
+      s"takes ${(Balance.VampireDamageReductionFraction * 100).toInt}% less damage"
+  case UnitKind.Necromancer =>
+    s"doesn't plunder — invokes a Soul every ${(Balance.SoulSummonIntervalMs / 1000).toInt}s"
+  case UnitKind.Soul =>
+    s"doesn't plunder — corrupts adjacent enemy buildings by ${Balance.SoulCorruptionPercentPerSec.toInt}%/s"
+  case UnitKind.Tree =>
+    s"doesn't plunder — every ${(Balance.TreeCloneIntervalMs / 1000).toInt}s clones a smaller copy of itself " +
+      s"(down to ${(Balance.TreeMinCloneSizeFraction * 100).toInt}% size), counting toward its owner's " +
+      s"forest victory the whole time"
+
+// Appended to any building's tooltip (static build-button hover — BuildingTooltips — or
+// live per-building hover — buildingHoverText) that spawns a unit, so its value proposition
+// is visible whether or not the building has been placed yet. Empty for a kind with no
+// spawn (BuildingSpecs.all(_).spawns = None — Watchtower, Angel, PassingGate, every Science
+// lab), which already describes its own (non-unit) ability directly in its own text.
+private def spawnAbilitySuffix(kind: BuildingKind): String =
+  BuildingSpecs.all(kind).spawns match
+    case Some((unitKind, _)) => s" — $unitKind ${unitAbilitySummary(unitKind)}"
+    case None                => ""
+
+// Zombie/Vampire corrupt buildings gradually toward Balance.CorruptionMaxPercent (see
+// CombatEngine's corruption mechanic) — shown only once corruption has actually started,
+// so an untouched building's tooltip stays exactly as it read before Death existed.
+private def corruptionSuffix(b: Building): String =
+  if b.corruptionPercent > 0 then f" — corrupted ${b.corruptionPercent}%.0f%%/${Balance.CorruptionMaxPercent.toInt}%%"
+  else ""
+
+// This one kind's live per-second rate, including whatever Engendre boost `maze`'s other
+// buildings currently grant it (CombatEngine.engendreBoost — same multiplier
+// CombatEngine.productionPerSec itself applies, so this can never silently drift from
+// the actual number the top summary panel and the real tick both use).
+private def effectiveRate(maze: MazeState, kind: BuildingKind, resource: Resource): Double =
+  BuildingSpecs.all(kind).produces.getOrElse(resource, 0.0) *
+    CombatEngine.researchProductionMultiplier(maze, kind, resource) *
+    (1.0 + CombatEngine.engendreBoost(maze, resource))
+
+private def perKindHoverText(kind: BuildingKind, b: Building, maze: MazeState): String = kind match
   case BuildingKind.Grove =>
     val nextElfS = (b.spawnCountdownMs / 1000).ceil.toInt
-    s"Bosquet — +${formatDecimal(Balance.WoodPerSecPerGrove)} wood/s, next Elf in ${nextElfS}s"
+    s"Bosquet — +${formatDecimal(effectiveRate(maze, kind, Resource.Wood))} wood/s, next Elf in ${nextElfS}s"
   case BuildingKind.Forest =>
     val nextElfS = (b.spawnCountdownMs / 1000).ceil.toInt
-    s"Forêt — ${Balance.AuraDamagePerSec.toInt} dmg/s to adjacent enemies, +${formatDecimal(Balance.WoodPerSecPerForest)} wood/s, next Elf in ${nextElfS}s"
+    s"Forêt — ${Balance.AuraDamagePerSec.toInt} dmg/s to adjacent enemies, +${formatDecimal(effectiveRate(maze, kind, Resource.Wood))} wood/s, next Elf in ${nextElfS}s"
   case BuildingKind.Jungle =>
     val nextWolfS = (b.spawnCountdownMs / 1000).ceil.toInt
-    s"Jungle — ${Balance.AuraDamagePerSec.toInt} dmg/s to adjacent enemies, +${formatDecimal(Balance.WoodPerSecPerJungle)} wood/s, next Wolf in ${nextWolfS}s"
+    s"Jungle — ${Balance.AuraDamagePerSec.toInt} dmg/s to adjacent enemies, +${formatDecimal(effectiveRate(maze, kind, Resource.Wood))} wood/s, next Wolf in ${nextWolfS}s"
   case BuildingKind.Cave =>
     val nextGoblinS = (b.spawnCountdownMs / 1000).ceil.toInt
-    s"Cave — +${formatDecimal(Balance.FirePerSecPerCave)} fire/s, next Goblin in ${nextGoblinS}s"
+    s"Cave — +${formatDecimal(effectiveRate(maze, kind, Resource.Fire))} fire/s, next Goblin in ${nextGoblinS}s"
   case BuildingKind.Labyrinth =>
     val nextMinotaurS = (b.spawnCountdownMs / 1000).ceil.toInt
     s"Labyrinthe — next Minotaur in ${nextMinotaurS}s"
   case BuildingKind.Church =>
     val nextPaladinS = (b.spawnCountdownMs / 1000).ceil.toInt
-    s"Eglise — +${formatDecimal(Balance.LightPerSecPerEglise)} light/s, next Paladin in ${nextPaladinS}s"
+    s"Eglise — +${formatDecimal(effectiveRate(maze, kind, Resource.Light))} light/s, next Paladin in ${nextPaladinS}s"
   case BuildingKind.Watchtower =>
-    s"Tour de guet — +${formatDecimal(Balance.LightPerSecPerWatchtower)} light/s, " +
+    s"Tour de guet — +${formatDecimal(effectiveRate(maze, kind, Resource.Light))} light/s, " +
       s"${Balance.WatchtowerDamagePerSec.toInt} dmg/s to the nearest enemy within ${Balance.WatchtowerRangeCells} cells"
+  case BuildingKind.Angel =>
+    s"Ange — +${formatDecimal(effectiveRate(maze, kind, Resource.Light))} light/s, " +
+      s"${Balance.AngelDamagePerSec.toInt} dmg/s to adjacent enemies, slows them ${(Balance.AngelSlowFraction * 100).toInt}%"
+  case BuildingKind.Tomb =>
+    val nextZombieS = (b.spawnCountdownMs / 1000).ceil.toInt
+    s"Tombe — +${formatDecimal(effectiveRate(maze, kind, Resource.Shadow))} shadow/s, next Zombie in ${nextZombieS}s"
+  case BuildingKind.BlackCastle =>
+    val nextVampireS = (b.spawnCountdownMs / 1000).ceil.toInt
+    s"Château Noir — +${formatDecimal(effectiveRate(maze, kind, Resource.Shadow))} shadow/s, next Vampire in ${nextVampireS}s"
+  case BuildingKind.DeathHouse =>
+    val nextNecromancerS = (b.spawnCountdownMs / 1000).ceil.toInt
+    s"Maison de la Mort — +${formatDecimal(effectiveRate(maze, kind, Resource.Shadow))} shadow/s, " +
+      s"next Necromancer in ${nextNecromancerS}s"
+  case BuildingKind.LaboFondamental =>
+    s"Labo Fondamental — +${formatDecimal(effectiveRate(maze, kind, Resource.Crystal))} crystal/s, " +
+      s"no research bonus — upgrade it into a specific lab below"
+  case BuildingKind.LaboNaturel =>
+    s"Labo Naturel — +${formatDecimal(effectiveRate(maze, kind, Resource.Crystal))} crystal/s, " +
+      researchLevelText(maze, kind)
+  case BuildingKind.LaboSombre =>
+    s"Labo Sombre — +${formatDecimal(effectiveRate(maze, kind, Resource.Crystal))} crystal/s, " +
+      researchLevelText(maze, kind)
+  case BuildingKind.LaboDeRecherche =>
+    s"Labo de Recherche — +${formatDecimal(effectiveRate(maze, kind, Resource.Crystal))} crystal/s, " +
+      researchLevelText(maze, kind)
+  case BuildingKind.LaboDeLaLoi =>
+    s"Labo de la Loi — +${formatDecimal(effectiveRate(maze, kind, Resource.Crystal))} crystal/s, " +
+      researchLevelText(maze, kind)
+  case BuildingKind.LaboDuChaos =>
+    s"Labo du Chaos — +${formatDecimal(effectiveRate(maze, kind, Resource.Crystal))} crystal/s, " +
+      researchLevelText(maze, kind)
+  case BuildingKind.Stonehenge =>
+    val nextTreeS = (b.spawnCountdownMs / 1000).ceil.toInt
+    s"Stonehenge — spawns no resource, next Arbre Anime in ${nextTreeS}s"
+  case BuildingKind.PassingGate =>
+    s"Portail — spawns no unit, ${Balance.PassingGateDamagePerSec.toInt} dmg/s to enemies on its 4 " +
+      s"adjacent cells; harvests ${(Balance.PassingGateDeathShadowFraction * 100).toInt}% of your own " +
+      s"total resources as shadow on every nearby death"
 
 // ── HTML overlay ────────────────────────────────────────────────────────
 
@@ -1215,6 +1956,10 @@ private def updateMazePanel(prefix: String, maze: MazeState, opponent: MazeState
   document.getElementById(s"$prefix-fire").textContent = maze.resources.getOrElse(Resource.Fire, 0.0).toInt.toString
   document.getElementById(s"$prefix-light").textContent =
     maze.resources.getOrElse(Resource.Light, 0.0).toInt.toString
+  document.getElementById(s"$prefix-shadow").textContent =
+    maze.resources.getOrElse(Resource.Shadow, 0.0).toInt.toString
+  document.getElementById(s"$prefix-crystal").textContent =
+    maze.resources.getOrElse(Resource.Crystal, 0.0).toInt.toString
   // Same CombatEngine function that actually applies production each tick — see its
   // doc for why (a hand-rolled `count * rate` here could silently drift out of sync).
   document.getElementById(s"$prefix-wood-rate").textContent =
@@ -1223,17 +1968,33 @@ private def updateMazePanel(prefix: String, maze: MazeState, opponent: MazeState
     s"(+${formatDecimal(CombatEngine.productionPerSec(maze, Resource.Fire))}/s)"
   document.getElementById(s"$prefix-light-rate").textContent =
     s"(+${formatDecimal(CombatEngine.productionPerSec(maze, Resource.Light))}/s)"
-  // Only Forest/Jungle count as real forests (see VictoryConditions.realForestKinds) — a
-  // Grove is still just a bush (Bosquet.md's own asset), not yet a forest.
-  val realForestKinds = Set(BuildingKind.Forest, BuildingKind.Jungle)
-  val forestCount = maze.buildings.count(b => realForestKinds.contains(b.kind))
-  val forestTarget = VictoryConditions.forestTarget(opponent)
+  document.getElementById(s"$prefix-shadow-rate").textContent =
+    s"(+${formatDecimal(CombatEngine.productionPerSec(maze, Resource.Shadow))}/s)"
+  document.getElementById(s"$prefix-crystal-rate").textContent =
+    s"(+${formatDecimal(CombatEngine.productionPerSec(maze, Resource.Crystal))}/s)"
+  // Same number VictoryConditions.evaluate itself compares against (real Forest/Jungle
+  // buildings plus any of this maze's own Trees currently raiding `opponent` — see its doc).
+  val forestCount = VictoryConditions.forestCount(maze, opponent)
+  val forestTarget = VictoryConditions.forestTarget(maze, opponent)
   val plunderTarget = VictoryConditions.plunderTarget(opponent)
+  val corruptionTarget = VictoryConditions.corruptionTarget(opponent)
   document.getElementById(s"$prefix-forests").textContent = s"$forestCount/${forestTarget.toInt}"
   document.getElementById(s"$prefix-plundered").textContent =
     s"${maze.resourcesPlundered.toInt}/${plunderTarget.toInt}"
+  document.getElementById(s"$prefix-corrupted").textContent =
+    s"${maze.buildingsCorrupted.toInt}/${corruptionTarget.toInt}"
   updateProgressBar(s"$prefix-forests-bar", forestCount, forestTarget)
   updateProgressBar(s"$prefix-plundered-bar", maze.resourcesPlundered, plunderTarget)
+  updateProgressBar(s"$prefix-corrupted-bar", maze.buildingsCorrupted, corruptionTarget)
+  // Recherche fondamentale.md: no opponent-relative target here (see VictoryConditions'
+  // doc on hasWonViaFondamentale) — the "target" is just the 4 other labs, at whatever
+  // depth this maze's OWN current fondamentale level currently demands of them.
+  val fondamentaleLevel = VictoryConditions.fondamentaleLevel(maze)
+  val fondamentaleReady = VictoryConditions.fondamentaleReadyLabCount(maze)
+  val fondamentaleTotal = ResearchSpecs.otherLabKinds.size
+  document.getElementById(s"$prefix-fondamentale").textContent =
+    s"$fondamentaleReady/$fondamentaleTotal (Lv$fondamentaleLevel)"
+  updateProgressBar(s"$prefix-fondamentale-bar", fondamentaleReady, fondamentaleTotal)
 
 // Visual companion to the "current/target" text above — lets you compare at a glance
 // how close each maze is to winning via the same (opponent-relative) condition.
@@ -1241,15 +2002,24 @@ private def updateProgressBar(id: String, current: Double, target: Double): Unit
   val pct = if target <= 0 then 100.0 else math.min(100.0, current / target * 100.0)
   document.getElementById(id).asInstanceOf[dom.html.Element].style.width = s"$pct%"
 
+// One WON/LOST banner per maze half (not a single "You win!"/"AI wins!" overlay) —
+// each stays confined to pointer-events: none (see index.html's .game-over-side), so
+// buildings on either side stay hoverable for their info tooltip after the match ends.
 private def updateGameOverBanner(battle: BattleState): Unit =
-  val banner = document.getElementById("game-over")
   battle.outcome match
     case Some(result) =>
-      val title = result match
-        case _: MatchResult.PlayerWins => "You win!"
-        case _: MatchResult.AiWins     => "AI wins!"
-      document.getElementById("game-over-title").textContent = title
-      document.getElementById("game-over-reason").textContent = result.reason
-      banner.classList.add("visible")
+      val playerWon = result.isInstanceOf[MatchResult.PlayerWins]
+      setGameOverSide("player", won = playerWon, result.reason)
+      setGameOverSide("ai", won = !playerWon, result.reason)
     case None =>
-      banner.classList.remove("visible")
+      document.getElementById("game-over-player").classList.remove("visible")
+      document.getElementById("game-over-ai").classList.remove("visible")
+
+private def setGameOverSide(prefix: String, won: Boolean, reason: String): Unit =
+  val title = document.getElementById(s"game-over-$prefix-title")
+  title.textContent = if won then "WON" else "LOST"
+  title.classList.remove("won")
+  title.classList.remove("lost")
+  title.classList.add(if won then "won" else "lost")
+  document.getElementById(s"game-over-$prefix-reason").textContent = reason
+  document.getElementById(s"game-over-$prefix").classList.add("visible")

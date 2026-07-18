@@ -7,8 +7,11 @@ cout en feu:
 cout en crystal: 10
 cout en ombre:
 ---
-Produit 0.2 [Crystal](Crystal.md) par sec
+Amelioration du [Labo Fondamental](Labo%20Fondamental.md) — pas de constructible directement.
 
-debloque [Recherches naturelles](Recherches%20naturelles.md)
+Produit 0.2 [Crystal](Crystal.md) par sec, augmente de 75% par niveau de recherche.
+
+debloque [Recherches naturelles](Recherches%20naturelles.md), au niveau 1 des la mise a
+niveau (gratuit).
 
 ![](Pasted%20image%2020260717192151.png)

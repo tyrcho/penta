@@ -19,8 +19,11 @@
       --color-gold:    #eab308;
       --color-fire:     #fb923c;
       --color-light:    #fde68a;
+      --color-shadow:   #c4b5fd;
+      --color-crystal:  #22d3ee;
       --color-progress: #38bdf8;
       --color-ai:      #a78bfa;
+      --color-lost:    #f87171;
     }
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     html, body { height: 100%; overflow: hidden; touch-action: none; }
@@ -88,11 +91,15 @@
     body.mode-spectating #spectate-label { display: inline-block; }
     body.mode-spectating .build-btn,
     body.mode-spectating .build-slot-placeholder { display: none; }
-    /* Concept rows: one per faction (Nature/Chaos/Loi + 2 placeholders for factions not
-       yet designed), each showing that faction's resource+rate, victory progress, and
-       building slots (real ones filled, the rest left as explicit placeholders) —
+    /* Concept rows: one per faction (Nature/Chaos/Loi/Mort/Science), each showing that
+       faction's resource+rate, victory progress, and building slots (real ones filled,
+       the rest left as explicit placeholders when a faction has fewer than 5 buildings) —
        replaces the old build-button bar + stats row, which grouped by kind of info
-       (all resources together, all buttons together) rather than by faction. */
+       (all resources together, all buttons together) rather than by faction. Science's
+       progress shows readyLabCount/4 other labs at the depth its own current fondamentale
+       level demands (see VictoryConditions.fondamentaleReadyLabCount) — Loi's "Paix
+       Eternelle" (win by building count at a turn-count deadline) has no such deadline
+       concept in this real-time game yet, so its row still shows "Victory: —". */
     #concept-rows {
       display: flex;
       flex-direction: column;
@@ -110,11 +117,12 @@
       border-top: 1px solid var(--color-border);
     }
     .concept-row:first-child { border-top: none; }
-    .concept-row.placeholder-row { opacity: 0.55; }
     .concept-name { font-size: 0.85rem; font-weight: 700; }
     .concept-name.nature { color: #4ade80; }
     .concept-name.chaos { color: #f87171; }
     .concept-name.loi { color: #93c5fd; }
+    .concept-name.mort { color: var(--color-shadow); }
+    .concept-name.science { color: var(--color-crystal); }
     .concept-name.unknown { color: var(--color-border); font-style: italic; }
     .concept-side { display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; }
     .concept-side.ai-side { justify-content: flex-end; }
@@ -134,6 +142,8 @@
     .stat.wood { color: var(--color-gold); }
     .stat.fire { color: var(--color-fire); }
     .stat.light { color: var(--color-light); }
+    .stat.shadow { color: var(--color-shadow); }
+    .stat.crystal { color: var(--color-crystal); }
     .stat.progress { color: var(--color-progress); }
     .stat.unknown { color: var(--color-border); font-style: italic; font-weight: 500; }
     .stat .rate { font-size: 0.75rem; font-weight: 500; opacity: 0.75; margin-left: 0.15rem; }
@@ -163,26 +173,42 @@
       display: block;
       touch-action: none;
     }
-    #game-over {
+    /* One banner per maze half, each dimming only its own side, so the loser's half
+       doesn't visually claim the winner's — see currentLayout/applyViewTransform for
+       the matching portrait/landscape split this mirrors. pointer-events: none keeps
+       the underlying canvas (and its buildings) hoverable straight through the banner. */
+    .game-over-side {
       display: none;
       position: absolute;
-      inset: 0;
       align-items: center;
       justify-content: center;
       flex-direction: column;
       gap: 0.5rem;
-      background: rgba(15, 23, 42, 0.85);
+      background: rgba(15, 23, 42, 0.55);
+      pointer-events: none;
       z-index: 2;
     }
-    #game-over.visible { display: flex; }
-    #game-over-title { font-size: 2rem; font-weight: 800; color: var(--color-brand); }
-    #game-over-reason { font-size: 1rem; color: var(--color-text); }
+    .game-over-side.visible { display: flex; }
+    #game-container:not(.layout-portrait) .game-over-side { top: 0; width: 50%; height: 100%; }
+    #game-container:not(.layout-portrait) #game-over-player { left: 0; }
+    #game-container:not(.layout-portrait) #game-over-ai { right: 0; }
+    #game-container.layout-portrait .game-over-side { left: 0; width: 100%; height: 50%; }
+    #game-container.layout-portrait #game-over-player { top: 0; }
+    #game-container.layout-portrait #game-over-ai { top: 50%; }
+    .game-over-title { font-size: 2rem; font-weight: 800; }
+    .game-over-title.won { color: var(--color-brand); }
+    .game-over-title.lost { color: var(--color-lost); }
+    .game-over-reason { font-size: 1rem; color: var(--color-text); }
     #tooltip {
       display: none;
       position: fixed;
       top: 0;
       left: 0;
+      right: auto;
+      bottom: auto;
       max-width: 260px;
+      max-height: calc(100vh - 24px);
+      overflow-y: auto;
       padding: 0.4rem 0.6rem;
       font-size: 0.8rem;
       line-height: 1.3;
@@ -208,7 +234,12 @@
     }
     #tooltip-destroy.visible { display: inline-block; }
     #tooltip-destroy:hover { border-color: var(--color-brand); background: var(--color-surface); }
-    #tooltip-upgrade {
+    /* Up to 5 slots (BuildingSpecs.upgradeOptions' longest branch — LaboFondamental's 5
+       specific labs); Grove/Forest's single-option chain only ever shows slot 0. Each is a
+       (preview, button) pair, same look as the old single #tooltip-upgrade/-preview pair
+       this replaces — just addressed by a shared class instead of one fixed id, so
+       GameApp.scala can show/hide/wire as many as the selected building actually has. */
+    .tooltip-upgrade-btn {
       display: none;
       margin-top: 0.4rem;
       margin-left: 0.3rem;
@@ -222,18 +253,36 @@
       cursor: pointer;
       pointer-events: auto;
     }
-    #tooltip-upgrade.visible { display: inline-block; }
-    #tooltip-upgrade:hover { background: var(--color-brand); }
-    #tooltip-upgrade.disabled { opacity: 0.35; cursor: not-allowed; }
-    #tooltip-upgrade.disabled:hover { background: var(--color-bg); }
-    #tooltip-upgrade-preview {
+    .tooltip-upgrade-btn.visible { display: inline-block; }
+    .tooltip-upgrade-btn:hover { background: var(--color-brand); }
+    .tooltip-upgrade-btn.disabled { opacity: 0.35; cursor: not-allowed; }
+    .tooltip-upgrade-btn.disabled:hover { background: var(--color-bg); }
+    .tooltip-upgrade-preview {
       display: none;
       margin-top: 0.3rem;
       font-size: 0.7rem;
       color: var(--color-brand);
       opacity: 0.85;
     }
-    #tooltip-upgrade-preview.visible { display: block; }
+    .tooltip-upgrade-preview.visible { display: block; }
+    #tooltip-research {
+      display: none;
+      margin-top: 0.4rem;
+      margin-left: 0.3rem;
+      padding: 0.2rem 0.5rem;
+      font-size: 0.75rem;
+      font-weight: 600;
+      border: 1px solid var(--color-crystal);
+      border-radius: 4px;
+      background: var(--color-bg);
+      color: var(--color-text);
+      cursor: pointer;
+      pointer-events: auto;
+    }
+    #tooltip-research.visible { display: inline-block; }
+    #tooltip-research:hover { background: var(--color-crystal); color: var(--color-bg); }
+    #tooltip-research.disabled { opacity: 0.35; cursor: not-allowed; }
+    #tooltip-research.disabled:hover { background: var(--color-bg); color: var(--color-text); }
     /* Phones (mostly portrait, mostly narrow): the maze is the whole point of the page,
        so the chrome above it — controlbar + the 3 real concept-rows — needs to stay as
        thin as possible. The 2 placeholder rows and every row's 5 "?" build-slot filler
@@ -246,7 +295,6 @@
       .speed-btn { padding: 0.25rem 0.5rem; font-size: 0.75rem; }
       #speed-label { min-width: 1.8rem; font-size: 0.75rem; }
       #spectate-label { font-size: 0.75rem; }
-      .concept-row.placeholder-row { display: none; }
       .build-slot-placeholder { display: none; }
       .concept-row {
         grid-template-columns: 3rem 1fr auto 1fr;
@@ -288,7 +336,7 @@
       </div>
       <div class="concept-buildings">
         <button class="build-btn selected" id="build-grove"><img src="./assets/grove.png" alt="Bosquet"></button>
-        <span class="build-slot-placeholder">?</span>
+        <button class="build-btn" id="build-stonehenge"><img src="./assets/stonehenge.png" alt="Stonehenge"></button>
         <span class="build-slot-placeholder">?</span>
         <span class="build-slot-placeholder">?</span>
         <span class="build-slot-placeholder">?</span>
@@ -326,7 +374,7 @@
       <div class="concept-buildings">
         <button class="build-btn" id="build-eglise"><img src="./assets/eglise.png" alt="Eglise"></button>
         <button class="build-btn" id="build-watchtower"><img src="./assets/watchtower.png" alt="Tour de guet"></button>
-        <span class="build-slot-placeholder">?</span>
+        <button class="build-btn" id="build-angel"><img src="./assets/angel.png" alt="Ange"></button>
         <span class="build-slot-placeholder">?</span>
         <span class="build-slot-placeholder">?</span>
       </div>
@@ -335,40 +383,68 @@
         <span class="stat light">Light: <span id="ai-light">0</span><span class="rate" id="ai-light-rate"></span></span>
       </div>
     </div>
-    <div class="concept-row placeholder-row">
-      <span class="concept-name unknown">???</span>
-      <div class="concept-side player-side"><span class="stat unknown">No resource yet</span></div>
+    <div class="concept-row">
+      <span class="concept-name mort">Mort</span>
+      <div class="concept-side player-side">
+        <span class="stat shadow">Shadow: <span id="player-shadow">0</span><span class="rate" id="player-shadow-rate"></span></span>
+        <span class="stat progress">Corrupted: <span id="player-corrupted">0/0</span><span class="progress-bar"><span class="progress-bar-fill" id="player-corrupted-bar"></span></span></span>
+      </div>
       <div class="concept-buildings">
-        <span class="build-slot-placeholder">?</span>
-        <span class="build-slot-placeholder">?</span>
-        <span class="build-slot-placeholder">?</span>
-        <span class="build-slot-placeholder">?</span>
+        <button class="build-btn" id="build-tomb"><img src="./assets/tomb.png" alt="Tombe"></button>
+        <button class="build-btn" id="build-chateau-noir"><img src="./assets/chateau-noir.png" alt="Chateau Noir"></button>
+        <button class="build-btn" id="build-death-house"><img src="./assets/death-house.png" alt="Maison de la Mort"></button>
+        <button class="build-btn" id="build-passing-gate"><img src="./assets/passing-gate.png" alt="Portail"></button>
         <span class="build-slot-placeholder">?</span>
       </div>
-      <div class="concept-side ai-side"><span class="stat unknown">No resource yet</span></div>
+      <div class="concept-side ai-side">
+        <span class="stat progress">Corrupted: <span id="ai-corrupted">0/0</span><span class="progress-bar"><span class="progress-bar-fill" id="ai-corrupted-bar"></span></span></span>
+        <span class="stat shadow">Shadow: <span id="ai-shadow">0</span><span class="rate" id="ai-shadow-rate"></span></span>
+      </div>
     </div>
-    <div class="concept-row placeholder-row">
-      <span class="concept-name unknown">???</span>
-      <div class="concept-side player-side"><span class="stat unknown">No resource yet</span></div>
+    <div class="concept-row">
+      <span class="concept-name science">Science</span>
+      <div class="concept-side player-side">
+        <span class="stat crystal">Crystal: <span id="player-crystal">0</span><span class="rate" id="player-crystal-rate"></span></span>
+        <span class="stat progress">Fondamentale: <span id="player-fondamentale">0/0</span><span class="progress-bar"><span class="progress-bar-fill" id="player-fondamentale-bar"></span></span></span>
+      </div>
       <div class="concept-buildings">
-        <span class="build-slot-placeholder">?</span>
+        <!-- The only Science build button — LaboNaturel/Sombre/DeRecherche/DeLaLoi/DuChaos
+             are reached by upgrading this one, chosen via the tooltip's 5 upgrade buttons
+             (see index.html's #tooltip-upgrade-0..4), never built directly. -->
+        <button class="build-btn" id="build-labo-fondamental"><img src="./assets/labo-fondamental.png" alt="Labo Fondamental"></button>
         <span class="build-slot-placeholder">?</span>
         <span class="build-slot-placeholder">?</span>
         <span class="build-slot-placeholder">?</span>
         <span class="build-slot-placeholder">?</span>
       </div>
-      <div class="concept-side ai-side"><span class="stat unknown">No resource yet</span></div>
+      <div class="concept-side ai-side">
+        <span class="stat progress">Fondamentale: <span id="ai-fondamentale">0/0</span><span class="progress-bar"><span class="progress-bar-fill" id="ai-fondamentale-bar"></span></span></span>
+        <span class="stat crystal">Crystal: <span id="ai-crystal">0</span><span class="rate" id="ai-crystal-rate"></span></span>
+      </div>
     </div>
   </div>
   <main id="game-container">
-    <div id="game-over">
-      <div id="game-over-title"></div>
-      <div id="game-over-reason"></div>
+    <div id="game-over-player" class="game-over-side">
+      <div id="game-over-player-title" class="game-over-title"></div>
+      <div id="game-over-player-reason" class="game-over-reason"></div>
+    </div>
+    <div id="game-over-ai" class="game-over-side">
+      <div id="game-over-ai-title" class="game-over-title"></div>
+      <div id="game-over-ai-reason" class="game-over-reason"></div>
     </div>
     <div id="tooltip">
       <span id="tooltip-text"></span>
-      <span id="tooltip-upgrade-preview"></span>
-      <button id="tooltip-upgrade"></button>
+      <span id="tooltip-upgrade-preview-0" class="tooltip-upgrade-preview"></span>
+      <button id="tooltip-upgrade-0" class="tooltip-upgrade-btn"></button>
+      <span id="tooltip-upgrade-preview-1" class="tooltip-upgrade-preview"></span>
+      <button id="tooltip-upgrade-1" class="tooltip-upgrade-btn"></button>
+      <span id="tooltip-upgrade-preview-2" class="tooltip-upgrade-preview"></span>
+      <button id="tooltip-upgrade-2" class="tooltip-upgrade-btn"></button>
+      <span id="tooltip-upgrade-preview-3" class="tooltip-upgrade-preview"></span>
+      <button id="tooltip-upgrade-3" class="tooltip-upgrade-btn"></button>
+      <span id="tooltip-upgrade-preview-4" class="tooltip-upgrade-preview"></span>
+      <button id="tooltip-upgrade-4" class="tooltip-upgrade-btn"></button>
+      <button id="tooltip-research"></button>
       <button id="tooltip-destroy"></button>
     </div>
   </main>

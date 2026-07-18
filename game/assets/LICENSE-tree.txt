@@ -1,0 +1,10 @@
+Tree walk-cycle frames (assets/tree/{front,back,left,right}-walk-*.png) were cropped from
+a labeled "WALK" reference sheet (4 rows x 6 frames) supplied directly by the project
+owner via chat upload — no source page attached, so licensing/provenance isn't known.
+The sheet's 4 rows are 4 facings of the same tree-ent (row 1 has a visible face = front,
+row 2 = back, rows 3/4 = the two side angles), used as a 4-direction walk cycle same as
+the Goblin/Elf packs.
+
+Per CLAUDE.md ("Art asset licensing is not a current concern"): used as-is on a
+best-effort basis for this local hobby project. Replace with properly licensed or
+commissioned assets before using it beyond that.

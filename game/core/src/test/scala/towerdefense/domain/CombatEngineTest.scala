@@ -132,8 +132,14 @@ class CombatEngineTest extends munit.FunSuite:
     val cave = Building(101, col = 6, row = 6, BuildingKind.Cave, Balance.GoblinSpawnIntervalMs)
     val state = withResources(wood = 0.0, fire = 0.0).copy(buildings = List(forest, cave))
     val result = CombatEngine.tick(state, deltaMs = 2000.0)
+    // Wood has no boost here (its Engendre source is Light, and nothing here produces
+    // Light), but Fire's Engendre source is Wood — the one Forest gives it a +5% boost
+    // (Balance.EngendreBoostPerBuilding) on top of Cave's own base rate.
     assertEquals(result.state.resources(Resource.Wood), Balance.WoodPerSecPerForest * 2.0)
-    assertEquals(result.state.resources(Resource.Fire), Balance.FirePerSecPerCave * 2.0)
+    assertEquals(
+      result.state.resources(Resource.Fire),
+      Balance.FirePerSecPerCave * (1.0 + Balance.EngendreBoostPerBuilding) * 2.0
+    )
   }
 
   test(
@@ -148,9 +154,112 @@ class CombatEngineTest extends munit.FunSuite:
         Building(4, 0, 4, BuildingKind.Church, 0.0)
       )
     )
-    assertEquals(CombatEngine.productionPerSec(state, Resource.Wood), 2 * Balance.WoodPerSecPerForest)
-    assertEquals(CombatEngine.productionPerSec(state, Resource.Fire), 1 * Balance.FirePerSecPerCave)
+    // Wood's Engendre source is Light — the one Church gives it a +5% boost. Fire's
+    // Engendre source is Wood — the two Forests give it a +10% boost. Light's Engendre
+    // source is Crystal, absent here, so Light stays exactly at its base rate.
+    assertEquals(
+      CombatEngine.productionPerSec(state, Resource.Wood),
+      2 * Balance.WoodPerSecPerForest * (1.0 + Balance.EngendreBoostPerBuilding)
+    )
+    assertEquals(
+      CombatEngine.productionPerSec(state, Resource.Fire),
+      1 * Balance.FirePerSecPerCave * (1.0 + 2 * Balance.EngendreBoostPerBuilding)
+    )
     assertEquals(CombatEngine.productionPerSec(state, Resource.Light), 1 * Balance.LightPerSecPerEglise)
+  }
+
+  // ── Engendre production-boost rule ────────────────────────────────────
+
+  test("each Engendre-source building adds a flat +5% to the next resource's production rate") {
+    val caves = List(
+      Building(1, 0, 1, BuildingKind.Cave, 0.0),
+      Building(2, 0, 2, BuildingKind.Cave, 0.0),
+      Building(3, 0, 3, BuildingKind.Cave, 0.0)
+    )
+    // Shadow's Engendre source is Fire — three Fire-producing Caves give it a flat +15%
+    // multiplier, even though nothing here produces Shadow itself yet (base rate 0).
+    val state = withResources().copy(buildings = caves)
+    assertEqualsDouble(
+      CombatEngine.engendreBoost(state, Resource.Shadow),
+      3 * Balance.EngendreBoostPerBuilding,
+      1e-9
+    )
+    assertEquals(CombatEngine.productionPerSec(state, Resource.Shadow), 0.0)
+  }
+
+  test("the Engendre boost only counts buildings that produce the *source* resource, not any building") {
+    // Church produces Light, not Fire — it shouldn't count toward Shadow's boost (whose
+    // source is Fire), even though it's a building "in play".
+    val church = Building(1, 5, 5, BuildingKind.Church, 0.0)
+    val state = withResources().copy(buildings = List(church))
+    assertEquals(CombatEngine.engendreBoost(state, Resource.Shadow), 0.0)
+  }
+
+  test("the Engendre cycle wraps: Light producers boost Wood, closing Wood -> Fire -> Shadow -> Crystal -> Light -> Wood") {
+    val church = Building(1, 5, 5, BuildingKind.Church, 0.0)
+    val grove = Building(2, 6, 6, BuildingKind.Grove, 0.0)
+    val state = withResources().copy(buildings = List(church, grove))
+    val result = CombatEngine.tick(state, deltaMs = 1000.0)
+    assertEquals(
+      result.state.resources(Resource.Wood) - state.resources(Resource.Wood),
+      Balance.WoodPerSecPerGrove * (1.0 + Balance.EngendreBoostPerBuilding)
+    )
+  }
+
+  // ── Lab research boosts its own Crystal production ────────────────────
+  // Note sur les laboratoires.md: "Chaque amelioration (recherche) dans un labo augmente
+  // sa production de crystal de 75% par rapport au niveau precedent" — distinct from each
+  // lab's own separately-researched effect (cost reduction/opponent target/plunder/damage),
+  // which reads the exact same researchLevels entry for a different purpose.
+
+  test("an unresearched lab produces Crystal at its plain base rate") {
+    val labo = Building(1, 0, 1, BuildingKind.LaboNaturel, 0.0)
+    val state = withResources().copy(buildings = List(labo))
+    assertEquals(CombatEngine.productionPerSec(state, Resource.Crystal), Balance.CrystalPerSecPerLaboNaturel)
+  }
+
+  test("one research level on a lab increases its own Crystal production by exactly 75%") {
+    val labo = Building(1, 0, 1, BuildingKind.LaboNaturel, 0.0)
+    val state = withResources()
+      .copy(buildings = List(labo), researchLevels = Map(BuildingKind.LaboNaturel -> 1))
+    assertEqualsDouble(
+      CombatEngine.productionPerSec(state, Resource.Crystal),
+      Balance.CrystalPerSecPerLaboNaturel * 1.75,
+      1e-9
+    )
+  }
+
+  test("research boost compounds: level 2 is 75% more than level 1, not just double level 1") {
+    val labo = Building(1, 0, 1, BuildingKind.LaboSombre, 0.0)
+    val state = withResources()
+      .copy(buildings = List(labo), researchLevels = Map(BuildingKind.LaboSombre -> 2))
+    assertEqualsDouble(
+      CombatEngine.productionPerSec(state, Resource.Crystal),
+      Balance.CrystalPerSecPerLaboSombre * 1.75 * 1.75,
+      1e-9
+    )
+  }
+
+  test("a lab's research boost never leaks onto another lab kind's Crystal production") {
+    val naturel = Building(1, 0, 1, BuildingKind.LaboNaturel, 0.0)
+    val sombre = Building(2, 0, 2, BuildingKind.LaboSombre, 0.0)
+    // Only LaboNaturel is researched — LaboSombre must still produce at its plain base rate.
+    val state = withResources()
+      .copy(buildings = List(naturel, sombre), researchLevels = Map(BuildingKind.LaboNaturel -> 3))
+    assertEqualsDouble(
+      CombatEngine.productionPerSec(state, Resource.Crystal),
+      Balance.CrystalPerSecPerLaboNaturel * math.pow(1.75, 3) + Balance.CrystalPerSecPerLaboSombre,
+      1e-9
+    )
+  }
+
+  test("a lab's research level never boosts a *different* resource's production") {
+    // LaboDeLaLoi's research level is keyed the same as Recherches loyales' building-damage
+    // effect — that shouldn't spill over into boosting some other building's Wood output.
+    val grove = Building(1, 0, 1, BuildingKind.Grove, 0.0)
+    val state = withResources()
+      .copy(buildings = List(grove), researchLevels = Map(BuildingKind.LaboDeLaLoi -> 4))
+    assertEquals(CombatEngine.productionPerSec(state, Resource.Wood), Balance.WoodPerSecPerGrove)
   }
 
   test("a forest emits exactly one elf-spawn signal per interval") {
@@ -275,6 +384,134 @@ class CombatEngineTest extends munit.FunSuite:
     val byId = result.state.creatures.map(c => c.id -> c).toMap
     assertEquals(byId(1).hp, closer.hp - Balance.WatchtowerDamagePerSec)
     assertEquals(byId(2).hp, farther.hp)
+  }
+
+  test("angels produce light over time, at their own rate") {
+    val angel = Building(100, col = 5, row = 5, BuildingKind.Angel, 0.0)
+    val state = withResources(light = 0.0).copy(buildings = List(angel))
+    val result = CombatEngine.tick(state, deltaMs = 2000.0)
+    assertEquals(result.state.resources(Resource.Light), Balance.LightPerSecPerAngel * 2.0)
+  }
+
+  test("an angel damages an adjacent enemy at its own rate, not Forest's AuraDamagePerSec") {
+    val angel = Building(100, col = 5, row = 5, BuildingKind.Angel, 0.0)
+    val adjacent =
+      Creature(1, GridConfig.cellCenter(6, 5), hp = 100.0, maxHp = 100.0, speedPerMs = 0.0, UnitKind.Elf)
+    val distant =
+      Creature(2, GridConfig.cellCenter(0, 0), hp = 100.0, maxHp = 100.0, speedPerMs = 0.0, UnitKind.Elf)
+    val state = withResources().copy(creatures = List(adjacent, distant), buildings = List(angel))
+    val result = CombatEngine.tick(state, deltaMs = 1000.0)
+    val byId = result.state.creatures.map(c => c.id -> c).toMap
+    assertEquals(byId(1).hp, adjacent.hp - Balance.AngelDamagePerSec)
+    assertEquals(byId(2).hp, distant.hp)
+  }
+
+  test("an angel slows an adjacent enemy's movement by AngelSlowFraction") {
+    val angel = Building(100, col = 5, row = 5, BuildingKind.Angel, 0.0)
+    val nearbyElf =
+      Creature(1, GridConfig.cellCenter(6, 5), Balance.ElfMaxHp, Balance.ElfMaxHp, Balance.ElfSpeedPerMs, UnitKind.Elf)
+    val state = withResources().copy(creatures = List(nearbyElf), buildings = List(angel))
+    val result = CombatEngine.tick(state, deltaMs = 10.0)
+    val slowedElf = result.state.creatures.find(_.id == 1).get
+    val aloneElf =
+      CombatEngine.tick(withResources().copy(creatures = List(nearbyElf)), deltaMs = 10.0).state.creatures.head
+    val slowedDistance = distanceMoved(nearbyElf.pos, slowedElf.pos)
+    val aloneDistance = distanceMoved(nearbyElf.pos, aloneElf.pos)
+    assertEqualsDouble(slowedDistance, aloneDistance * (1.0 - Balance.AngelSlowFraction), 1e-9)
+  }
+
+  test("an angel's slow does not reach a creature on a non-adjacent cell") {
+    val angel = Building(100, col = 5, row = 5, BuildingKind.Angel, 0.0)
+    val farElf =
+      Creature(1, GridConfig.cellCenter(0, 0), Balance.ElfMaxHp, Balance.ElfMaxHp, Balance.ElfSpeedPerMs, UnitKind.Elf)
+    val state = withResources().copy(creatures = List(farElf), buildings = List(angel))
+    val result = CombatEngine.tick(state, deltaMs = 10.0)
+    val unaffected = result.state.creatures.find(_.id == 1).get
+    val alone =
+      CombatEngine.tick(withResources().copy(creatures = List(farElf)), deltaMs = 10.0).state.creatures.head
+    assertEquals(unaffected.pos, alone.pos)
+  }
+
+  test("a wolf's speed boost and an angel's slow stack multiplicatively") {
+    val angel = Building(100, col = 5, row = 5, BuildingKind.Angel, 0.0)
+    // A Wolf never boosts itself (see effectiveSpeedPerMs: the boost is for *other*
+    // creatures within range) — so the boosted-and-slowed subject here is the Elf, sitting
+    // adjacent to both the Angel (for the slow) and the Wolf (for the boost).
+    val wolf =
+      Creature(1, GridConfig.cellCenter(6, 6), Balance.WolfMaxHp, Balance.WolfMaxHp, Balance.WolfSpeedPerMs, UnitKind.Wolf)
+    val elf =
+      Creature(2, GridConfig.cellCenter(6, 5), Balance.ElfMaxHp, Balance.ElfMaxHp, Balance.ElfSpeedPerMs, UnitKind.Elf)
+    val state = withResources().copy(creatures = List(wolf, elf), buildings = List(angel))
+    val result = CombatEngine.tick(state, deltaMs = 10.0)
+    val boostedAndSlowed = result.state.creatures.find(_.id == 2).get
+    val plainElf =
+      CombatEngine.tick(withResources().copy(creatures = List(elf)), deltaMs = 10.0).state.creatures.head
+    val actualDistance = distanceMoved(elf.pos, boostedAndSlowed.pos)
+    val plainDistance = distanceMoved(elf.pos, plainElf.pos)
+    assertEqualsDouble(
+      actualDistance,
+      plainDistance * Balance.WolfSpeedAuraMultiplier * (1.0 - Balance.AngelSlowFraction),
+      1e-9
+    )
+  }
+
+  test("a passing gate damages an adjacent enemy at its own rate, not Forest's/Angel's") {
+    val gate = Building(100, col = 5, row = 5, BuildingKind.PassingGate, 0.0)
+    val adjacent =
+      Creature(1, GridConfig.cellCenter(6, 5), hp = 100.0, maxHp = 100.0, speedPerMs = 0.0, UnitKind.Elf)
+    val distant =
+      Creature(2, GridConfig.cellCenter(0, 0), hp = 100.0, maxHp = 100.0, speedPerMs = 0.0, UnitKind.Elf)
+    val state = withResources().copy(creatures = List(adjacent, distant), buildings = List(gate))
+    val result = CombatEngine.tick(state, deltaMs = 1000.0)
+    val byId = result.state.creatures.map(c => c.id -> c).toMap
+    assertEquals(byId(1).hp, adjacent.hp - Balance.PassingGateDamagePerSec)
+    assertEquals(byId(2).hp, distant.hp)
+  }
+
+  test(
+    "a passing gate harvests PassingGateDeathShadowFraction of the maze's own total resources " +
+      "when a creature dies on one of its 4 adjacent cells, and flashes"
+  ) {
+    val gate = Building(100, col = 5, row = 5, BuildingKind.PassingGate, 0.0)
+    // hp set to die from exactly one tick of the gate's own aura damage.
+    val dying =
+      Creature(1, GridConfig.cellCenter(6, 5), hp = Balance.PassingGateDamagePerSec, maxHp = 100.0, speedPerMs = 0.0, UnitKind.Elf)
+    val resources =
+      Map(Resource.Wood -> 100.0, Resource.Fire -> 0.0, Resource.Light -> 0.0, Resource.Shadow -> 20.0, Resource.Crystal -> 0.0)
+    val state = MazeState.initial.copy(resources = resources, creatures = List(dying), buildings = List(gate))
+    val result = CombatEngine.tick(state, deltaMs = 1000.0)
+    assertEquals(result.state.creatures, Nil)
+    val expectedShadow = resources(Resource.Shadow) + Balance.PassingGateDeathShadowFraction * resources.values.sum
+    assertEqualsDouble(result.state.resources(Resource.Shadow), expectedShadow, 1e-9)
+    assertEquals(result.state.buildings.head.flashMs, Balance.PassingGateFlashMs)
+  }
+
+  test("a passing gate does not harvest shadow (or flash) for a death far from it") {
+    val gate = Building(100, col = 0, row = 0, BuildingKind.PassingGate, 0.0)
+    val watchtower = Building(101, col = 10, row = 10, BuildingKind.Watchtower, 0.0)
+    val farDying =
+      Creature(1, GridConfig.cellCenter(9, 10), hp = Balance.WatchtowerDamagePerSec, maxHp = 100.0, speedPerMs = 0.0, UnitKind.Elf)
+    val resources =
+      Map(Resource.Wood -> 100.0, Resource.Fire -> 0.0, Resource.Light -> 0.0, Resource.Shadow -> 20.0, Resource.Crystal -> 0.0)
+    val state = MazeState.initial.copy(resources = resources, creatures = List(farDying), buildings = List(gate, watchtower))
+    val result = CombatEngine.tick(state, deltaMs = 1000.0)
+    assertEquals(result.state.creatures, Nil)
+    assertEqualsDouble(result.state.resources(Resource.Shadow), resources(Resource.Shadow), 1e-9)
+    assertEquals(result.state.buildings.find(_.kind == BuildingKind.PassingGate).get.flashMs, 0.0)
+  }
+
+  test("a passing gate's flash fades over time (deltaMs per tick) when no death is nearby") {
+    val gate = Building(100, col = 5, row = 5, BuildingKind.PassingGate, 0.0, flashMs = Balance.PassingGateFlashMs)
+    val state = withResources().copy(buildings = List(gate))
+    val result = CombatEngine.tick(state, deltaMs = 200.0)
+    assertEqualsDouble(result.state.buildings.head.flashMs, Balance.PassingGateFlashMs - 200.0, 1e-9)
+  }
+
+  test("a passing gate's flash never goes negative, even ticked past its full duration") {
+    val gate = Building(100, col = 5, row = 5, BuildingKind.PassingGate, 0.0, flashMs = 50.0)
+    val state = withResources().copy(buildings = List(gate))
+    val result = CombatEngine.tick(state, deltaMs = 200.0)
+    assertEquals(result.state.buildings.head.flashMs, 0.0)
   }
 
   test("a paladin shields its target from watchtower damage too, not just forest aura") {
@@ -430,4 +667,607 @@ class CombatEngineTest extends munit.FunSuite:
     val state = withResources().copy(creatures = List(creature))
     val result = CombatEngine.tick(state, deltaMs = 1.0)
     assertEquals(result.arrivals, Nil)
+  }
+
+  test("a tomb emits exactly one zombie-spawn signal per interval") {
+    val tomb = Building(100, col = 5, row = 5, BuildingKind.Tomb, Balance.ZombieSpawnIntervalMs)
+    val state = withResources().copy(buildings = List(tomb))
+    val before = CombatEngine.tick(state, deltaMs = Balance.ZombieSpawnIntervalMs - 1.0)
+    val at = CombatEngine.tick(state, deltaMs = Balance.ZombieSpawnIntervalMs)
+    assertEquals(before.spawned.getOrElse(UnitKind.Zombie, 0), 0)
+    assertEquals(at.spawned.getOrElse(UnitKind.Zombie, 0), 1)
+  }
+
+  test("a black castle emits exactly one vampire-spawn signal per interval") {
+    val blackCastle = Building(100, col = 5, row = 5, BuildingKind.BlackCastle, Balance.VampireSpawnIntervalMs)
+    val state = withResources().copy(buildings = List(blackCastle))
+    val before = CombatEngine.tick(state, deltaMs = Balance.VampireSpawnIntervalMs - 1.0)
+    val at = CombatEngine.tick(state, deltaMs = Balance.VampireSpawnIntervalMs)
+    assertEquals(before.spawned.getOrElse(UnitKind.Vampire, 0), 0)
+    assertEquals(at.spawned.getOrElse(UnitKind.Vampire, 0), 1)
+  }
+
+  test("tombs and black castles produce shadow over time") {
+    val tomb = Building(100, col = 5, row = 5, BuildingKind.Tomb, Balance.ZombieSpawnIntervalMs)
+    val state = withResources().copy(buildings = List(tomb))
+    val result = CombatEngine.tick(state, deltaMs = 2000.0)
+    assertEquals(result.state.resources(Resource.Shadow), Balance.ShadowPerSecPerTomb * 2.0)
+  }
+
+  test("a zombie corrupts an adjacent enemy building but not a distant one") {
+    // A Cave, not a Grove — a Nature building would also heal itself (see
+    // CombatEngine.healBuildingCorruption), which isn't what this test is exercising.
+    val cave = Building(100, col = 5, row = 5, BuildingKind.Cave, 0.0)
+    val adjacent = Creature(1, GridConfig.cellCenter(6, 5), Balance.ZombieMaxHp, Balance.ZombieMaxHp, 0.0, UnitKind.Zombie)
+    val distant = Creature(2, GridConfig.cellCenter(0, 0), Balance.ZombieMaxHp, Balance.ZombieMaxHp, 0.0, UnitKind.Zombie)
+    val other = Building(101, col = 0, row = 5, BuildingKind.Labyrinth, 0.0)
+    val state = withResources().copy(creatures = List(adjacent, distant), buildings = List(cave, other))
+    val result = CombatEngine.tick(state, deltaMs = 1000.0)
+    val byId = result.state.buildings.map(b => b.id -> b).toMap
+    assertEquals(byId(100).corruptionPercent, Balance.ZombieCorruptionPercentPerSec)
+    assertEquals(byId(101).corruptionPercent, 0.0)
+  }
+
+  test("a vampire corrupts twice as fast as a zombie") {
+    // Not a Grove/Forest/Jungle — see the note above.
+    val cave = Building(100, col = 5, row = 5, BuildingKind.Cave, 0.0)
+    val vampire = Creature(1, GridConfig.cellCenter(6, 5), Balance.VampireMaxHp, Balance.VampireMaxHp, 0.0, UnitKind.Vampire)
+    val state = withResources().copy(creatures = List(vampire), buildings = List(cave))
+    val result = CombatEngine.tick(state, deltaMs = 1000.0)
+    assertEquals(result.state.buildings.head.corruptionPercent, Balance.VampireCorruptionPercentPerSec)
+    assertEquals(Balance.VampireCorruptionPercentPerSec, Balance.ZombieCorruptionPercentPerSec * 2.0)
+  }
+
+  test("multiple corrupting creatures adjacent to the same building stack their corruption") {
+    // Not a Grove/Forest/Jungle — see the note above.
+    val cave = Building(100, col = 5, row = 5, BuildingKind.Cave, 0.0)
+    val zombieA = Creature(1, GridConfig.cellCenter(6, 5), Balance.ZombieMaxHp, Balance.ZombieMaxHp, 0.0, UnitKind.Zombie)
+    val zombieB = Creature(2, GridConfig.cellCenter(4, 5), Balance.ZombieMaxHp, Balance.ZombieMaxHp, 0.0, UnitKind.Zombie)
+    val state = withResources().copy(creatures = List(zombieA, zombieB), buildings = List(cave))
+    val result = CombatEngine.tick(state, deltaMs = 1000.0)
+    assertEquals(result.state.buildings.head.corruptionPercent, Balance.ZombieCorruptionPercentPerSec * 2.0)
+  }
+
+  test("a building corrupted to 100% is destroyed and reported for refund") {
+    val almostCorrupted = Building(
+      100,
+      col = 5,
+      row = 5,
+      BuildingKind.Grove,
+      spawnCountdownMs = 0.0,
+      corruptionPercent = Balance.CorruptionMaxPercent - Balance.ZombieCorruptionPercentPerSec
+    )
+    val zombie = Creature(1, GridConfig.cellCenter(6, 5), Balance.ZombieMaxHp, Balance.ZombieMaxHp, 0.0, UnitKind.Zombie)
+    val state = withResources().copy(creatures = List(zombie), buildings = List(almostCorrupted))
+    val result = CombatEngine.tick(state, deltaMs = 1000.0)
+    assertEquals(result.state.buildings, Nil)
+    assertEquals(
+      result.corrupted,
+      List(Corrosion(100, BuildingKind.Grove, 5, 5, BuildingSpecs.all(BuildingKind.Grove).cost))
+    )
+  }
+
+  test("corruption never exceeds 100%, even with excess corrupting exposure") {
+    val grove = Building(100, col = 5, row = 5, BuildingKind.Grove, 0.0)
+    val zombie = Creature(1, GridConfig.cellCenter(6, 5), Balance.ZombieMaxHp, Balance.ZombieMaxHp, 0.0, UnitKind.Zombie)
+    val state = withResources().copy(creatures = List(zombie), buildings = List(grove))
+    val result = CombatEngine.tick(state, deltaMs = Balance.CorruptionMaxPercent / Balance.ZombieCorruptionPercentPerSec * 1000.0 * 2)
+    assertEquals(result.state.buildings, Nil)
+    assertEquals(result.corrupted.size, 1)
+  }
+
+  test("a grove heals corruption on itself at GroveCorruptionHealPercentPerSec") {
+    val grove = Building(100, col = 5, row = 5, BuildingKind.Grove, 0.0, corruptionPercent = 50.0)
+    val state = withResources().copy(buildings = List(grove))
+    val result = CombatEngine.tick(state, deltaMs = 1000.0)
+    assertEquals(result.state.buildings.head.corruptionPercent, 50.0 - Balance.GroveCorruptionHealPercentPerSec)
+  }
+
+  test("a grove heals corruption on a diagonally-adjacent building too, not just the 4 orthogonal neighbors") {
+    val grove = Building(100, col = 5, row = 5, BuildingKind.Grove, 0.0)
+    val diagonal = Building(101, col = 6, row = 6, BuildingKind.Cave, 0.0, corruptionPercent = 50.0)
+    val state = withResources().copy(buildings = List(grove, diagonal))
+    val result = CombatEngine.tick(state, deltaMs = 1000.0)
+    val byId = result.state.buildings.map(b => b.id -> b).toMap
+    assertEquals(byId(101).corruptionPercent, 50.0 - Balance.GroveCorruptionHealPercentPerSec)
+  }
+
+  test("forest and jungle heal corruption at their own, higher rates than a grove") {
+    val forest = Building(100, col = 5, row = 5, BuildingKind.Forest, 0.0, corruptionPercent = 50.0)
+    val jungle = Building(101, col = 0, row = 0, BuildingKind.Jungle, 0.0, corruptionPercent = 50.0)
+    val state = withResources().copy(buildings = List(forest, jungle))
+    val result = CombatEngine.tick(state, deltaMs = 1000.0)
+    val byId = result.state.buildings.map(b => b.id -> b).toMap
+    assertEquals(byId(100).corruptionPercent, 50.0 - Balance.ForestCorruptionHealPercentPerSec)
+    assertEquals(byId(101).corruptionPercent, 50.0 - Balance.JungleCorruptionHealPercentPerSec)
+  }
+
+  test("a grove's healing does not reach a building 2 cells away") {
+    val grove = Building(100, col = 5, row = 5, BuildingKind.Grove, 0.0)
+    val farAway = Building(101, col = 7, row = 5, BuildingKind.Cave, 0.0, corruptionPercent = 50.0)
+    val state = withResources().copy(buildings = List(grove, farAway))
+    val result = CombatEngine.tick(state, deltaMs = 1000.0)
+    assertEquals(result.state.buildings.find(_.id == 101).get.corruptionPercent, 50.0)
+  }
+
+  test("multiple nearby nature buildings stack their corruption healing") {
+    val groveA = Building(100, col = 4, row = 5, BuildingKind.Grove, 0.0)
+    val groveB = Building(101, col = 6, row = 5, BuildingKind.Grove, 0.0)
+    val target = Building(102, col = 5, row = 5, BuildingKind.Cave, 0.0, corruptionPercent = 50.0)
+    val state = withResources().copy(buildings = List(groveA, groveB, target))
+    val result = CombatEngine.tick(state, deltaMs = 1000.0)
+    assertEquals(
+      result.state.buildings.find(_.id == 102).get.corruptionPercent,
+      50.0 - 2 * Balance.GroveCorruptionHealPercentPerSec
+    )
+  }
+
+  test("corruption healing never goes below 0%") {
+    // Below the heal amount a full-second tick would apply, so it floors at 0 rather
+    // than going negative.
+    val grove = Building(
+      100,
+      col = 5,
+      row = 5,
+      BuildingKind.Grove,
+      0.0,
+      corruptionPercent = Balance.GroveCorruptionHealPercentPerSec / 2.0
+    )
+    val state = withResources().copy(buildings = List(grove))
+    val result = CombatEngine.tick(state, deltaMs = 1000.0)
+    assertEquals(result.state.buildings.head.corruptionPercent, 0.0)
+  }
+
+  test("a nature building's own healing partially offsets an adjacent zombie's corruption in the same tick") {
+    // Grove and zombie flank the Cave from opposite sides (west/east) — both adjacent to
+    // it, neither on its own cell (corruption/healing only reach a building's neighbors,
+    // never the cell the corruptor/healer itself occupies).
+    val grove = Building(100, col = 5, row = 5, BuildingKind.Grove, 0.0)
+    val cave = Building(101, col = 6, row = 5, BuildingKind.Cave, 0.0)
+    val zombie = Creature(1, GridConfig.cellCenter(7, 5), Balance.ZombieMaxHp, Balance.ZombieMaxHp, 0.0, UnitKind.Zombie)
+    val state = withResources().copy(creatures = List(zombie), buildings = List(grove, cave))
+    val result = CombatEngine.tick(state, deltaMs = 1000.0)
+    // The zombie corrupts the Cave (adjacent to it) by ZombieCorruptionPercentPerSec, then
+    // the Grove heals it back down by GroveCorruptionHealPercentPerSec (also adjacent).
+    val cavePercent = result.state.buildings.find(_.id == 101).get.corruptionPercent
+    assertEquals(cavePercent, Balance.ZombieCorruptionPercentPerSec - Balance.GroveCorruptionHealPercentPerSec)
+  }
+
+  test("a death house emits exactly one necromancer-spawn signal per interval") {
+    val deathHouse = Building(100, col = 5, row = 5, BuildingKind.DeathHouse, Balance.NecromancerSpawnIntervalMs)
+    val state = withResources().copy(buildings = List(deathHouse))
+    val before = CombatEngine.tick(state, deltaMs = Balance.NecromancerSpawnIntervalMs - 1.0)
+    val at = CombatEngine.tick(state, deltaMs = Balance.NecromancerSpawnIntervalMs)
+    assertEquals(before.spawned.getOrElse(UnitKind.Necromancer, 0), 0)
+    assertEquals(at.spawned.getOrElse(UnitKind.Necromancer, 0), 1)
+  }
+
+  test("death houses produce shadow over time") {
+    val deathHouse = Building(100, col = 5, row = 5, BuildingKind.DeathHouse, Balance.NecromancerSpawnIntervalMs)
+    val state = withResources().copy(buildings = List(deathHouse))
+    val result = CombatEngine.tick(state, deltaMs = 2000.0)
+    assertEquals(result.state.resources(Resource.Shadow), Balance.ShadowPerSecPerDeathHouse * 2.0)
+  }
+
+  test("a soul corrupts an adjacent building at the same rate as a zombie") {
+    // Not a Grove/Forest/Jungle — a Nature building would also heal itself (see
+    // CombatEngine.healBuildingCorruption), which isn't what this test is exercising.
+    val cave = Building(100, col = 5, row = 5, BuildingKind.Cave, 0.0)
+    val soul = Creature(1, GridConfig.cellCenter(6, 5), Balance.SoulMaxHp, Balance.SoulMaxHp, 0.0, UnitKind.Soul)
+    val state = withResources().copy(creatures = List(soul), buildings = List(cave))
+    val result = CombatEngine.tick(state, deltaMs = 1000.0)
+    assertEquals(result.state.buildings.head.corruptionPercent, Balance.SoulCorruptionPercentPerSec)
+    assertEquals(Balance.SoulCorruptionPercentPerSec, Balance.ZombieCorruptionPercentPerSec)
+  }
+
+  test("a necromancer invokes a soul every SoulSummonIntervalMs, appearing at its own position") {
+    val necromancer = Creature(
+      1,
+      GridConfig.cellCenter(6, 5),
+      Balance.NecromancerMaxHp,
+      Balance.NecromancerMaxHp,
+      0.0,
+      UnitKind.Necromancer,
+      spawnCountdownMs = Balance.SoulSummonIntervalMs
+    )
+    val state = withResources().copy(creatures = List(necromancer))
+    val before = CombatEngine.tick(state, deltaMs = Balance.SoulSummonIntervalMs - 1.0)
+    assertEquals(before.state.creatures.count(_.kind == UnitKind.Soul), 0)
+    val at = CombatEngine.tick(before.state, deltaMs = 1.0)
+    val souls = at.state.creatures.filter(_.kind == UnitKind.Soul)
+    assertEquals(souls.size, 1)
+    assertEquals(GridConfig.cellOf(souls.head.pos), GridConfig.cellOf(necromancer.pos))
+    assertEquals(souls.head.summonedBy, Some(1L))
+    // The necromancer itself survives (it isn't consumed by summoning) and its own
+    // countdown resets for the next Soul.
+    assertEquals(at.state.creatures.count(_.kind == UnitKind.Necromancer), 1)
+  }
+
+  test("a freshly spawned necromancer's first soul only appears after the full interval, not instantly") {
+    val spec = CreatureSpecs.all(UnitKind.Necromancer)
+    assertEquals(spec.spawns, Some((UnitKind.Soul, Balance.SoulSummonIntervalMs)))
+  }
+
+  test("a necromancer freezes for NecromancerSummonFreezeMs the instant it summons a soul") {
+    val necromancer = Creature(
+      1,
+      GridConfig.cellCenter(6, 5),
+      Balance.NecromancerMaxHp,
+      Balance.NecromancerMaxHp,
+      0.0,
+      UnitKind.Necromancer,
+      spawnCountdownMs = Balance.SoulSummonIntervalMs
+    )
+    val state = withResources().copy(creatures = List(necromancer))
+    val result = CombatEngine.tick(state, deltaMs = Balance.SoulSummonIntervalMs)
+    val updated = result.state.creatures.find(_.kind == UnitKind.Necromancer).get
+    assertEquals(updated.frozenMs, Balance.NecromancerSummonFreezeMs)
+  }
+
+  test("a frozen necromancer does not move forward, even with nonzero speed, and its freeze ticks down") {
+    val necromancer = Creature(
+      1,
+      GridConfig.cellCenter(0, 0),
+      Balance.NecromancerMaxHp,
+      Balance.NecromancerMaxHp,
+      Balance.NecromancerSpeedPerMs,
+      UnitKind.Necromancer,
+      // Comfortably far from its own next summon, so advanceCreatureSummons doesn't also
+      // fire this tick and reset frozenMs back to the full duration.
+      spawnCountdownMs = Balance.SoulSummonIntervalMs,
+      frozenMs = 1000.0
+    )
+    val state = withResources().copy(creatures = List(necromancer))
+    val result = CombatEngine.tick(state, deltaMs = 400.0)
+    val updated = result.state.creatures.find(_.kind == UnitKind.Necromancer).get
+    assertEquals(updated.pos, necromancer.pos)
+    assertEquals(updated.frozenMs, 600.0)
+  }
+
+  test("a necromancer resumes normal movement once its freeze reaches zero") {
+    val necromancer = Creature(
+      1,
+      GridConfig.cellCenter(0, 0),
+      Balance.NecromancerMaxHp,
+      Balance.NecromancerMaxHp,
+      Balance.NecromancerSpeedPerMs,
+      UnitKind.Necromancer,
+      spawnCountdownMs = Balance.SoulSummonIntervalMs,
+      frozenMs = 100.0
+    )
+    val state = withResources().copy(creatures = List(necromancer))
+    // First tick burns off the remaining freeze (100ms out of 500ms elapsed) but still
+    // doesn't move — the whole tick is treated as frozen-or-not, not partially frozen.
+    val afterFreeze = CombatEngine.tick(state, deltaMs = 100.0)
+    val stillFrozen = afterFreeze.state.creatures.find(_.kind == UnitKind.Necromancer).get
+    assertEquals(stillFrozen.frozenMs, 0.0)
+    assertEquals(stillFrozen.pos, necromancer.pos)
+    val afterMove = CombatEngine.tick(afterFreeze.state, deltaMs = 400.0)
+    val moved = afterMove.state.creatures.find(_.kind == UnitKind.Necromancer).get
+    assertNotEquals(moved.pos, necromancer.pos)
+  }
+
+  // ── Tree self-cloning (Stonehenge/Arbre Anime) ─────────────────────────
+  // Unlike the Necromancer/Soul (child appears on the summoner's own position), a Tree's
+  // clone appears one cell further along the summoner's own path — see CreatureSpec.
+  // spawnAtNextCell / CombatEngine.advanceCreatureSummons's nextPathCellCenter.
+
+  test("a tree clones itself onto the next path cell, not its own position, when its clone timer elapses") {
+    val tree = Creature(
+      1,
+      GridConfig.cellCenter(0, 0),
+      Balance.TreeMaxHp,
+      Balance.TreeMaxHp,
+      speedPerMs = 0.0,
+      UnitKind.Tree,
+      spawnCountdownMs = Balance.TreeCloneIntervalMs
+    )
+    val state = withResources().copy(creatures = List(tree), nextId = 2L)
+    val result = CombatEngine.tick(state, deltaMs = Balance.TreeCloneIntervalMs)
+    assertEquals(result.state.creatures.size, 2)
+    val clone = result.state.creatures.find(_.id != tree.id).get
+    val expectedNextCell = Pathfinding.shortestPath((0, 0), GridConfig.goalCell, Set.empty).get(1)
+    assertEquals(clone.pos, GridConfig.cellCenter(expectedNextCell._1, expectedNextCell._2))
+    assertNotEquals(clone.pos, tree.pos)
+  }
+
+  test("the original tree's clone is TreeCloneSizeStepFraction smaller (size and HP), same kind and fresh countdown") {
+    val tree = Creature(
+      1,
+      GridConfig.cellCenter(0, 0),
+      Balance.TreeMaxHp,
+      Balance.TreeMaxHp,
+      speedPerMs = 0.0,
+      UnitKind.Tree,
+      spawnCountdownMs = Balance.TreeCloneIntervalMs
+      // sizeFraction defaults to 1.0 — this is the original, full-size tree.
+    )
+    val state = withResources().copy(creatures = List(tree), nextId = 2L)
+    val result = CombatEngine.tick(state, deltaMs = Balance.TreeCloneIntervalMs)
+    val clone = result.state.creatures.find(_.id != tree.id).get
+    val expectedFraction = 1.0 - Balance.TreeCloneSizeStepFraction
+    assertEquals(clone.kind, UnitKind.Tree)
+    assertEqualsDouble(clone.sizeFraction, expectedFraction, 1e-9)
+    assertEqualsDouble(clone.hp, Balance.TreeMaxHp * expectedFraction, 1e-9)
+    assertEqualsDouble(clone.maxHp, Balance.TreeMaxHp * expectedFraction, 1e-9)
+    assertEquals(clone.spawnCountdownMs, Balance.TreeCloneIntervalMs)
+  }
+
+  test("a clone can clone itself too, shrinking another TreeCloneSizeStepFraction from ITS OWN size") {
+    val cloneTree = Creature(
+      1,
+      GridConfig.cellCenter(0, 0),
+      hp = 80.0,
+      maxHp = 80.0,
+      speedPerMs = 0.0,
+      UnitKind.Tree,
+      spawnCountdownMs = Balance.TreeCloneIntervalMs,
+      summonedBy = Some(99L),
+      sizeFraction = 0.8
+    )
+    val state = withResources().copy(creatures = List(cloneTree), nextId = 2L)
+    val result = CombatEngine.tick(state, deltaMs = Balance.TreeCloneIntervalMs)
+    assertEquals(result.state.creatures.size, 2)
+    val grandchild = result.state.creatures.find(_.id != cloneTree.id).get
+    assertEqualsDouble(grandchild.sizeFraction, 0.6, 1e-9)
+    assertEqualsDouble(grandchild.maxHp, Balance.TreeMaxHp * 0.6, 1e-9)
+  }
+
+  test("cloning never shrinks below TreeMinCloneSizeFraction — a clone at the floor makes another at the floor") {
+    val tinyTree = Creature(
+      1,
+      GridConfig.cellCenter(0, 0),
+      hp = 20.0,
+      maxHp = 20.0,
+      speedPerMs = 0.0,
+      UnitKind.Tree,
+      spawnCountdownMs = Balance.TreeCloneIntervalMs,
+      summonedBy = Some(99L),
+      sizeFraction = Balance.TreeMinCloneSizeFraction
+    )
+    val state = withResources().copy(creatures = List(tinyTree), nextId = 2L)
+    val result = CombatEngine.tick(state, deltaMs = Balance.TreeCloneIntervalMs)
+    val clone = result.state.creatures.find(_.id != tinyTree.id).get
+    assertEqualsDouble(clone.sizeFraction, Balance.TreeMinCloneSizeFraction, 1e-9)
+  }
+
+  test("a tree freezes for TreeCloneFreezeMs the instant it clones itself") {
+    val tree = Creature(
+      1,
+      GridConfig.cellCenter(0, 0),
+      Balance.TreeMaxHp,
+      Balance.TreeMaxHp,
+      // 0.0 speed, same as the equivalent Necromancer freeze test — isolates the freeze
+      // flag from the fact that movement (moveCreatures) runs *before* this tick's own
+      // freeze gets set (advanceCreatureSummons), so a nonzero-speed tree still takes one
+      // step on the very tick it clones.
+      speedPerMs = 0.0,
+      UnitKind.Tree,
+      spawnCountdownMs = Balance.TreeCloneIntervalMs
+    )
+    val state = withResources().copy(creatures = List(tree), nextId = 2L)
+    val result = CombatEngine.tick(state, deltaMs = Balance.TreeCloneIntervalMs)
+    val parent = result.state.creatures.find(_.id == tree.id).get
+    assertEquals(parent.frozenMs, Balance.TreeCloneFreezeMs)
+  }
+
+  test("a frozen tree does not advance, even with nonzero speed, until its freeze reaches zero") {
+    val tree = Creature(
+      1,
+      GridConfig.cellCenter(0, 0),
+      Balance.TreeMaxHp,
+      Balance.TreeMaxHp,
+      speedPerMs = Balance.TreeSpeedPerMs,
+      UnitKind.Tree,
+      spawnCountdownMs = Balance.TreeCloneIntervalMs,
+      frozenMs = Balance.TreeCloneFreezeMs
+    )
+    val state = withResources().copy(creatures = List(tree))
+    val result = CombatEngine.tick(state, deltaMs = 100.0)
+    val stillFrozen = result.state.creatures.find(_.id == tree.id).get
+    assertEquals(stillFrozen.pos, tree.pos)
+    assertEquals(stillFrozen.frozenMs, Balance.TreeCloneFreezeMs - 100.0)
+  }
+
+  test("a soul's corruption heals its summoning necromancer by SoulHealPerSecPerBuilding, capped at max HP") {
+    val grove = Building(100, col = 5, row = 5, BuildingKind.Grove, 0.0)
+    val necromancer = Creature(
+      1,
+      GridConfig.cellCenter(0, 0),
+      hp = Balance.NecromancerMaxHp - 5.0,
+      maxHp = Balance.NecromancerMaxHp,
+      speedPerMs = 0.0,
+      UnitKind.Necromancer
+    )
+    val soul = Creature(
+      2,
+      GridConfig.cellCenter(6, 5),
+      Balance.SoulMaxHp,
+      Balance.SoulMaxHp,
+      speedPerMs = 0.0,
+      UnitKind.Soul,
+      summonedBy = Some(1L)
+    )
+    val state = withResources().copy(creatures = List(necromancer, soul), buildings = List(grove))
+    val result = CombatEngine.tick(state, deltaMs = 1000.0)
+    val healedNecromancer = result.state.creatures.find(_.id == 1).get
+    assertEquals(healedNecromancer.hp, necromancer.hp + Balance.SoulHealPerSecPerBuilding)
+  }
+
+  test("healing never exceeds the necromancer's max HP") {
+    val grove = Building(100, col = 5, row = 5, BuildingKind.Grove, 0.0)
+    val necromancer = Creature(
+      1,
+      GridConfig.cellCenter(0, 0),
+      hp = Balance.NecromancerMaxHp,
+      maxHp = Balance.NecromancerMaxHp,
+      speedPerMs = 0.0,
+      UnitKind.Necromancer
+    )
+    val soul = Creature(
+      2,
+      GridConfig.cellCenter(6, 5),
+      Balance.SoulMaxHp,
+      Balance.SoulMaxHp,
+      speedPerMs = 0.0,
+      UnitKind.Soul,
+      summonedBy = Some(1L)
+    )
+    val state = withResources().copy(creatures = List(necromancer, soul), buildings = List(grove))
+    val result = CombatEngine.tick(state, deltaMs = 1000.0)
+    val healedNecromancer = result.state.creatures.find(_.id == 1).get
+    assertEquals(healedNecromancer.hp, Balance.NecromancerMaxHp)
+  }
+
+  test("a soul adjacent to two buildings at once heals its necromancer twice as much") {
+    val groveA = Building(100, col = 5, row = 5, BuildingKind.Grove, 0.0)
+    val groveB = Building(101, col = 7, row = 5, BuildingKind.Grove, 0.0)
+    val necromancer = Creature(
+      1,
+      GridConfig.cellCenter(0, 0),
+      hp = Balance.NecromancerMaxHp - 10.0,
+      maxHp = Balance.NecromancerMaxHp,
+      speedPerMs = 0.0,
+      UnitKind.Necromancer
+    )
+    val soul = Creature(
+      2,
+      GridConfig.cellCenter(6, 5),
+      Balance.SoulMaxHp,
+      Balance.SoulMaxHp,
+      speedPerMs = 0.0,
+      UnitKind.Soul,
+      summonedBy = Some(1L)
+    )
+    val state = withResources().copy(creatures = List(necromancer, soul), buildings = List(groveA, groveB))
+    val result = CombatEngine.tick(state, deltaMs = 1000.0)
+    val healedNecromancer = result.state.creatures.find(_.id == 1).get
+    assertEquals(healedNecromancer.hp, necromancer.hp + Balance.SoulHealPerSecPerBuilding * 2.0)
+  }
+
+  test("a soul with no living summoning necromancer heals no one") {
+    val grove = Building(100, col = 5, row = 5, BuildingKind.Grove, 0.0)
+    val soul = Creature(
+      2,
+      GridConfig.cellCenter(6, 5),
+      Balance.SoulMaxHp,
+      Balance.SoulMaxHp,
+      speedPerMs = 0.0,
+      UnitKind.Soul,
+      summonedBy = Some(999L) // no creature with this id exists
+    )
+    val state = withResources().copy(creatures = List(soul), buildings = List(grove))
+    val result = CombatEngine.tick(state, deltaMs = 1000.0)
+    // Should not throw, and no creature should have gained hp from nowhere.
+    assertEquals(result.state.creatures.map(c => c.id -> c.hp).toMap, Map(2L -> Balance.SoulMaxHp))
+  }
+
+  test("a vampire takes half damage from a forest aura") {
+    val forest = Building(100, col = 5, row = 5, BuildingKind.Forest, Balance.ElfSpawnIntervalMs)
+    val vampire =
+      Creature(1, GridConfig.cellCenter(6, 5), hp = 100.0, maxHp = 100.0, speedPerMs = 0.0, UnitKind.Vampire)
+    val state = withResources().copy(creatures = List(vampire), buildings = List(forest))
+    val result = CombatEngine.tick(state, deltaMs = 1000.0)
+    assertEquals(result.state.creatures.head.hp, vampire.hp - Balance.AuraDamagePerSec * (1.0 - Balance.VampireDamageReductionFraction))
+  }
+
+  test("a vampire is not protected by an adjacent paladin's shield, unlike other creatures") {
+    val forest = Building(100, col = 5, row = 5, BuildingKind.Forest, Balance.ElfSpawnIntervalMs)
+    val sharedPos = GridConfig.cellCenter(6, 5)
+    val vampire = Creature(1, sharedPos, hp = 100.0, maxHp = 100.0, speedPerMs = 0.0, UnitKind.Vampire)
+    val paladin = Creature(
+      2,
+      sharedPos,
+      Balance.PaladinMaxHp,
+      Balance.PaladinMaxHp,
+      speedPerMs = 0.0,
+      UnitKind.Paladin
+    )
+    val state = withResources().copy(creatures = List(vampire, paladin), buildings = List(forest))
+    val result = CombatEngine.tick(state, deltaMs = 1000.0)
+    val byId = result.state.creatures.map(c => c.id -> c).toMap
+    // No Paladin reduction applied at all — only Vampire's own 50% flat reduction, same as
+    // if no Paladin were present (contrast with the Elf in the shield test above, which
+    // takes zero damage since the Paladin fully cancels Forest's aura for it).
+    assertEquals(byId(1).hp, vampire.hp - Balance.AuraDamagePerSec * (1.0 - Balance.VampireDamageReductionFraction))
+  }
+
+  test("a zombie reaching the goal is reported as an arrival, but plunders nothing") {
+    val goalPos = GridConfig.cellCenter(GridConfig.goalCell._1, GridConfig.goalCell._2)
+    val zombie = Creature(1, goalPos, Balance.ZombieMaxHp, Balance.ZombieMaxHp, speedPerMs = 0.0, UnitKind.Zombie)
+    val state = withResources(wood = 5.0, fire = 5.0).copy(creatures = List(zombie))
+    val result = CombatEngine.tick(state, deltaMs = 1.0)
+    assertEquals(result.arrivals, List(UnitKind.Zombie))
+    assertEquals(result.stolen, Map.empty[Resource, Double])
+  }
+
+  test("labs emit no unit and produce crystal over time") {
+    val labo = Building(100, col = 5, row = 5, BuildingKind.LaboNaturel, 0.0)
+    val state = withResources().copy(buildings = List(labo))
+    val result = CombatEngine.tick(state, deltaMs = 2000.0)
+    assertEquals(result.spawned, Map.empty[UnitKind, Int])
+    assertEquals(result.state.resources(Resource.Crystal), Balance.CrystalPerSecPerLaboNaturel * 2.0)
+  }
+
+  // ── Recherches loyales: boosts this maze's OWN building damage ───────────
+
+  test("Recherches loyales increases forest aura damage by the owning maze's own level") {
+    val forest = Building(100, col = 5, row = 5, BuildingKind.Forest, Balance.ElfSpawnIntervalMs)
+    val elf = Creature(1, GridConfig.cellCenter(6, 5), hp = 1000.0, maxHp = 1000.0, speedPerMs = 0.0, UnitKind.Elf)
+    val loyalesLevel = 2
+    val state = withResources()
+      .copy(creatures = List(elf), buildings = List(forest), researchLevels = Map(BuildingKind.LaboDeLaLoi -> loyalesLevel))
+    val result = CombatEngine.tick(state, deltaMs = 1000.0)
+    val bonus = Balance.LoyalesBuildingDamageIncreaseByLevel(loyalesLevel - 1)
+    assertEquals(result.state.creatures.head.hp, elf.hp - Balance.AuraDamagePerSec * (1.0 + bonus))
+  }
+
+  test("Recherches loyales increases watchtower damage the same way") {
+    val watchtower = Building(100, col = 5, row = 5, BuildingKind.Watchtower, 0.0)
+    val elf = Creature(1, GridConfig.cellCenter(6, 6), hp = 1000.0, maxHp = 1000.0, speedPerMs = 0.0, UnitKind.Elf)
+    val loyalesLevel = 1
+    val state = withResources()
+      .copy(creatures = List(elf), buildings = List(watchtower), researchLevels = Map(BuildingKind.LaboDeLaLoi -> loyalesLevel))
+    val result = CombatEngine.tick(state, deltaMs = 1000.0)
+    val bonus = Balance.LoyalesBuildingDamageIncreaseByLevel(loyalesLevel - 1)
+    assertEquals(result.state.creatures.head.hp, elf.hp - Balance.WatchtowerDamagePerSec * (1.0 + bonus))
+  }
+
+  test("without any Recherches loyales research, building damage is unchanged") {
+    val forest = Building(100, col = 5, row = 5, BuildingKind.Forest, Balance.ElfSpawnIntervalMs)
+    val elf = Creature(1, GridConfig.cellCenter(6, 5), hp = 1000.0, maxHp = 1000.0, speedPerMs = 0.0, UnitKind.Elf)
+    val state = withResources().copy(creatures = List(elf), buildings = List(forest))
+    val result = CombatEngine.tick(state, deltaMs = 1000.0)
+    assertEquals(result.state.creatures.head.hp, elf.hp - Balance.AuraDamagePerSec)
+  }
+
+  // ── Recherches chaotiques: boosts the ATTACKER's own plunder efficiency ──
+
+  test("Recherches chaotiques gives a normally non-plundering unit (Wolf) plunder on arrival") {
+    val goalPos = GridConfig.cellCenter(GridConfig.goalCell._1, GridConfig.goalCell._2)
+    val wolf = Creature(1, goalPos, Balance.WolfMaxHp, Balance.WolfMaxHp, speedPerMs = 0.0, UnitKind.Wolf)
+    val state = withResources(wood = 100.0, fire = 100.0).copy(creatures = List(wolf))
+    val chaotiquesLevel = 3
+    val result = CombatEngine.tick(state, deltaMs = 1.0, attackerResearchLevels = Map(BuildingKind.LaboDuChaos -> chaotiquesLevel))
+    val bonus = Balance.ChaotiquesPlunderBonusByLevel(chaotiquesLevel - 1)
+    assertEquals(result.stolen.getOrElse(Resource.Wood, 0.0), bonus)
+    assertEquals(result.stolen.getOrElse(Resource.Fire, 0.0), bonus)
+  }
+
+  test("Recherches chaotiques adds its flat bonus on top of a unit's existing plunder, per resource") {
+    val goalPos = GridConfig.cellCenter(GridConfig.goalCell._1, GridConfig.goalCell._2)
+    val goblin = Creature(1, goalPos, Balance.GoblinMaxHp, Balance.GoblinMaxHp, speedPerMs = 0.0, UnitKind.Goblin)
+    val state = withResources(wood = 100.0, fire = 100.0).copy(creatures = List(goblin))
+    val chaotiquesLevel = 1
+    val result = CombatEngine.tick(state, deltaMs = 1.0, attackerResearchLevels = Map(BuildingKind.LaboDuChaos -> chaotiquesLevel))
+    val bonus = Balance.ChaotiquesPlunderBonusByLevel(chaotiquesLevel - 1)
+    assertEquals(result.stolen.getOrElse(Resource.Wood, 0.0), Balance.PlunderPerUnit + bonus)
+  }
+
+  test("without attackerResearchLevels, plunder matches today's exact behavior (no bonus, empty for Wolf)") {
+    val goalPos = GridConfig.cellCenter(GridConfig.goalCell._1, GridConfig.goalCell._2)
+    val wolf = Creature(1, goalPos, Balance.WolfMaxHp, Balance.WolfMaxHp, speedPerMs = 0.0, UnitKind.Wolf)
+    val state = withResources(wood = 100.0, fire = 100.0).copy(creatures = List(wolf))
+    val result = CombatEngine.tick(state, deltaMs = 1.0)
+    assertEquals(result.stolen, Map.empty[Resource, Double])
   }

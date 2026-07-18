@@ -10,12 +10,16 @@ import towerdefense.domain.geometry.Vec2
 // purely observational, nothing else in CombatEngine reads it back.
 // arrivals: the UnitKind of every creature that reached the goal this tick, including
 // ones with no plunder ability (Paladin, Wolf) that `stolen` alone would miss entirely.
+// corrupted: buildings this maze just lost to an enemy Zombie/Vampire finishing a
+// corruption (Corruption.md) — like `stolen`, the caller credits their cost (in full,
+// see Corrosion's doc) and a count toward the corrupting side's own Mort victory tally.
 case class TickResult(
     state: MazeState,
     spawned: Map[UnitKind, Int],
     stolen: Map[Resource, Double],
     deaths: List[Death],
-    arrivals: List[UnitKind]
+    arrivals: List[UnitKind],
+    corrupted: List[Corrosion]
 )
 
 // Which damage source(s) killed a creature this tick — a *type* of source, not which
@@ -26,14 +30,34 @@ enum DeathCause derives CanEqual:
 
 case class Death(creatureId: Long, kind: UnitKind, cause: DeathCause)
 
+// A building destroyed by corruption this tick (Corruption.md) — cost is the full
+// BuildingSpecs cost of `kind`, refunded to the corrupting creature's owner by
+// BattleEngine (unlike Demolition's partial self-refund). `cost` already reflects only
+// the last upgrade's price for an upgraded kind like Jungle (see BuildingSpecs/
+// Placement.upgradeBuilding — cost was never modeled as cumulative), matching
+// Corruption.md's own clarification that an upgraded building only refunds its last
+// upgrade's cost.
+case class Corrosion(buildingId: Long, kind: BuildingKind, col: Int, row: Int, cost: Map[Resource, Double])
+
 object CombatEngine:
 
-  def tick(state: MazeState, deltaMs: Double): TickResult =
-    val (s1, stolen, arrivals) = moveCreatures(state, deltaMs)
+  // attackerResearchLevels: the *opponent's* researchLevels (i.e. whoever owns the
+  // creatures walking `state`) — only Recherches chaotiques reads it (see moveCreatures),
+  // needed because a creature's plunder is normally a pure function of its kind, but
+  // chaotiques makes it depend on research the creature's owner did in their *own* maze,
+  // invisible from `state` alone. Defaults to empty so every caller untouched by Science
+  // (every existing test, the live browser game before a match ever researches anything)
+  // keeps today's exact behavior with no plumbing required.
+  def tick(state: MazeState, deltaMs: Double, attackerResearchLevels: Map[BuildingKind, Int] = Map.empty): TickResult =
+    val (s1, stolen, arrivals) = moveCreatures(state, deltaMs, attackerResearchLevels)
     val (s2, deaths) = applyDamageSources(s1, deltaMs)
-    val s3 = produceResources(s2, deltaMs)
-    val (s4, spawned) = advanceSpawnTimers(s3, deltaMs)
-    TickResult(s4, spawned, stolen, deaths, arrivals)
+    val (s3, corrupted, hitsByCreature) = applyCorruption(s2, deltaMs)
+    val s3a = healBuildingCorruption(s3, deltaMs)
+    val s3b = healSummoners(s3a, hitsByCreature, deltaMs)
+    val s4 = produceResources(s3b, deltaMs)
+    val (s5, spawned) = advanceSpawnTimers(s4, deltaMs)
+    val s6 = advanceCreatureSummons(s5, deltaMs)
+    TickResult(s6, spawned, stolen, deaths, arrivals, corrupted)
 
   // Re-pathfinds every creature from its current cell to the goal each tick, avoiding
   // building cells — no cached path to invalidate when a new building changes the maze.
@@ -45,13 +69,15 @@ object CombatEngine:
   // with no plunder ability entirely.
   private def moveCreatures(
       state: MazeState,
-      deltaMs: Double
+      deltaMs: Double,
+      attackerResearchLevels: Map[BuildingKind, Int]
   ): (MazeState, Map[Resource, Double], List[UnitKind]) =
     val blocked = state.buildingCells
+    val angelCells = state.buildings.filter(_.kind == BuildingKind.Angel).map(b => (b.col, b.row)).toSet
     val (remaining, arrived) =
-      state.creatures.map(stepCreature(_, state.creatures, blocked, deltaMs)).partitionMap(identity)
+      state.creatures.map(stepCreature(_, state.creatures, blocked, angelCells, deltaMs)).partitionMap(identity)
     val plundered = arrived
-      .flatMap(c => CreatureSpecs.all(c.kind).plunder)
+      .flatMap(c => effectivePlunder(c.kind, attackerResearchLevels))
       .groupMapReduce(_._1)(_._2)(_ + _)
     val stolen = plundered.map { case (res, amount) =>
       res -> math.min(state.resources.getOrElse(res, 0.0), amount)
@@ -64,52 +90,91 @@ object CombatEngine:
     )
     (next, stolen, arrived.map(_.kind))
 
+  // Recherches chaotiques.md: "Augmente l'efficacite du pillage de chaque unite (meme
+  // celles qui ne pillent pas initialement) dans chaque ressource de: X" — a flat bonus
+  // added to *every* resource (not just ones the kind already plunders), so at a high
+  // enough chaotiques level even Paladin/Wolf/Zombie/Vampire arrivals start stealing.
+  private def effectivePlunder(kind: UnitKind, attackerResearchLevels: Map[BuildingKind, Int]): Map[Resource, Double] =
+    val chaotiquesLevel = attackerResearchLevels.getOrElse(BuildingKind.LaboDuChaos, 0)
+    if chaotiquesLevel <= 0 then CreatureSpecs.all(kind).plunder
+    else
+      val bonus = ResearchSpecs.all(BuildingKind.LaboDuChaos).effectAtLevel(chaotiquesLevel)
+      val base = CreatureSpecs.all(kind).plunder
+      Resource.values.map(res => res -> (base.getOrElse(res, 0.0) + bonus)).toMap
+
+  // Necromancien.md: "pendant 1 seconde, il reste immobile" (see CreatureSpec.
+  // spawnFreezeMs/Creature.frozenMs) — a frozen creature doesn't pathfind or move at all
+  // this tick, just burns down its own freeze timer; still takes damage normally (this
+  // check only short-circuits movement, applyDamageSources doesn't look at frozenMs).
   private def stepCreature(
       creature: Creature,
       allCreatures: List[Creature],
       blocked: Set[(Int, Int)],
+      angelCells: Set[(Int, Int)],
       deltaMs: Double
   ): Either[Creature, Creature] =
-    val currentCell = GridConfig.cellOf(creature.pos)
-    if currentCell == GridConfig.goalCell then Right(creature)
+    if creature.frozenMs > 0 then Left(creature.copy(frozenMs = math.max(0.0, creature.frozenMs - deltaMs)))
     else
-      Pathfinding.shortestPath(currentCell, GridConfig.goalCell, blocked) match
-        case None => Left(creature) // no route right now (shouldn't happen, placement guards this)
-        case Some(path) => Left(advanceTowards(creature, allCreatures, path, deltaMs))
+      val currentCell = GridConfig.cellOf(creature.pos)
+      if currentCell == GridConfig.goalCell then Right(creature)
+      else
+        Pathfinding.shortestPath(currentCell, GridConfig.goalCell, blocked) match
+          case None => Left(creature) // no route right now (shouldn't happen, placement guards this)
+          case Some(path) => Left(advanceTowards(creature, allCreatures, angelCells, path, deltaMs))
 
   private def advanceTowards(
       creature: Creature,
       allCreatures: List[Creature],
+      angelCells: Set[(Int, Int)],
       path: List[(Int, Int)],
       deltaMs: Double
   ): Creature =
     val nextCell = if path.size > 1 then path(1) else path.head
     val target = GridConfig.cellCenter(nextCell._1, nextCell._2)
-    val speed = effectiveSpeedPerMs(creature, allCreatures)
+    val speed = effectiveSpeedPerMs(creature, allCreatures, angelCells)
     creature.copy(pos = moveToward(creature.pos, target, speed * deltaMs))
 
   // Loup.md: "augmente la vitesse de deplacement des unites a 2 cases de 50%" — any
   // Wolf within range multiplies another creature's speed (not its own; the boost is for
   // *other* units, Wolf's own speed is already baked into its CreatureSpec). Multiple
   // nearby Wolves don't stack — presence of at least one is enough, mirroring how
-  // Paladin's shield is binary rather than additive per source.
-  private def effectiveSpeedPerMs(creature: Creature, allCreatures: List[Creature]): Double =
+  // Paladin's shield is binary rather than additive per source. Ange.md's slow ("ralentit
+  // leur vitesse de deplacement de 25%") is the opposite kind of aura — a *building*
+  // debuffing any enemy creature adjacent to it (same adjacency rule as its own damage,
+  // see accumulateAuraHits) — and stacks multiplicatively with Wolf's boost rather than
+  // overriding it, since nothing in Ange.md/Loup.md says otherwise.
+  private def effectiveSpeedPerMs(creature: Creature, allCreatures: List[Creature], angelCells: Set[(Int, Int)]): Double =
     val cell = GridConfig.cellOf(creature.pos)
     val boosted = allCreatures.exists(other =>
       other.id != creature.id && other.kind == UnitKind.Wolf &&
         chebyshevDistance(cell, GridConfig.cellOf(other.pos)) <= Balance.WolfSpeedAuraRangeCells
     )
-    if boosted then creature.speedPerMs * Balance.WolfSpeedAuraMultiplier else creature.speedPerMs
+    val slowed = angelCells.exists(ac => Pathfinding.neighbors(ac).contains(cell))
+    val boostMultiplier = if boosted then Balance.WolfSpeedAuraMultiplier else 1.0
+    val slowMultiplier = if slowed then 1.0 - Balance.AngelSlowFraction else 1.0
+    creature.speedPerMs * boostMultiplier * slowMultiplier
 
   private def moveToward(pos: Vec2, target: Vec2, maxDist: Double): Vec2 =
     val delta = target - pos
     if delta.length <= maxDist then target else pos + delta.normalized * maxDist
 
-  // Buildings with the Ent aura — Foret.md introduces it, and Jungle (an upgrade of
-  // Foret) inherits it since "Amelioration" is cumulative; Grove/Bosquet, the base tier,
-  // doesn't have it yet. domain-visible (not private) since CompositeStrategy's maze
-  // scoring needs the same set to value routing paths past these buildings.
-  private[domain] val auraBuildingKinds: Set[BuildingKind] = Set(BuildingKind.Forest, BuildingKind.Jungle)
+  // Buildings that damage every enemy creature standing adjacent to them, each at its own
+  // rate (see auraDamagePerSecFor) — Foret.md introduces the Ent aura, Jungle (an upgrade
+  // of Foret) inherits it since "Amelioration" is cumulative (Grove/Bosquet, the base tier,
+  // doesn't have it yet), and Ange.md adds a third, independently-costed source at a
+  // different rate (plus its own slow debuff — see effectiveSpeedPerMs). domain-visible
+  // (not private) since CompositeStrategy's maze scoring needs the same set to value
+  // routing paths past these buildings — that heuristic (LayoutPolicy.dangerScore) still
+  // assumes a single flat Balance.AuraDamagePerSec per aura cell, so it currently
+  // underrates how dangerous a path past an Angel specifically is; only the real per-tick
+  // damage below (applyDamageSources) needs to be exact.
+  private[domain] val auraBuildingKinds: Set[BuildingKind] =
+    Set(BuildingKind.Forest, BuildingKind.Jungle, BuildingKind.Angel, BuildingKind.PassingGate)
+
+  private def auraDamagePerSecFor(kind: BuildingKind): Double = kind match
+    case BuildingKind.Angel       => Balance.AngelDamagePerSec
+    case BuildingKind.PassingGate => Balance.PassingGateDamagePerSec
+    case _                        => Balance.AuraDamagePerSec
 
   // Two independent damage sources, combined before Paladin shielding is applied once to
   // the total (not once per source) — Forest/Jungle deal passive damage-over-time to
@@ -123,12 +188,16 @@ object CombatEngine:
   // math is intentionally kept as kind-based special cases, not folded into BuildingSpec/
   // CreatureSpec (see the refactor's confirmed scope).
   private def applyDamageSources(state: MazeState, deltaMs: Double): (MazeState, List[Death]) =
-    val forestDamagePerHit = Balance.AuraDamagePerSec * deltaMs / 1000.0
-    val watchtowerDamagePerHit = Balance.WatchtowerDamagePerSec * deltaMs / 1000.0
+    // Recherches loyales.md: "Augmente les degats infliges par les batiments" — purely
+    // local to `state` (the maze whose own buildings are dealing the damage), unlike
+    // chaotiques' plunder bonus above which needs the *opponent's* research instead.
+    val loyalesLevel = state.researchLevels.getOrElse(BuildingKind.LaboDeLaLoi, 0)
+    val loyalesMultiplier = 1.0 + ResearchSpecs.all(BuildingKind.LaboDeLaLoi).effectAtLevel(loyalesLevel)
+    val watchtowerDamagePerHit = Balance.WatchtowerDamagePerSec * deltaMs / 1000.0 * loyalesMultiplier
     val forests = state.buildings.filter(b => auraBuildingKinds.contains(b.kind))
     val watchtowers = state.buildings.filter(_.kind == BuildingKind.Watchtower)
     val fromForests = forests.foldLeft(Map.empty[Long, Double])((acc, f) =>
-      accumulateAuraHits(f, state.creatures, forestDamagePerHit, acc)
+      accumulateAuraHits(f, state.creatures, auraDamagePerSecFor(f.kind) * deltaMs / 1000.0 * loyalesMultiplier, acc)
     )
     val fromTowers = watchtowers.foldLeft(Map.empty[Long, Double])((acc, w) =>
       accumulateWatchtowerHit(w, state.creatures, watchtowerDamagePerHit, acc)
@@ -138,15 +207,54 @@ object CombatEngine:
     val shielded = paladinShieldedIds(state.creatures)
     val damaged = state.creatures.map { c =>
       val raw = damageByCreature.getOrElse(c.id, 0.0)
-      val taken = if shielded.contains(c.id) then math.max(0.0, raw - reductionPerHit) else raw
+      // Vampire.md: "Reduit les degats qu'il subit de 50% (mais n'est pas protege par
+      // l'aura du Paladin)" — explicitly excluded from Paladin's shield even when
+      // standing adjacent to one, and instead gets its own unconditional flat reduction
+      // applied to whatever raw damage it takes from any source.
+      val afterShield =
+        if c.kind != UnitKind.Vampire && shielded.contains(c.id) then math.max(0.0, raw - reductionPerHit)
+        else raw
+      val taken =
+        if c.kind == UnitKind.Vampire then afterShield * (1.0 - Balance.VampireDamageReductionFraction)
+        else afterShield
       c.copy(hp = c.hp - taken)
     }
     val dead = damaged.filter(_.hp <= 0)
     val deaths = dead.map(c => Death(c.id, c.kind, deathCause(c.id, fromForests, fromTowers)))
-    (state.copy(creatures = damaged.filter(_.hp > 0)), deaths)
+    val withoutDead = state.copy(creatures = damaged.filter(_.hp > 0))
+    (applyPassingGateHarvest(withoutDead, dead, deltaMs), deaths)
 
   private def mergeSum(a: Map[Long, Double], b: Map[Long, Double]): Map[Long, Double] =
     b.foldLeft(a) { case (acc, (id, amount)) => acc.updated(id, acc.getOrElse(id, 0.0) + amount) }
+
+  // Portail.md: any creature dying on one of a PassingGate's 4 orthogonally-adjacent cells
+  // this tick — regardless of what actually killed it (its own aura, a Watchtower, even a
+  // Forest/Angel aura elsewhere reaching the same cell) — earns the owning maze a Shadow
+  // reward equal to PassingGateDeathShadowFraction of `state`'s OWN current total resource
+  // stockpile (summed across all 5 Resource kinds, snapshotted once before any reward is
+  // added, so multiple qualifying deaths this tick don't compound off each other's reward).
+  // Two gates both adjacent to the same death each independently harvest it, and each also
+  // sets its own flashMs (Building.flashMs's doc) to the UI's kill-flash duration; a gate
+  // with no qualifying death nearby this tick just counts flashMs down toward 0 instead,
+  // same shape as spawnCountdownMs/frozenMs elsewhere in the domain.
+  private def applyPassingGateHarvest(state: MazeState, dead: List[Creature], deltaMs: Double): MazeState =
+    val deadCells = dead.map(c => GridConfig.cellOf(c.pos))
+    val totalResourcesSnapshot = state.resources.values.sum
+    val (buildings, shadowReward) =
+      state.buildings.foldLeft((List.empty[Building], 0.0)) { case ((acc, reward), b) =>
+        if b.kind != BuildingKind.PassingGate then (b :: acc, reward)
+        else
+          val adjacent = Pathfinding.neighbors((b.col, b.row)).toSet
+          val harvestedCount = deadCells.count(adjacent.contains)
+          if harvestedCount > 0 then
+            val gateReward = harvestedCount * Balance.PassingGateDeathShadowFraction * totalResourcesSnapshot
+            (b.copy(flashMs = Balance.PassingGateFlashMs) :: acc, reward + gateReward)
+          else (b.copy(flashMs = math.max(0.0, b.flashMs - deltaMs)) :: acc, reward)
+      }
+    val resources =
+      if shadowReward > 0 then state.resources.updated(Resource.Shadow, state.resources.getOrElse(Resource.Shadow, 0.0) + shadowReward)
+      else state.resources
+    state.copy(buildings = buildings.reverse, resources = resources)
 
   // A creature only dies from a source it actually took damage from this tick — Paladin
   // shielding can zero out one source's contribution to `damaged` without it being absent
@@ -206,14 +314,206 @@ object CombatEngine:
     val shieldedCells = paladinCells.flatMap(c => c :: Pathfinding.neighbors(c)).toSet
     creatures.filter(c => shieldedCells.contains(GridConfig.cellOf(c.pos))).map(_.id).toSet
 
+  // Zombie.md/Vampire.md/Ame.md's corruption rates — Corruption.md: "Les unites de cette
+  // faction corrompent les batiments qu'elles touchent", no restriction to particular
+  // building kinds, so every building in `state` is a fair target the same way Forest's
+  // aura hits every creature, not just certain kinds of them.
+  private val corruptionRatesPerSec: Map[UnitKind, Double] = Map(
+    UnitKind.Zombie -> Balance.ZombieCorruptionPercentPerSec,
+    UnitKind.Vampire -> Balance.VampireCorruptionPercentPerSec,
+    UnitKind.Soul -> Balance.SoulCorruptionPercentPerSec
+  )
+
+  // Mirrors applyDamageSources' aura pattern but building-side: instead of a *building*
+  // hitting *creatures* on adjacent cells, a *creature* corrupts *buildings* on adjacent
+  // cells. Multiple corrupting creatures near the same building stack (summed, same as
+  // multiple Forests would stack aura damage on a creature between them). A building
+  // whose corruptionPercent reaches Balance.CorruptionMaxPercent is removed from the
+  // maze and reported as a Corrosion for the caller to refund.
+  // The third return value — how many buildings *each individual corruptor* is adjacent
+  // to this tick — exists solely for Ame.md's heal-the-summoner effect (see
+  // healSummoners): every other corruptor (Zombie/Vampire) simply has no `summonedBy` to
+  // credit it to, so it's inert for them.
+  private def applyCorruption(state: MazeState, deltaMs: Double): (MazeState, List[Corrosion], Map[Long, Int]) =
+    val corruptors = state.creatures.filter(c => corruptionRatesPerSec.contains(c.kind))
+    if corruptors.isEmpty then (state, Nil, Map.empty)
+    else
+      val corruptionByCell = corruptors
+        .groupMapReduce(c => GridConfig.cellOf(c.pos))(c => corruptionRatesPerSec(c.kind) * deltaMs / 1000.0)(_ + _)
+      val updated = state.buildings.map { b =>
+        val hits = Pathfinding.neighbors((b.col, b.row)).flatMap(corruptionByCell.get).sum
+        if hits <= 0.0 then b
+        else b.copy(corruptionPercent = math.min(Balance.CorruptionMaxPercent, b.corruptionPercent + hits))
+      }
+      val (destroyed, remaining) = updated.partition(_.corruptionPercent >= Balance.CorruptionMaxPercent)
+      val corrosions = destroyed.map(b => Corrosion(b.id, b.kind, b.col, b.row, BuildingSpecs.all(b.kind).cost))
+      val buildingCellsBefore = state.buildings.map(b => (b.col, b.row)).toSet
+      val hitCountByCreature = corruptors.map { c =>
+        val cell = GridConfig.cellOf(c.pos)
+        c.id -> Pathfinding.neighbors(cell).count(buildingCellsBefore.contains)
+      }.toMap
+      (state.copy(buildings = remaining), corrosions, hitCountByCreature)
+
+  // Not from the vault's own numbers — added at the project owner's explicit request (see
+  // Balance.GroveCorruptionHealPercentPerSec's doc): each tier heals at its own rate.
+  private val natureCorruptionHealPercentPerSec: Map[BuildingKind, Double] = Map(
+    BuildingKind.Grove -> Balance.GroveCorruptionHealPercentPerSec,
+    BuildingKind.Forest -> Balance.ForestCorruptionHealPercentPerSec,
+    BuildingKind.Jungle -> Balance.JungleCorruptionHealPercentPerSec
+  )
+
+  // Mirrors applyCorruption's shape but in reverse (reduces corruptionPercent instead of
+  // raising it) and building-to-building rather than creature-to-building: a Nature
+  // building heals itself and its 8 surrounding buildings (Chebyshev distance <= 1, unlike
+  // the 4-orthogonal-neighbor rule everywhere else in this file — self-healing at distance
+  // 0 needs the wider metric anyway). Multiple nearby healers stack, same as multiple
+  // corrupting creatures do above. Runs after applyCorruption so it can partially (or
+  // fully) offset the same tick's corruption increase, but can't save a building that
+  // already hit CorruptionMaxPercent and was destroyed this tick — that's resolved first.
+  private def healBuildingCorruption(state: MazeState, deltaMs: Double): MazeState =
+    val healers = state.buildings.filter(b => natureCorruptionHealPercentPerSec.contains(b.kind))
+    if healers.isEmpty || !state.buildings.exists(_.corruptionPercent > 0.0) then state
+    else
+      state.copy(buildings = state.buildings.map { b =>
+        if b.corruptionPercent <= 0.0 then b
+        else
+          val heal = healers
+            .filter(h => chebyshevDistance((h.col, h.row), (b.col, b.row)) <= 1)
+            .map(h => natureCorruptionHealPercentPerSec(h.kind) * deltaMs / 1000.0)
+            .sum
+          if heal <= 0.0 then b else b.copy(corruptionPercent = math.max(0.0, b.corruptionPercent - heal))
+      })
+
+  // Ame.md: "Chaque fois qu'elle corrompt un batiment, elle soigne le Necromancien... de 1
+  // PV... Si sa corruption touche plusieurs batiments a la fois, elle soigne davantage" —
+  // credited to the *specific* Necromancer each Soul was summoned by (Creature.summonedBy),
+  // not any Necromancer present in the maze. A Soul whose summoner has already died simply
+  // heals no one (summonedBy no longer matches any living creature) — same "lost, not an
+  // error" shape as Corrosion crediting a side that has since changed.
+  private def healSummoners(state: MazeState, hitsByCreature: Map[Long, Int], deltaMs: Double): MazeState =
+    val healPerSummoner = state.creatures
+      .filter(c => c.kind == UnitKind.Soul && c.summonedBy.isDefined && hitsByCreature.getOrElse(c.id, 0) > 0)
+      .groupMapReduce(_.summonedBy.get)(c => hitsByCreature(c.id) * Balance.SoulHealPerSecPerBuilding * deltaMs / 1000.0)(
+        _ + _
+      )
+    if healPerSummoner.isEmpty then state
+    else
+      state.copy(creatures = state.creatures.map { c =>
+        healPerSummoner.get(c.id) match
+          case Some(amount) => c.copy(hp = math.min(c.maxHp, c.hp + amount))
+          case None         => c
+      })
+
+  // Necromancien.md: "Toutes les 5 secondes, invoque une Ame" — a *creature* spawning
+  // another creature directly into the same maze it's currently walking, unlike every
+  // building's spawn (which always crosses into the opponent's maze via BattleEngine's
+  // deliverUnits). Mirrors advanceSpawnTimers' countdown shape, but appends straight to
+  // `state.creatures` and consumes `state.nextId` itself instead of returning a count for
+  // the caller to deliver elsewhere.
+  private def advanceCreatureSummons(state: MazeState, deltaMs: Double): MazeState =
+    val summoners = state.creatures.filter(c => CreatureSpecs.all(c.kind).spawns.isDefined)
+    if summoners.isEmpty then state
+    else
+      val blocked = state.buildingCells
+      val (updatedSummoners, newCreatures, nextId) =
+        summoners.foldLeft((List.empty[Creature], List.empty[Creature], state.nextId)) {
+          case ((accUpdated, accNew, id), summoner) =>
+            val summonerSpec = CreatureSpecs.all(summoner.kind)
+            val (summonedKind, intervalMs) = summonerSpec.spawns.get
+            val remaining = summoner.spawnCountdownMs - deltaMs
+            if remaining > 0 then (summoner.copy(spawnCountdownMs = remaining) :: accUpdated, accNew, id)
+            else
+              val spec = CreatureSpecs.all(summonedKind)
+              val spawnPos =
+                if summonerSpec.spawnAtNextCell then nextPathCellCenter(summoner, blocked) else summoner.pos
+              // Arbre Anime.md: a self-clone (summonedKind == summoner.kind, i.e. a Tree
+              // cloning a Tree) is smaller than whatever made it, not just the original —
+              // any creature reachable through this chain can keep cloning. A different-
+              // kind summon (e.g. Necromancer -> Soul) is unaffected, full size as always.
+              val childSizeFraction =
+                if summonedKind == summoner.kind then
+                  math.max(Balance.TreeMinCloneSizeFraction, summoner.sizeFraction - Balance.TreeCloneSizeStepFraction)
+                else 1.0
+              val summoned = Creature(
+                id,
+                spawnPos,
+                spec.maxHp * childSizeFraction,
+                spec.maxHp * childSizeFraction,
+                spec.speedPerMs,
+                summonedKind,
+                spawnCountdownMs = spec.spawns.map(_._2).getOrElse(0.0),
+                summonedBy = Some(summoner.id),
+                sizeFraction = childSizeFraction
+              )
+              (
+                summoner.copy(
+                  spawnCountdownMs = remaining + intervalMs,
+                  frozenMs = summonerSpec.spawnFreezeMs
+                ) :: accUpdated,
+                summoned :: accNew,
+                id + 1
+              )
+        }
+      val summonerIds = summoners.map(_.id).toSet
+      val untouched = state.creatures.filterNot(c => summonerIds.contains(c.id))
+      state.copy(creatures = untouched ++ updatedSummoners ++ newCreatures, nextId = nextId)
+
+  // Arbre Anime.md: a self-cloning Tree's copy appears one cell further along its own path
+  // (not on top of it, like the Necromancer/Soul's same-position summon — see
+  // CreatureSpec.spawnAtNextCell) — falls back to the summoner's own position if it's
+  // already at the goal or (shouldn't happen, placement guards this) has no route at all.
+  private def nextPathCellCenter(summoner: Creature, blocked: Set[(Int, Int)]): Vec2 =
+    val currentCell = GridConfig.cellOf(summoner.pos)
+    if currentCell == GridConfig.goalCell then summoner.pos
+    else
+      Pathfinding.shortestPath(currentCell, GridConfig.goalCell, blocked) match
+        case Some(path) if path.size > 1 => GridConfig.cellCenter(path(1)._1, path(1)._2)
+        case _                           => summoner.pos
+
   // Exposed (not private) so any other reader of live production rates — the UI's stock
   // display, tooltips — computes the exact same number tick applies, instead of
   // re-deriving `count * rate` by hand and risking it drift out of sync.
   def productionPerSec(state: MazeState, resource: Resource): Double =
-    state.buildings
+    val base = state.buildings
       .groupBy(_.kind)
-      .map { case (kind, bs) => bs.size * BuildingSpecs.all(kind).produces.getOrElse(resource, 0.0) }
+      .map { case (kind, bs) =>
+        bs.size * BuildingSpecs.all(kind).produces.getOrElse(resource, 0.0) *
+          researchProductionMultiplier(state, kind, resource)
+      }
       .sum
+    base * (1.0 + engendreBoost(state, resource))
+
+  // Note sur les laboratoires.md: "Chaque amelioration (recherche) dans un labo augmente sa
+  // production de crystal de 75% par rapport au niveau precedent" — a lab's own research
+  // level compounds ONLY its own Crystal output, not any other building's production of any
+  // other resource. Exposed (not private) so GameApp's per-building tooltip (effectiveRate)
+  // shows the exact same number this applies, same reasoning as engendreBoost below.
+  def researchProductionMultiplier(state: MazeState, kind: BuildingKind, resource: Resource): Double =
+    if resource != Resource.Crystal then 1.0
+    else math.pow(1.0 + Balance.LaboCrystalBoostPerResearchLevel, state.researchLevels.getOrElse(kind, 0).toDouble)
+
+  // Engendre.md's resource-generation cycle, keyed by *target* — the resource whose
+  // producer-buildings boost `resource`'s own production rate (see Balance.
+  // EngendreBoostPerBuilding's doc): Wood's boost comes from Light producers, Fire's from
+  // Wood producers, Shadow's from Fire producers, Crystal's from Shadow producers, Light's
+  // from Crystal producers — the same 5-cycle Engendre.md itself describes.
+  private val engendreSource: Map[Resource, Resource] = Map(
+    Resource.Fire -> Resource.Wood,
+    Resource.Shadow -> Resource.Fire,
+    Resource.Crystal -> Resource.Shadow,
+    Resource.Light -> Resource.Crystal,
+    Resource.Wood -> Resource.Light
+  )
+
+  // Exposed (not private) so any other reader of the live boost — GameApp's per-building
+  // hover tooltip, which shows *this building's* effective rate, not the maze-wide total
+  // productionPerSec already reports — computes the exact same multiplier, instead of
+  // re-deriving "which resource sources this one" and risking it drift.
+  def engendreBoost(state: MazeState, resource: Resource): Double =
+    val source = engendreSource(resource)
+    val sourceBuildingCount =
+      state.buildings.count(b => BuildingSpecs.all(b.kind).produces.getOrElse(source, 0.0) > 0.0)
+    Balance.EngendreBoostPerBuilding * sourceBuildingCount
 
   private def produceResources(state: MazeState, deltaMs: Double): MazeState =
     val produced = Resource.values.map(res => res -> productionPerSec(state, res) * deltaMs / 1000.0)

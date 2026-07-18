@@ -5,6 +5,13 @@ package towerdefense.sim
 // contract, so nothing here asserts a specific outcome — just shape and termination.
 class SimulatorTest extends munit.FunSuite:
 
+  // A recent rebalance (Balance.scala: cheaper Grove/lower Jungle-upgrade cost) makes
+  // LinearStrategy accumulate far more buildings before either side reaches a victory
+  // condition — the maxTicks=3_000 fixture below now regularly needs 15s+ of wall time per
+  // match (more buildings means more per-tick work), well past munit's 30s default.
+  override val munitTimeout: _root_.scala.concurrent.duration.Duration =
+    _root_.scala.concurrent.duration.Duration(120, "s")
+
   test("linear vs linear runs to completion and returns well-formed tallies") {
     val tallies = Simulator.runMatches("linear", "linear", matches = 5, maxTicks = 300, deltaMs = 100.0)
     assertEquals(tallies.size, 2)
