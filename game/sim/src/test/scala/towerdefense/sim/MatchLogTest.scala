@@ -140,7 +140,7 @@ class MatchLogTest extends munit.FunSuite:
     val playerState = maze(buildings = List(forest), resources = Map(Resource.Wood -> 45.0), resourcesPlundered = 0.0)
     val aiState = maze(resources = Map(Resource.Fire -> 30.0), resourcesPlundered = 12.0)
     val line = MatchLog.snapshotLine(tick = 500, battle(playerState, aiState))
-    val playerForestTarget = VictoryConditions.forestTarget(aiState)
+    val playerForestTarget = VictoryConditions.forestTarget(playerState, aiState)
     val aiPlunderTarget = VictoryConditions.plunderTarget(playerState)
     assert(line.startsWith("tick 500  SNAPSHOT  "), line)
     assert(line.contains(s"a: forests 1/${playerForestTarget.toInt}"), line)

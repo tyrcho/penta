@@ -588,7 +588,8 @@ private val LaboDuChaosTooltip =
 private val StonehengeTooltip =
   s"Stonehenge — cost ${Balance.StonehengeCostWood.toInt} wood. Spawns an Arbre Anime every " +
     s"${(Balance.StonehengeSpawnIntervalMs / 1000).toInt}s — it raids the opponent like any " +
-    s"other unit, and can keep cloning smaller copies of itself along the way"
+    s"other unit, keeps cloning smaller copies of itself along the way, and counts toward " +
+    s"your own forest victory the whole time"
 
 private val BuildingTooltips: Map[BuildingKind, String] = Map(
   BuildingKind.Grove -> GroveTooltip,
@@ -1566,7 +1567,8 @@ private def hoverText(target: HoverTarget, battle: BattleState): Option[String] 
             val sizeNote = if c.sizeFraction < 1.0 then s" (${(c.sizeFraction * 100).toInt}% size)" else ""
             s"Arbre Anime$sizeNote — HP ${c.hp.toInt}/${c.maxHp.toInt}, doesn't plunder; every " +
               s"${(Balance.TreeCloneIntervalMs / 1000).toInt}s stops for ${(Balance.TreeCloneFreezeMs / 1000).toInt}s " +
-              s"and clones a smaller copy of itself (down to ${(Balance.TreeMinCloneSizeFraction * 100).toInt}% size)"
+              s"and clones a smaller copy of itself (down to ${(Balance.TreeMinCloneSizeFraction * 100).toInt}% size); " +
+              s"counts toward its owner's forest victory the whole time"
           case _ =>
             val (name, plunders) = c.kind match
               case UnitKind.Elf => ("Elf", s"${Balance.PlunderPerUnit.toInt} wood")
@@ -1695,11 +1697,10 @@ private def updateMazePanel(prefix: String, maze: MazeState, opponent: MazeState
     s"(+${formatDecimal(CombatEngine.productionPerSec(maze, Resource.Shadow))}/s)"
   document.getElementById(s"$prefix-crystal-rate").textContent =
     s"(+${formatDecimal(CombatEngine.productionPerSec(maze, Resource.Crystal))}/s)"
-  // Only Forest/Jungle count as real forests (see VictoryConditions.realForestKinds) — a
-  // Grove is still just a bush (Bosquet.md's own asset), not yet a forest.
-  val realForestKinds = Set(BuildingKind.Forest, BuildingKind.Jungle)
-  val forestCount = maze.buildings.count(b => realForestKinds.contains(b.kind))
-  val forestTarget = VictoryConditions.forestTarget(opponent)
+  // Same number VictoryConditions.evaluate itself compares against (real Forest/Jungle
+  // buildings plus any of this maze's own Trees currently raiding `opponent` — see its doc).
+  val forestCount = VictoryConditions.forestCount(maze, opponent)
+  val forestTarget = VictoryConditions.forestTarget(maze, opponent)
   val plunderTarget = VictoryConditions.plunderTarget(opponent)
   val corruptionTarget = VictoryConditions.corruptionTarget(opponent)
   document.getElementById(s"$prefix-forests").textContent = s"$forestCount/${forestTarget.toInt}"

@@ -11,4 +11,8 @@ n'importe lequel de ses clones) fait 80% de la taille et des PV de celui qui l'a
 peut lui-meme se cloner de la meme facon — jusqu'a un minimum de 20% de la taille
 d'origine.
 
-![Arbre Animé](../../game/assets/tree/walk-00.png)
+Part attaquer l'adversaire comme n'importe quelle autre unite, mais compte quand meme
+pour la condition de victoire de la Nature (Expansion Inarrêtable) de son proprietaire
+tant qu'il est en vie, meme pendant qu'il attaque.
+
+![Arbre Animé](../../game/assets/tree/front-walk-00.png)

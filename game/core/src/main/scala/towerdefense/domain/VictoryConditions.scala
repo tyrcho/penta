@@ -24,7 +24,7 @@ object VictoryConditions:
     else None
 
   private def hasWon(state: MazeState, opponent: MazeState): Boolean =
-    forestCount(state) >= forestTarget(opponent) ||
+    forestCount(state, opponent) >= forestTarget(state, opponent) ||
       state.resourcesPlundered >= plunderTarget(opponent) ||
       state.buildingsCorrupted >= corruptionTarget(opponent) ||
       hasWonViaFondamentale(state)
@@ -38,13 +38,25 @@ object VictoryConditions:
   // reason: any external reader (the UI, the sim module's match logger) that wants to
   // display live progress needs the exact number `hasWon` itself compares against,
   // instead of re-deriving "which kinds count as a forest" and risking it drift.
-  def forestCount(state: MazeState): Int =
-    state.buildings.count(b => realForestKinds.contains(b.kind))
+  // `opponent`: Arbre Anime.md/Stonehenge.md's Tree still belongs to whoever's Stonehenge
+  // made it even after it crosses into the opponent's maze to raid — a Creature alone
+  // can't say whose it is, but every creature in a maze's own creature list is, by this
+  // game's own invariant, always "sent by the opponent of that maze" (see Creature's doc),
+  // so a Tree sitting in `opponent`'s creatures can only be `state`'s own raider.
+  def forestCount(state: MazeState, opponent: MazeState): Int =
+    state.buildings.count(b => realForestKinds.contains(b.kind)) +
+      opponent.creatures.count(_.kind == UnitKind.Tree)
 
   // Exposed (not just private) so the UI can display the live target, which moves
-  // with the opponent's own count — see the module doc above.
-  def forestTarget(opponent: MazeState): Double =
-    withSombresBonus(opponent, math.max(Balance.NatureVictoryForestTarget.toDouble, opponentTarget(forestCount(opponent))))
+  // with the opponent's own count — see the module doc above. `state` here is only used
+  // to read the OPPONENT's raiding Trees (a Tree in `state`'s own creature list belongs to
+  // `opponent`, symmetric to forestCount's own reasoning) — the target itself is about
+  // what `opponent` has, same as every other *Target function below.
+  def forestTarget(state: MazeState, opponent: MazeState): Double =
+    withSombresBonus(
+      opponent,
+      math.max(Balance.NatureVictoryForestTarget.toDouble, opponentTarget(forestCount(opponent, state)))
+    )
 
   def plunderTarget(opponent: MazeState): Double =
     withSombresBonus(opponent, math.max(Balance.ChaosVictoryPlunderTarget, opponentTarget(opponent.resourcesPlundered)))
@@ -82,8 +94,9 @@ object VictoryConditions:
       }
 
   private def winReason(state: MazeState, opponent: MazeState): String =
-    if forestCount(state) >= forestTarget(opponent) then
-      s"Nature's unstoppable expansion: ${forestCount(state)} Forests built (target ${forestTarget(opponent).toInt})."
+    if forestCount(state, opponent) >= forestTarget(state, opponent) then
+      s"Nature's unstoppable expansion: ${forestCount(state, opponent)} Forests built " +
+        s"(target ${forestTarget(state, opponent).toInt})."
     else if state.resourcesPlundered >= plunderTarget(opponent) then
       s"Chaos plunder: ${state.resourcesPlundered.toInt} resources stolen (target ${plunderTarget(opponent).toInt})."
     else if state.buildingsCorrupted >= corruptionTarget(opponent) then

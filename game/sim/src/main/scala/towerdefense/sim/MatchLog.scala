@@ -136,8 +136,8 @@ object MatchLog:
     s"tick $tick  SNAPSHOT  a: $a | b: $b"
 
   private def sideSummary(state: MazeState, opponent: MazeState): String =
-    val forests = VictoryConditions.forestCount(state)
-    val forestTarget = VictoryConditions.forestTarget(opponent).toInt
+    val forests = VictoryConditions.forestCount(state, opponent)
+    val forestTarget = VictoryConditions.forestTarget(state, opponent).toInt
     val plunderTarget = VictoryConditions.plunderTarget(opponent).toInt
     val plundered = state.resourcesPlundered
     val corrupted = state.buildingsCorrupted.toInt

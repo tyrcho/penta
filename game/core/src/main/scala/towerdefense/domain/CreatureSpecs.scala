@@ -71,8 +71,9 @@ object CreatureSpecs:
     // this spec (see CombatEngine's corruption/healSummoners handling).
     UnitKind.Soul -> CreatureSpec(Balance.SoulMaxHp, Balance.SoulSpeedPerMs, plunder = Map.empty),
     // Arbre Anime.md gives it no plunder ability either — its value is the self-cloning
-    // that grows this maze's own forest tally (VictoryConditions.forestCount), a combat
-    // ability that stays outside this spec (see CombatEngine's advanceCreatureSummons).
+    // that grows its OWNER's own forest tally even while raiding the opponent
+    // (VictoryConditions.forestCount), a combat ability that stays outside this spec
+    // (see CombatEngine's advanceCreatureSummons).
     UnitKind.Tree -> CreatureSpec(
       Balance.TreeMaxHp,
       Balance.TreeSpeedPerMs,

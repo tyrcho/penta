@@ -109,15 +109,49 @@ class VictoryConditionsTest extends munit.FunSuite:
     assertEquals(VictoryConditions.evaluate(battle), None)
   }
 
-  // Arbre Anime.md/Stonehenge.md: the Tree raids like every other unit (crosses to the
-  // opponent's maze) and has no plunder ability of its own — it doesn't feed any
-  // victory condition; only real Forest/Jungle buildings count toward the forest tally.
-  test("a Tree creature does not count toward the forest target — only Forest/Jungle buildings do") {
-    val trees = List.fill(Balance.NatureVictoryForestTarget)(
+  // Arbre Anime.md/Stonehenge.md: unlike every other creature, a Tree still belongs to
+  // whoever's Stonehenge made it even after it crosses into the opponent's maze to raid
+  // (Creature.kind alone can't say whose it is, but every creature in a maze's own
+  // creature list is — by the game's own invariant — always "sent by the opponent of
+  // that maze", so a Tree sitting in the AI's creatures list can only be the player's).
+  test("a Tree raiding the opponent's maze counts toward ITS OWNER's forest tally, not a bare building count") {
+    val raidingTrees = List.fill(Balance.NatureVictoryForestTarget)(
       Creature(1, GridConfig.cellCenter(2, 2), Balance.TreeMaxHp, Balance.TreeMaxHp, 0.0, UnitKind.Tree)
     )
-    val battle = BattleState(player = MazeState.initial.copy(creatures = trees), ai = MazeState.initial)
-    assertEquals(VictoryConditions.evaluate(battle), None)
+    // The trees sit in the AI's OWN creature list (they crossed over to raid it) — the
+    // player (who built the Stonehenge that sent them) still wins, not the AI.
+    val battle = BattleState(player = MazeState.initial, ai = MazeState.initial.copy(creatures = raidingTrees))
+    assertEquals(
+      VictoryConditions.evaluate(battle).map(_.isInstanceOf[MatchResult.PlayerWins]),
+      Some(true)
+    )
+  }
+
+  test("a Tree raiding YOUR maze counts toward the RAIDER's forest tally, not your own") {
+    // Same trees, but sitting in the player's own creature list this time — per the same
+    // invariant, they must be the AI's raiders, so the AI (not the player) wins here.
+    val raidingTrees = List.fill(Balance.NatureVictoryForestTarget)(
+      Creature(1, GridConfig.cellCenter(2, 2), Balance.TreeMaxHp, Balance.TreeMaxHp, 0.0, UnitKind.Tree)
+    )
+    val battle = BattleState(player = MazeState.initial.copy(creatures = raidingTrees), ai = MazeState.initial)
+    assertEquals(
+      VictoryConditions.evaluate(battle).map(_.isInstanceOf[MatchResult.AiWins]),
+      Some(true)
+    )
+  }
+
+  test("real Forest buildings and raiding Trees add up together toward the same forest tally") {
+    val raidingTrees = List.fill(Balance.NatureVictoryForestTarget - 1)(
+      Creature(1, GridConfig.cellCenter(2, 2), Balance.TreeMaxHp, Balance.TreeMaxHp, 0.0, UnitKind.Tree)
+    )
+    val battle = BattleState(
+      player = MazeState.initial.copy(buildings = List(forestBuilding(5, 5))),
+      ai = MazeState.initial.copy(creatures = raidingTrees)
+    )
+    assertEquals(
+      VictoryConditions.evaluate(battle).map(_.isInstanceOf[MatchResult.PlayerWins]),
+      Some(true)
+    )
   }
 
   test("ai wins once it has corrupted enough enemy buildings (Mort)") {
@@ -156,10 +190,12 @@ class VictoryConditionsTest extends munit.FunSuite:
     val sombresLevel = 3
     val researcher = MazeState.initial.copy(researchLevels = Map(BuildingKind.LaboSombre -> sombresLevel))
     val bonus = Balance.SombresOpponentTargetIncreaseByLevel(sombresLevel - 1)
-    // forestTarget(opponent) reads `opponent`'s own Sombres level, since `opponent` here is
-    // the side making it harder for `state` (whoever calls forestTarget) to win.
+    // forestTarget(state, opponent) reads `opponent`'s own Sombres level, since `opponent`
+    // here is the side making it harder for `state` (whoever calls forestTarget) to win.
+    // `state` itself is irrelevant to this assertion (an empty maze, so it isn't raiding
+    // `researcher` with any Trees of its own).
     assertEquals(
-      VictoryConditions.forestTarget(researcher),
+      VictoryConditions.forestTarget(MazeState.initial, researcher),
       Balance.NatureVictoryForestTarget * (1.0 + bonus)
     )
   }
