@@ -1,16 +1,13 @@
 ---
-faction: "[Nature](Nature.md)"
 type: batiment
-cout en bois: 10
-ressources:
-  - "[Bois](Bois.md)"
+faction: "[Nature](Nature.md)"
+cout en bois: 5
 ---
 
-![](../../game/assets/grove.png)
+![Bosquet](../../game/assets/grove.png)
 
-Produit 1 bois / 5 sec.
+Produit 0.2 [Bois](Bois.md) par seconde.
 
-Toutes les 10 sec  genere un [Elfe](Elfe.md).
+Toutes les 10 secondes, génère un [Elfe](Elfe.md).
 
-Soigne la corruption (voir [Corruption](../Mort/Corruption.md)) de lui-meme et des 8
-batiments environnants de 1% par seconde.
+Soigne la corruption (voir [Corruption](../Mort/Corruption.md)) de lui-même et des 8 bâtiments environnants de 0.1% par seconde.

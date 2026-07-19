@@ -2,8 +2,11 @@
 type: batiment
 faction: "[Loi](Loi.md)"
 cout en bois: 10
-cout en lumiere: 5
+cout en lumiere: 20
 ---
-Produit 0.1 [Lumière](Lumière.md) par seconde.
 
-Inflige 10 degats chaque seconde a une cible jusqu'a 2 cases de distance.
+![Tour de guet](../../game/assets/watchtower.png)
+
+Produit 0.3 [Lumière](Lumière.md) par seconde.
+
+N'envoie aucune unité. Inflige 10 dégâts par seconde à l'ennemi le plus proche jusqu'à 2 cases de distance.

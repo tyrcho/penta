@@ -14,6 +14,7 @@ See `CLAUDE.md` for the two standing project rules (symmetry, tests-first).
 make dev      # compile + watch + serve on http://localhost:8082
 make test     # run unit tests on the JVM (fast — for iterating on AI strategies)
 make test-js  # run unit tests under Node.js (parity check for the browser build)
+make docs     # regenerate the vault's building/unit/resource pages (see "Docs" below)
 make build    # production JS build → public/
 ```
 
@@ -23,6 +24,23 @@ produces wood over time, damages any enemy on an adjacent cell, and every 10s se
 Elf into the opponent's maze. A Cave costs wood + fire, produces fire, and every 5s sends
 a Goblin. Either unit reaching a goal plunders 1 wood + 1 fire from that maze, credited
 to whoever sent it. Hover any building or unit on the board to see its live stats.
+
+**Language:** the control bar's FR/EN button switches every tooltip, hover stat, and UI
+label between French and English (choice persisted across reloads) — see `core/domain/
+i18n/` for the shared name/text tables and `docgen` below for how the same tables also
+drive the generated vault pages.
+
+## Docs
+
+`make docs` (`sbt "sim/runMain towerdefense.docgen.DocGenerator"`) regenerates every
+building/unit/resource page in the vault straight from `Balance`/`BuildingSpecs`/
+`CreatureSpecs` — so a page's cost/rate/duration numbers can never drift from what the
+game actually simulates. French pages are written in place under `../Resources/<Faction>/`
+(the existing hand-written vault's own paths); English pages are written to a sibling
+`../Resources-en/<Faction>/` tree. Faction overview pages, the Relations cross-influence
+pages, and Science's research-line notes are hand-written narrative content outside what
+Balance can drive, so they're left untouched — generated pages link out to the existing
+French originals for those (see `core/domain/i18n/EntityNames.outOfScopeLink`).
 
 **Winning:** build 10 Forêts (Nature) or plunder 20 resources total (Chaos) — either
 side can win via either condition, whichever they reach first.

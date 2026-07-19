@@ -3,5 +3,4 @@ type: ressource
 faction: "[Science](Science.md)"
 ---
 
-
-![](../../game/assets/crystal-reference.png)
+![Crystal](../../game/assets/crystal-reference.png)

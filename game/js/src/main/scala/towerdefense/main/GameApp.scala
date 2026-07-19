@@ -8,6 +8,7 @@ import scala.scalajs.js
 import scala.util.Random
 import towerdefense.domain.*
 import towerdefense.domain.geometry.Vec2
+import towerdefense.domain.i18n.*
 import towerdefense.pixi.*
 
 private case class ViewTransform(scale: Double, offsetX: Double, offsetY: Double)
@@ -43,6 +44,29 @@ private val PlayingIdleToSpectateDelayMs = 30000.0
 // real wall-clock time, same as the flame burst it replaces (Pixi's own animation
 // ticker, unaffected by GameSpeed's pause/fast-forward).
 private val UnitPreviewDurationMs = 1000.0
+
+// Current UI language — read by every text-producing function below (tooltips, hover
+// text, control-bar labels) instead of threading a `lang: Lang` parameter through each of
+// them individually, since this is a single-page app with exactly one language setting
+// live at a time (same "module-level mutable state" shape GameSpeed's own paused/
+// multiplier fields use). Set from LangPersistence at startup, flipped by wireLangButton.
+private var currentLang: Lang = Lang.Fr
+
+// Saves/restores the language choice across page refreshes — deliberately its own tiny
+// localStorage key rather than folded into Persistence's save blob, since the language is
+// a UI preference, not part of the battle being saved/resumed (Persistence.clear() on a
+// new game must not also reset it).
+private object LangPersistence:
+  private val StorageKey = "towerdefense-lang"
+
+  def load(): Lang =
+    try
+      Option(dom.window.localStorage.getItem(StorageKey)).map(Lang.fromCode).getOrElse(Lang.Fr)
+    catch case _: Throwable => Lang.Fr
+
+  def save(lang: Lang): Unit =
+    try dom.window.localStorage.setItem(StorageKey, lang.code)
+    catch case _: Throwable => ()
 
 private def randomLadderIndex(): Int = Random.nextInt(AiStrategy.ladder.length)
 
@@ -233,18 +257,10 @@ private def domSlug(kind: BuildingKind): String = kind match
   case BuildingKind.LaboDeLaLoi     => "labo-de-la-loi"
   case BuildingKind.LaboDuChaos     => "labo-du-chaos"
 
-// A human-readable name for kinds whose enum spelling reads awkwardly without spaces
-// (the five Labo* kinds) — used only in the upgrade button label (see
-// upgradeOptionsInfo); every other reader of BuildingKind already spells its own name out
-// in a hand-written tooltip/hover-text constant, so this doesn't need to cover every kind.
-private def displayName(kind: BuildingKind): String = kind match
-  case BuildingKind.LaboFondamental => "Labo Fondamental"
-  case BuildingKind.LaboNaturel     => "Labo Naturel"
-  case BuildingKind.LaboSombre      => "Labo Sombre"
-  case BuildingKind.LaboDeRecherche => "Labo de Recherche"
-  case BuildingKind.LaboDeLaLoi     => "Labo de la Loi"
-  case BuildingKind.LaboDuChaos     => "Labo du Chaos"
-  case other                        => other.toString
+// A human-readable, localized name for a building kind — same table core's doc generator
+// reads (EntityNames), so a kind is never named two different ways between the vault
+// pages and this UI.
+private def displayName(kind: BuildingKind): String = EntityNames.buildingName(kind, currentLang)
 
 // Only these can be placed fresh via a toolbar button — Forest/Jungle are reached only
 // by upgrading an existing Grove/Forest (see Placement.tryUpgradeBuilding), so they get
@@ -252,12 +268,7 @@ private def displayName(kind: BuildingKind): String = kind match
 private def buildableKinds: List[BuildingKind] =
   BuildingKind.values.toList.filter(BuildingSpecs.all(_).buildableDirectly)
 
-private def resourceName(res: Resource): String = res match
-  case Resource.Wood    => "wood"
-  case Resource.Fire    => "fire"
-  case Resource.Light   => "light"
-  case Resource.Shadow  => "shadow"
-  case Resource.Crystal => "crystal"
+private def resourceName(res: Resource): String = EntityNames.resourceName(res, currentLang)
 
 private val MazeGapPx = GridConfig.cellSize
 
@@ -367,6 +378,17 @@ def onReady(app: Application, textures: js.Dictionary[Texture]): Unit =
   var msSinceLastSave = 0.0
   val playerSprites = new MazeSprites
   val aiSprites = new MazeSprites
+  currentLang = LangPersistence.load()
+
+  // Re-renders every bit of static UI text that isn't already refreshed every animation
+  // frame by the ticker (mode/overlay/tooltip text all read currentLang live on every
+  // tick already) — called once at startup (so a French default doesn't show English
+  // control-bar labels until the first click) and again on every language toggle.
+  def refreshLanguage(): Unit =
+    applyStaticLabels()
+    updateSpeedLabel(speed)
+    updateFullscreenLabel()
+  refreshLanguage()
 
   // Always lands in Playing, whether triggered from a finished/paused game (the original
   // behavior) or from the attract-mode AI duel (see wireNewGameButton) — that's how a
@@ -401,6 +423,11 @@ def onReady(app: Application, textures: js.Dictionary[Texture]): Unit =
   wireSpeedControls(speed)
   wireNewGameButton(() => resetGame())
   wireFullscreenButton()
+  wireLangButton(() => {
+    currentLang = if currentLang == Lang.Fr then Lang.En else Lang.Fr
+    LangPersistence.save(currentLang)
+    refreshLanguage()
+  })
   wireAiLevelSelect(aiLevelIndex, index => aiLevelIndex = index)
   wireDestroyButton((col, row) => battle = destroyPlayerBuilding(battle, mode, col, row))
   wireUpgradeButtons((col, row, targetKind) => battle = upgradePlayerBuilding(battle, mode, col, row, targetKind))
@@ -657,87 +684,14 @@ private def fillCell(g: Graphics, col: Int, row: Int): Unit =
 // ── Input (only the left/player maze is tappable; both buildings are available —
 // symmetric game, see CLAUDE.md — so the player picks one via the toolbar buttons) ──
 
-private val GroveTooltip =
-  s"Bosquet — cost ${Balance.GroveCostWood.toInt} wood. " +
-    s"+${formatDecimal(Balance.WoodPerSecPerGrove)} wood/s, spawns an Elf every " +
-    s"${(Balance.ElfSpawnIntervalMs / 1000).toInt}s. Upgrades into a Forêt, then a Jungle."
-
-private val CaveTooltip =
-  s"Cave — cost ${Balance.CaveCostWood.toInt} wood + ${Balance.CaveCostFire.toInt} fire. " +
-    s"+${formatDecimal(Balance.FirePerSecPerCave)} fire/s, spawns a Goblin every ${(Balance.GoblinSpawnIntervalMs / 1000).toInt}s"
-
-// The unit's own ability (plunder amount, shield, etc.) is appended generically via
-// spawnAbilitySuffix when this is shown (see BuildingTooltips/buildingHoverText), so this
-// string itself only needs cost/production/spawn-interval.
-private val LabyrintheTooltip =
-  s"Labyrinthe — cost ${Balance.LabyrintheCostWood.toInt} wood + ${Balance.LabyrintheCostFire.toInt} fire. " +
-    s"Spawns a Minotaur every ${(Balance.MinotaurSpawnIntervalMs / 1000).toInt}s"
-
-private val EgliseTooltip =
-  s"Eglise — cost ${Balance.EgliseCostWood.toInt} wood + ${Balance.EgliseCostLight.toInt} light. " +
-    s"+${formatDecimal(Balance.LightPerSecPerEglise)} light/s, spawns a Paladin every ${(Balance.PaladinSpawnIntervalMs / 1000).toInt}s"
-
-private val WatchtowerTooltip =
-  s"Tour de guet — cost ${Balance.WatchtowerCostWood.toInt} wood + ${Balance.WatchtowerCostLight.toInt} light. " +
-    s"+${formatDecimal(Balance.LightPerSecPerWatchtower)} light/s, spawns no unit — instead inflicts " +
-    s"${Balance.WatchtowerDamagePerSec.toInt} dmg/s to the nearest enemy within ${Balance.WatchtowerRangeCells} cells"
-
-private val AngelTooltip =
-  s"Ange — cost ${Balance.AngelCostLight.toInt} light. +${formatDecimal(Balance.LightPerSecPerAngel)} light/s, " +
-    s"spawns no unit — instead inflicts ${Balance.AngelDamagePerSec.toInt} dmg/s to adjacent enemies and " +
-    s"slows them by ${(Balance.AngelSlowFraction * 100).toInt}%"
-
-private val TombTooltip =
-  s"Tombe — cost ${Balance.TombCostWood.toInt} wood + ${Balance.TombCostShadow.toInt} shadow. " +
-    s"+${formatDecimal(Balance.ShadowPerSecPerTomb)} shadow/s, spawns a Zombie every " +
-    s"${(Balance.ZombieSpawnIntervalMs / 1000).toInt}s"
-
-private val BlackCastleTooltip =
-  s"Château Noir — cost ${Balance.BlackCastleCostWood.toInt} wood + ${Balance.BlackCastleCostShadow.toInt} shadow. " +
-    s"+${formatDecimal(Balance.ShadowPerSecPerBlackCastle)} shadow/s, spawns a Vampire every " +
-    s"${(Balance.VampireSpawnIntervalMs / 1000).toInt}s"
-
-private val DeathHouseTooltip =
-  s"Maison de la Mort — cost ${Balance.DeathHouseCostWood.toInt} wood + ${Balance.DeathHouseCostShadow.toInt} shadow. " +
-    s"+${formatDecimal(Balance.ShadowPerSecPerDeathHouse)} shadow/s, spawns a Necromancer every " +
-    s"${(Balance.NecromancerSpawnIntervalMs / 1000).toInt}s"
-
-// The only Science build button now — the five specific labs are reached by upgrading
-// this one (see the tooltip-upgrade-N buttons/upgradeOptionsInfo), never built directly.
-private val LaboFondamentalTooltip =
-  s"Labo Fondamental — cost ${Balance.LaboFondamentalCostCrystal.toInt} crystal. " +
-    s"+${formatDecimal(Balance.CrystalPerSecPerLaboFondamental)} crystal/s, no research bonus of its own. " +
-    s"Upgrade it into a specific lab to unlock that lab's own research line (starting at a free level 1) " +
-    s"— only one lab of each specific kind per maze at a time"
-
-private val StonehengeTooltip =
-  s"Stonehenge — cost ${Balance.StonehengeCostWood.toInt} wood. Spawns an Arbre Anime every " +
-    s"${(Balance.StonehengeSpawnIntervalMs / 1000).toInt}s"
-
-private val PassingGateTooltip =
-  s"Portail — cost ${Balance.PassingGateCostShadow.toInt} shadow + ${Balance.PassingGateCostLight.toInt} light. " +
-    s"Spawns no unit — inflicts ${Balance.PassingGateDamagePerSec.toInt} dmg/s to enemies on its 4 adjacent " +
-    s"cells, and harvests ${(Balance.PassingGateDeathShadowFraction * 100).toInt}% of your own total " +
-    s"resources as bonus shadow whenever any creature dies on one of those cells"
-
-// spawnAbilitySuffix appended uniformly here (rather than baked into each *Tooltip val
-// above) — every kind that spawns a unit states what that unit does, before it's even
-// placed, without each constant needing to spell it out (and risk drifting from
-// unitAbilitySummary's own numbers).
-private val BuildingTooltips: Map[BuildingKind, String] = Map(
-  BuildingKind.Grove -> GroveTooltip,
-  BuildingKind.Cave -> CaveTooltip,
-  BuildingKind.Labyrinth -> LabyrintheTooltip,
-  BuildingKind.Church -> EgliseTooltip,
-  BuildingKind.Watchtower -> WatchtowerTooltip,
-  BuildingKind.Angel -> AngelTooltip,
-  BuildingKind.Tomb -> TombTooltip,
-  BuildingKind.BlackCastle -> BlackCastleTooltip,
-  BuildingKind.DeathHouse -> DeathHouseTooltip,
-  BuildingKind.LaboFondamental -> LaboFondamentalTooltip,
-  BuildingKind.Stonehenge -> StonehengeTooltip,
-  BuildingKind.PassingGate -> PassingGateTooltip
-).map { case (kind, text) => kind -> (text + spawnAbilitySuffix(kind)) }
+// The static build-button tooltip for a kind — cost/production from BuildingSpecs
+// (TooltipText.buildingButtonTooltip), any combat ability BuildingSpec doesn't model
+// (TooltipText.buildingOwnAbility), and what unit it spawns, if any (spawnAbilitySuffix) —
+// recomputed on every hover (not cached) so it always reflects `currentLang`.
+private def buildingTooltip(kind: BuildingKind): String =
+  val spec = BuildingSpecs.all(kind)
+  TooltipText.buildingButtonTooltip(kind, spec.cost, spec.produces, currentLang) +
+    TooltipText.buildingOwnAbility(kind, currentLang) + spawnAbilitySuffix(kind)
 
 // canAfford is read at click time (not baked into the closure) since the player's
 // wood/fire change every tick — see updateBuildButtonsAffordability for the matching
@@ -750,7 +704,7 @@ private def wireBuildingButtons(
   val buttons = buildableKinds.map(kind => kind -> document.getElementById(s"build-${domSlug(kind)}")).toMap
   val allButtons = buttons.values.toList
   buildableKinds.foreach { kind =>
-    wireButtonTooltip(buttons(kind), BuildingTooltips(kind), setHoveringButton)
+    wireButtonTooltip(buttons(kind), () => buildingTooltip(kind), setHoveringButton)
     wireBuildClick(buttons(kind), kind, allButtons, canAfford, onSelect)
   }
 
@@ -795,12 +749,15 @@ private def updateButtonDisabled(id: String, affordable: Boolean): Unit =
 // while a button tooltip is showing — the two hover sources share one DOM element.
 private def wireButtonTooltip(
     btn: dom.Element,
-    text: String,
+    text: () => String,
     setHoveringButton: Boolean => Unit
 ): Unit =
   btn.addEventListener(
+    // Evaluated at hover time, not wiring time, so a language switch mid-session is
+    // reflected the next time this button is hovered rather than needing every button
+    // rewired from scratch.
     "mouseenter",
-    (_: dom.Event) => { showButtonTooltip(text); setHoveringButton(true) }
+    (_: dom.Event) => { showButtonTooltip(text()); setHoveringButton(true) }
   )
   btn.addEventListener(
     "mousemove",
@@ -817,12 +774,21 @@ private def wireButtonTooltip(
     }
   )
 
+// A build button's own tooltip never has a destroy/upgrade/research affordance (those
+// apply to an already-placed building, not a buildable kind) — clears whatever a
+// previously-selected building may have left showing. Fixes a pre-existing bug: this used
+// to reference singular "tooltip-upgrade"/"tooltip-upgrade-preview" ids that no longer
+// exist in index.html (superseded by the indexed tooltip-upgrade-0..4/tooltip-upgrade-
+// preview-0..4 slots — see MaxUpgradeOptions), throwing on every build-button hover.
 private def showButtonTooltip(text: String): Unit =
   document.getElementById("tooltip-text").textContent = text
   document.getElementById("tooltip").classList.add("visible")
   document.getElementById("tooltip-destroy").classList.remove("visible")
-  document.getElementById("tooltip-upgrade").classList.remove("visible")
-  document.getElementById("tooltip-upgrade-preview").classList.remove("visible")
+  (0 until MaxUpgradeOptions).foreach { i =>
+    document.getElementById(s"tooltip-upgrade-$i").classList.remove("visible")
+    document.getElementById(s"tooltip-upgrade-preview-$i").classList.remove("visible")
+  }
+  document.getElementById("tooltip-research").classList.remove("visible")
 
 private def selectBuilding(
     kind: BuildingKind,
@@ -849,17 +815,13 @@ private def wireSpeedControls(speed: GameSpeed): Unit =
 
 private def updateSpeedLabel(speed: GameSpeed): Unit =
   document.getElementById("speed-label").textContent =
-    if speed.paused then "Paused" else s"${formatDecimal(speed.multiplier)}x"
-  document.getElementById("pause-btn").textContent = if speed.paused then "Play" else "Pause"
+    if speed.paused then Ui.paused(currentLang) else s"${formatDecimal(speed.multiplier)}x"
+  document.getElementById("pause-btn").textContent = if speed.paused then Ui.play(currentLang) else Ui.pause(currentLang)
 
-// Whole numbers print bare ("2"), fractional ones keep their decimal ("0.2") — used for
-// the speed multiplier and every per-second rate shown in tooltips/stats, so a sub-1
-// rate (e.g. Balance.FirePerSecPerCave) never gets silently truncated to "0" by `.toInt`.
-// Rounded to 2 significant digits first so summed rates (count * perUnitRate) never show
-// raw floating-point noise (e.g. 0.6000000000000001 from three 0.2 forests).
-private def formatDecimal(d: Double): String =
-  val rounded = roundToSignificantDigits(d, digits = 2)
-  if rounded == rounded.toInt then rounded.toInt.toString else rounded.toString
+// Whole numbers print bare ("2"), fractional ones keep their decimal ("0.2") — delegates
+// to the same NumberFormat the doc generator uses, so a rate never reads differently
+// between a vault page and this tooltip.
+private def formatDecimal(d: Double): String = NumberFormat.decimal(d)
 
 // Blank at a zero rate rather than "+0/s" — one of the concept-rows' biggest sources of
 // clutter (5 of these per row, both sides) was showing a rate readout even for the
@@ -868,12 +830,6 @@ private def formatDecimal(d: Double): String =
 // ate the vertical space the maze canvas needed (see index.html's concept-rows doc).
 private def rateText(perSec: Double): String =
   if perSec == 0.0 then "" else s"+${formatDecimal(perSec)}/s"
-
-private def roundToSignificantDigits(value: Double, digits: Int): Double =
-  if value == 0.0 then 0.0
-  else
-    val magnitude = math.pow(10, digits - 1 - math.floor(math.log10(math.abs(value))).toInt)
-    math.round(value * magnitude) / magnitude
 
 // ── AI difficulty ladder (see AiStrategy.ladder — same ranking the simulator uses) ──
 
@@ -908,7 +864,7 @@ private def updateModeUi(mode: Mode): Unit =
     case Mode.Spectating(leftIdx, rightIdx) =>
       val leftName = AiStrategy.ladder(leftIdx)._1
       val rightName = AiStrategy.ladder(rightIdx)._1
-      document.getElementById("spectate-label").textContent = s"AI duel: $leftName vs $rightName"
+      document.getElementById("spectate-label").textContent = Ui.spectateLabel(leftName, rightName, currentLang)
     case Mode.Playing => ()
 
 // ── New game (visible while Spectating — it's how a spectator becomes a player — or,
@@ -921,7 +877,7 @@ private def updateNewGameButtonVisibility(mode: Mode, playingButNotLive: Boolean
   val btn = document.getElementById("new-game-btn")
   val visible = mode.isInstanceOf[Mode.Spectating] || playingButNotLive
   if visible then btn.classList.add("visible") else btn.classList.remove("visible")
-  btn.textContent = if mode.isInstanceOf[Mode.Spectating] then "Play" else "New Game"
+  btn.textContent = if mode.isInstanceOf[Mode.Spectating] then Ui.play(currentLang) else Ui.newGame(currentLang)
 
 // ── Fullscreen (hides browser chrome — address bar, tab strip — leaving more room for
 // the maze; the resizeTo target in setup() reacts automatically once the browser fires
@@ -940,7 +896,65 @@ private def toggleFullscreen(): Unit =
 
 private def updateFullscreenLabel(): Unit =
   document.getElementById("fullscreen-btn").textContent =
-    if fullscreenElement().isDefined then "Exit" else "Full"
+    if fullscreenElement().isDefined then Ui.exitFullscreen(currentLang) else Ui.fullscreen(currentLang)
+
+// ── Language (FR/EN — see currentLang/LangPersistence) ──────────────────
+
+private def wireLangButton(onToggle: () => Unit): Unit =
+  document.getElementById("lang-btn").addEventListener("click", (_: dom.Event) => onToggle())
+
+private def elementsWithAttr(attr: String): List[dom.Element] =
+  val nodes = document.querySelectorAll(s"[$attr]")
+  (0 until nodes.length).map(i => nodes(i)).toList
+
+// index.html's static labels that the ticker never re-renders on its own (unlike
+// mode/overlay/tooltip text, which already read currentLang fresh every animation frame)
+// — concept-row/stat title attributes (data-i18n) and build-button image alt text
+// (data-i18n-alt), plus the handful of control-bar buttons with a fixed (non-live) label.
+private def applyStaticLabels(): Unit =
+  document.getElementById("lang-btn").textContent = Ui.languageToggleLabel(currentLang)
+  document.getElementById("ai-label").textContent = Ui.aiLabel(currentLang)
+
+  val titles: Map[String, String] = Map(
+    "wood" -> Ui.wood(currentLang),
+    "fire" -> Ui.fire(currentLang),
+    "light" -> Ui.light(currentLang),
+    "shadow" -> Ui.shadow(currentLang),
+    "crystal" -> Ui.crystal(currentLang),
+    "forests" -> Ui.forestsLabel(currentLang),
+    "plundered" -> Ui.plunderedLabel(currentLang),
+    "corrupted" -> Ui.corruptedLabel(currentLang),
+    "victory" -> Ui.victoryLabel(currentLang),
+    "fondamentale" -> Ui.fondamentaleLabel(currentLang),
+    "nature" -> Ui.natureTitle(currentLang),
+    "chaos" -> Ui.chaosTitle(currentLang),
+    "loi" -> Ui.loiTitle(currentLang),
+    "mort" -> Ui.mortTitle(currentLang),
+    "science" -> Ui.scienceTitle(currentLang)
+  )
+  elementsWithAttr("data-i18n").foreach { el =>
+    val key = el.getAttribute("data-i18n")
+    titles.get(key).foreach(t => el.asInstanceOf[dom.html.Element].title = t)
+  }
+
+  val altKinds: Map[String, BuildingKind] = Map(
+    "grove" -> BuildingKind.Grove,
+    "stonehenge" -> BuildingKind.Stonehenge,
+    "cave" -> BuildingKind.Cave,
+    "labyrinth" -> BuildingKind.Labyrinth,
+    "church" -> BuildingKind.Church,
+    "watchtower" -> BuildingKind.Watchtower,
+    "angel" -> BuildingKind.Angel,
+    "tomb" -> BuildingKind.Tomb,
+    "blackCastle" -> BuildingKind.BlackCastle,
+    "deathHouse" -> BuildingKind.DeathHouse,
+    "passingGate" -> BuildingKind.PassingGate,
+    "laboFondamental" -> BuildingKind.LaboFondamental
+  )
+  elementsWithAttr("data-i18n-alt").foreach { el =>
+    val key = el.getAttribute("data-i18n-alt")
+    altKinds.get(key).foreach(k => el.asInstanceOf[dom.html.Image].alt = EntityNames.buildingName(k, currentLang))
+  }
 
 private def fullscreenElement(): Option[dom.Element] =
   val el = document.asInstanceOf[js.Dynamic].fullscreenElement
@@ -1627,7 +1641,7 @@ private def destroyInfo(target: HoverTarget, maze: MazeState): Option[(Int, Int,
               s"+${formatDecimal(amount * Balance.DemolishRefundFraction)} ${resourceName(res)}"
             }
             .mkString(", ")
-          (b.col, b.row, s"Destroy ($refundText)")
+          (b.col, b.row, TooltipText.destroyLabel(refundText, currentLang))
         }
 
 private def wireDestroyButton(onDestroy: (Int, Int) => Unit): Unit =
@@ -1708,7 +1722,7 @@ private def upgradeOptionsInfo(
                   val slotAvailable = nextSpec.maxPerMaze.forall(max => maze.buildings.count(_.kind == nextKind) < max)
                   (
                     nextKind,
-                    s"Upgrade to ${displayName(nextKind)} ($costText)",
+                    TooltipText.upgradeLabel(nextKind, costText, currentLang),
                     slotAvailable && Placement.canAfford(maze.resources, nextSpec.cost),
                     preview
                   )
@@ -1743,24 +1757,24 @@ private def upgradePlayerBuilding(battle: BattleState, mode: Mode, col: Int, row
 // really does. Recherche fondamentale has no numeric effectByLevel (its own doc: "the
 // victory check itself") — described instead via Balance.FondamentaleRequiredOtherLabLevel,
 // the same list VictoryConditions.hasWonViaFondamentale compares against.
+// The concrete magnitude a lab's research level actually gives — same numbers
+// VictoryConditions/CombatEngine/Placement.effectiveCost themselves read (Balance.*ByLevel
+// via ResearchSpecs.effectAtLevel), passed to core's TooltipText.researchEffectSummary for
+// the actual (localized) phrasing, so this can't silently drift from what leveling up
+// really does.
 private def researchEffectSummary(labKind: BuildingKind, level: Int): String =
-  val spec = ResearchSpecs.all(labKind)
-  labKind match
-    case BuildingKind.LaboNaturel => s"-${(spec.effectAtLevel(level) * 100).toInt}% building cost"
-    case BuildingKind.LaboSombre  => s"+${(spec.effectAtLevel(level) * 100).toInt}% opponent's victory targets"
-    case BuildingKind.LaboDuChaos => s"+${formatDecimal(spec.effectAtLevel(level))} plunder per resource, every unit"
-    case BuildingKind.LaboDeLaLoi => s"+${(spec.effectAtLevel(level) * 100).toInt}% building damage"
-    case BuildingKind.LaboDeRecherche =>
-      s"wins outright once every other lab reaches level ${Balance.FondamentaleRequiredOtherLabLevel(level - 1)}+"
-    case _ => ""
+  val magnitude = labKind match
+    case BuildingKind.LaboDeRecherche => Balance.FondamentaleRequiredOtherLabLevel(level - 1).toDouble
+    case other                        => ResearchSpecs.all(other).effectAtLevel(level)
+  TooltipText.researchEffectSummary(labKind, magnitude, currentLang)
 
 // A specific lab's own live hover text (perKindHoverText) — current level plus what it's
 // actually buying, or an explicit "no bonus yet" at level 0 rather than researchEffectSummary's
 // level-0 numbers (which read oddly, e.g. "-0% building cost").
 private def researchLevelText(maze: MazeState, kind: BuildingKind): String =
   val level = maze.researchLevels.getOrElse(kind, 0)
-  if level <= 0 then s"research level 0/${Balance.MaxResearchLevel} (no bonus yet)"
-  else s"research level $level/${Balance.MaxResearchLevel} (${researchEffectSummary(kind, level)})"
+  val effect = if level > 0 then Some(researchEffectSummary(kind, level)) else None
+  TooltipText.researchLevelText(level, Balance.MaxResearchLevel, effect, currentLang)
 
 // Only the player's own Science lab can be researched from the UI (the AI researches via
 // AiStrategy.maybeResearch instead) — mirrors upgradeInfo's shape/wiring, but keyed by
@@ -1791,8 +1805,7 @@ private def researchInfo(target: HoverTarget, maze: MazeState): Option[(Int, Int
                 (
                   b.col,
                   b.row,
-                  s"Research level $nextLevel/${Balance.MaxResearchLevel} ($costText) " +
-                    s"→ ${researchEffectSummary(b.kind, nextLevel)}",
+                  TooltipText.researchLabel(nextLevel, Balance.MaxResearchLevel, costText, researchEffectSummary(b.kind, nextLevel), currentLang),
                   Placement.canAfford(maze.resources, cost)
                 )
               )
@@ -1823,47 +1836,7 @@ private def hoverText(target: HoverTarget, battle: BattleState): Option[String] 
   target.kind match
     case HoverKind.EnemyH =>
       maze.creatures.find(_.id == target.id).map { c =>
-        c.kind match
-          case UnitKind.Paladin =>
-            s"Paladin — HP ${c.hp.toInt}/${c.maxHp.toInt}, doesn't plunder; shields adjacent allies " +
-              s"from ${Balance.PaladinAuraDamageReductionPerSec.toInt} dmg/s"
-          case UnitKind.Wolf =>
-            s"Wolf — HP ${c.hp.toInt}/${c.maxHp.toInt}, doesn't plunder; speeds up allies within " +
-              s"${Balance.WolfSpeedAuraRangeCells} cells by ${((Balance.WolfSpeedAuraMultiplier - 1) * 100).toInt}%"
-          case UnitKind.Zombie =>
-            s"Zombie — HP ${c.hp.toInt}/${c.maxHp.toInt}, doesn't plunder; corrupts adjacent enemy " +
-              s"buildings by ${Balance.ZombieCorruptionPercentPerSec.toInt}%/s"
-          case UnitKind.Vampire =>
-            s"Vampire — HP ${c.hp.toInt}/${c.maxHp.toInt}, doesn't plunder; corrupts adjacent enemy " +
-              s"buildings by ${Balance.VampireCorruptionPercentPerSec.toInt}%/s, takes " +
-              s"${(Balance.VampireDamageReductionFraction * 100).toInt}% less damage (not shielded by Paladins)"
-          case UnitKind.Necromancer =>
-            s"Necromancien — HP ${c.hp.toInt}/${c.maxHp.toInt}, doesn't plunder; invokes an Ame every " +
-              s"${(Balance.SoulSummonIntervalMs / 1000).toInt}s"
-          case UnitKind.Soul =>
-            s"Ame — HP ${c.hp.toInt}/${c.maxHp.toInt}, doesn't plunder; corrupts adjacent enemy buildings " +
-              s"by ${Balance.SoulCorruptionPercentPerSec.toInt}%/s, healing its Necromancien " +
-              s"${Balance.SoulHealPerSecPerBuilding.toInt} HP/s per building corrupted"
-          case UnitKind.Tree =>
-            val sizeNote = if c.sizeFraction < 1.0 then s" (${(c.sizeFraction * 100).toInt}% size)" else ""
-            s"Arbre Anime$sizeNote — HP ${c.hp.toInt}/${c.maxHp.toInt}, doesn't plunder; every " +
-              s"${(Balance.TreeCloneIntervalMs / 1000).toInt}s stops for ${(Balance.TreeCloneFreezeMs / 1000).toInt}s " +
-              s"and clones a smaller copy of itself (down to ${(Balance.TreeMinCloneSizeFraction * 100).toInt}% size); " +
-              s"counts toward its owner's forest victory the whole time"
-          case _ =>
-            val (name, plunders) = c.kind match
-              case UnitKind.Elf => ("Elf", s"${Balance.PlunderPerUnit.toInt} wood")
-              case UnitKind.Goblin =>
-                (
-                  "Goblin",
-                  s"${Balance.PlunderPerUnit.toInt} wood + ${Balance.PlunderPerUnit.toInt} fire"
-                )
-              case _ =>
-                (
-                  "Minotaur",
-                  s"${Balance.MinotaurPlunderPerUnit.toInt} wood + ${Balance.MinotaurPlunderPerUnit.toInt} fire"
-                )
-            s"$name — HP ${c.hp.toInt}/${c.maxHp.toInt}, plunders $plunders on arrival"
+        TooltipText.creatureHoverText(c.kind, currentLang, c.hp.toInt, c.maxHp.toInt, Some((c.sizeFraction * 100).toInt))
       }
     // b.kind, not the pattern-matched kind — see destroyInfo's comment on the same issue.
     case HoverKind.BuildingH(_) =>
@@ -1882,53 +1855,28 @@ private def hoverText(target: HoverTarget, battle: BattleState): Option[String] 
 private def buildingHoverText(kind: BuildingKind, b: Building, maze: MazeState): String =
   perKindHoverText(kind, b, maze) + spawnAbilitySuffix(kind) + corruptionSuffix(b)
 
-// A short ability fragment for a creature kind — same numbers as hoverText's own EnemyH
-// branch (kept in sync by construction: both read the same Balance constants), but without
-// the HP prefix, since this is meant to be appended to a *building's* tooltip/hover text,
-// not shown on the creature itself. Every building that spawns a unit gets this appended
-// (see spawnAbilitySuffix) so its tooltip states not just "spawns a Goblin" but what a
-// Goblin actually does once it arrives.
-private def unitAbilitySummary(kind: UnitKind): String = kind match
-  case UnitKind.Elf => s"plunders ${Balance.PlunderPerUnit.toInt} wood on arrival"
-  case UnitKind.Goblin =>
-    s"plunders ${Balance.PlunderPerUnit.toInt} wood + ${Balance.PlunderPerUnit.toInt} fire on arrival"
-  case UnitKind.Minotaur =>
-    s"plunders ${Balance.MinotaurPlunderPerUnit.toInt} wood + ${Balance.MinotaurPlunderPerUnit.toInt} fire on arrival"
-  case UnitKind.Paladin =>
-    s"doesn't plunder — shields adjacent allies from ${Balance.PaladinAuraDamageReductionPerSec.toInt} dmg/s"
-  case UnitKind.Wolf =>
-    s"doesn't plunder — speeds up allies within ${Balance.WolfSpeedAuraRangeCells} cells by " +
-      s"${((Balance.WolfSpeedAuraMultiplier - 1) * 100).toInt}%"
-  case UnitKind.Zombie =>
-    s"doesn't plunder — corrupts adjacent enemy buildings by ${Balance.ZombieCorruptionPercentPerSec.toInt}%/s"
-  case UnitKind.Vampire =>
-    s"doesn't plunder — corrupts adjacent enemy buildings by ${Balance.VampireCorruptionPercentPerSec.toInt}%/s, " +
-      s"takes ${(Balance.VampireDamageReductionFraction * 100).toInt}% less damage"
-  case UnitKind.Necromancer =>
-    s"doesn't plunder — invokes a Soul every ${(Balance.SoulSummonIntervalMs / 1000).toInt}s"
-  case UnitKind.Soul =>
-    s"doesn't plunder — corrupts adjacent enemy buildings by ${Balance.SoulCorruptionPercentPerSec.toInt}%/s"
-  case UnitKind.Tree =>
-    s"doesn't plunder — every ${(Balance.TreeCloneIntervalMs / 1000).toInt}s clones a smaller copy of itself " +
-      s"(down to ${(Balance.TreeMinCloneSizeFraction * 100).toInt}% size), counting toward its owner's " +
-      s"forest victory the whole time"
+// A short ability fragment for a creature kind — TooltipText.unitAbilitySummary reads the
+// same Balance constants hoverText's own EnemyH branch does (via TooltipText.
+// creatureHoverText), so the two can't drift apart. Every building that spawns a unit gets
+// this appended (see spawnAbilitySuffix) so its tooltip states not just "spawns a Goblin"
+// but what a Goblin actually does once it arrives.
+private def unitAbilitySummary(kind: UnitKind): String = TooltipText.unitAbilitySummary(kind, currentLang)
 
-// Appended to any building's tooltip (static build-button hover — BuildingTooltips — or
+// Appended to any building's tooltip (static build-button hover — buildingTooltip — or
 // live per-building hover — buildingHoverText) that spawns a unit, so its value proposition
 // is visible whether or not the building has been placed yet. Empty for a kind with no
 // spawn (BuildingSpecs.all(_).spawns = None — Watchtower, Angel, PassingGate, every Science
 // lab), which already describes its own (non-unit) ability directly in its own text.
 private def spawnAbilitySuffix(kind: BuildingKind): String =
   BuildingSpecs.all(kind).spawns match
-    case Some((unitKind, _)) => s" — $unitKind ${unitAbilitySummary(unitKind)}"
+    case Some((unitKind, _)) => s" — ${EntityNames.unitName(unitKind, currentLang)} ${unitAbilitySummary(unitKind)}"
     case None                => ""
 
 // Zombie/Vampire corrupt buildings gradually toward Balance.CorruptionMaxPercent (see
 // CombatEngine's corruption mechanic) — shown only once corruption has actually started,
 // so an untouched building's tooltip stays exactly as it read before Death existed.
 private def corruptionSuffix(b: Building): String =
-  if b.corruptionPercent > 0 then f" — corrupted ${b.corruptionPercent}%.0f%%/${Balance.CorruptionMaxPercent.toInt}%%"
-  else ""
+  TooltipText.corruptionSuffix(b.corruptionPercent, Balance.CorruptionMaxPercent, currentLang)
 
 // This one kind's live per-second rate, including whatever Engendre boost `maze`'s other
 // buildings currently grant it (CombatEngine.engendreBoost — same multiplier
@@ -1939,66 +1887,45 @@ private def effectiveRate(maze: MazeState, kind: BuildingKind, resource: Resourc
     CombatEngine.researchProductionMultiplier(maze, kind, resource) *
     (1.0 + CombatEngine.engendreBoost(maze, resource))
 
-private def perKindHoverText(kind: BuildingKind, b: Building, maze: MazeState): String = kind match
-  case BuildingKind.Grove =>
-    val nextElfS = (b.spawnCountdownMs / 1000).ceil.toInt
-    s"Bosquet — +${formatDecimal(effectiveRate(maze, kind, Resource.Wood))} wood/s, next Elf in ${nextElfS}s"
-  case BuildingKind.Forest =>
-    val nextElfS = (b.spawnCountdownMs / 1000).ceil.toInt
-    s"Forêt — ${Balance.AuraDamagePerSec.toInt} dmg/s to adjacent enemies, +${formatDecimal(effectiveRate(maze, kind, Resource.Wood))} wood/s, next Elf in ${nextElfS}s"
-  case BuildingKind.Jungle =>
-    val nextWolfS = (b.spawnCountdownMs / 1000).ceil.toInt
-    s"Jungle — ${Balance.AuraDamagePerSec.toInt} dmg/s to adjacent enemies, +${formatDecimal(effectiveRate(maze, kind, Resource.Wood))} wood/s, next Wolf in ${nextWolfS}s"
-  case BuildingKind.Cave =>
-    val nextGoblinS = (b.spawnCountdownMs / 1000).ceil.toInt
-    s"Cave — +${formatDecimal(effectiveRate(maze, kind, Resource.Fire))} fire/s, next Goblin in ${nextGoblinS}s"
-  case BuildingKind.Labyrinth =>
-    val nextMinotaurS = (b.spawnCountdownMs / 1000).ceil.toInt
-    s"Labyrinthe — next Minotaur in ${nextMinotaurS}s"
-  case BuildingKind.Church =>
-    val nextPaladinS = (b.spawnCountdownMs / 1000).ceil.toInt
-    s"Eglise — +${formatDecimal(effectiveRate(maze, kind, Resource.Light))} light/s, next Paladin in ${nextPaladinS}s"
-  case BuildingKind.Watchtower =>
-    s"Tour de guet — +${formatDecimal(effectiveRate(maze, kind, Resource.Light))} light/s, " +
-      s"${Balance.WatchtowerDamagePerSec.toInt} dmg/s to the nearest enemy within ${Balance.WatchtowerRangeCells} cells"
-  case BuildingKind.Angel =>
-    s"Ange — +${formatDecimal(effectiveRate(maze, kind, Resource.Light))} light/s, " +
-      s"${Balance.AngelDamagePerSec.toInt} dmg/s to adjacent enemies, slows them ${(Balance.AngelSlowFraction * 100).toInt}%"
-  case BuildingKind.Tomb =>
-    val nextZombieS = (b.spawnCountdownMs / 1000).ceil.toInt
-    s"Tombe — +${formatDecimal(effectiveRate(maze, kind, Resource.Shadow))} shadow/s, next Zombie in ${nextZombieS}s"
-  case BuildingKind.BlackCastle =>
-    val nextVampireS = (b.spawnCountdownMs / 1000).ceil.toInt
-    s"Château Noir — +${formatDecimal(effectiveRate(maze, kind, Resource.Shadow))} shadow/s, next Vampire in ${nextVampireS}s"
-  case BuildingKind.DeathHouse =>
-    val nextNecromancerS = (b.spawnCountdownMs / 1000).ceil.toInt
-    s"Maison de la Mort — +${formatDecimal(effectiveRate(maze, kind, Resource.Shadow))} shadow/s, " +
-      s"next Necromancer in ${nextNecromancerS}s"
-  case BuildingKind.LaboFondamental =>
-    s"Labo Fondamental — +${formatDecimal(effectiveRate(maze, kind, Resource.Crystal))} crystal/s, " +
-      s"no research bonus — upgrade it into a specific lab below"
-  case BuildingKind.LaboNaturel =>
-    s"Labo Naturel — +${formatDecimal(effectiveRate(maze, kind, Resource.Crystal))} crystal/s, " +
-      researchLevelText(maze, kind)
-  case BuildingKind.LaboSombre =>
-    s"Labo Sombre — +${formatDecimal(effectiveRate(maze, kind, Resource.Crystal))} crystal/s, " +
-      researchLevelText(maze, kind)
-  case BuildingKind.LaboDeRecherche =>
-    s"Labo de Recherche — +${formatDecimal(effectiveRate(maze, kind, Resource.Crystal))} crystal/s, " +
-      researchLevelText(maze, kind)
-  case BuildingKind.LaboDeLaLoi =>
-    s"Labo de la Loi — +${formatDecimal(effectiveRate(maze, kind, Resource.Crystal))} crystal/s, " +
-      researchLevelText(maze, kind)
-  case BuildingKind.LaboDuChaos =>
-    s"Labo du Chaos — +${formatDecimal(effectiveRate(maze, kind, Resource.Crystal))} crystal/s, " +
-      researchLevelText(maze, kind)
-  case BuildingKind.Stonehenge =>
-    val nextTreeS = (b.spawnCountdownMs / 1000).ceil.toInt
-    s"Stonehenge — spawns no resource, next Arbre Anime in ${nextTreeS}s"
-  case BuildingKind.PassingGate =>
-    s"Portail — spawns no unit, ${Balance.PassingGateDamagePerSec.toInt} dmg/s to enemies on its 4 " +
-      s"adjacent cells; harvests ${(Balance.PassingGateDeathShadowFraction * 100).toInt}% of your own " +
-      s"total resources as shadow on every nearby death"
+private def perKindHoverText(kind: BuildingKind, b: Building, maze: MazeState): String =
+  val name = EntityNames.buildingName(kind, currentLang)
+  def nextS = (b.spawnCountdownMs / 1000).ceil.toInt
+  def rate(res: Resource) = TooltipText.rate(res, effectiveRate(maze, kind, res), currentLang)
+  kind match
+    case BuildingKind.Grove =>
+      s"$name — ${rate(Resource.Wood)}, ${TooltipText.nextSpawnIn(UnitKind.Elf, nextS, currentLang)}"
+    case BuildingKind.Forest =>
+      s"$name — ${TooltipText.adjacentDamage(Balance.AuraDamagePerSec, currentLang)}, ${rate(Resource.Wood)}, " +
+        s"${TooltipText.nextSpawnIn(UnitKind.Elf, nextS, currentLang)}"
+    case BuildingKind.Jungle =>
+      s"$name — ${TooltipText.adjacentDamage(Balance.AuraDamagePerSec, currentLang)}, ${rate(Resource.Wood)}, " +
+        s"${TooltipText.nextSpawnIn(UnitKind.Wolf, nextS, currentLang)}"
+    case BuildingKind.Cave =>
+      s"$name — ${rate(Resource.Fire)}, ${TooltipText.nextSpawnIn(UnitKind.Goblin, nextS, currentLang)}"
+    case BuildingKind.Labyrinth =>
+      s"$name — ${TooltipText.nextSpawnIn(UnitKind.Minotaur, nextS, currentLang)}"
+    case BuildingKind.Church =>
+      s"$name — ${rate(Resource.Light)}, ${TooltipText.nextSpawnIn(UnitKind.Paladin, nextS, currentLang)}"
+    case BuildingKind.Watchtower =>
+      s"$name — ${rate(Resource.Light)}, ${TooltipText.rangedDamage(Balance.WatchtowerDamagePerSec, Balance.WatchtowerRangeCells, currentLang)}"
+    case BuildingKind.Angel =>
+      s"$name — ${rate(Resource.Light)}, ${TooltipText.adjacentDamageAndSlow(Balance.AngelDamagePerSec, Balance.AngelSlowFraction * 100, currentLang)}"
+    case BuildingKind.Tomb =>
+      s"$name — ${rate(Resource.Shadow)}, ${TooltipText.nextSpawnIn(UnitKind.Zombie, nextS, currentLang)}"
+    case BuildingKind.BlackCastle =>
+      s"$name — ${rate(Resource.Shadow)}, ${TooltipText.nextSpawnIn(UnitKind.Vampire, nextS, currentLang)}"
+    case BuildingKind.DeathHouse =>
+      s"$name — ${rate(Resource.Shadow)}, ${TooltipText.nextSpawnIn(UnitKind.Necromancer, nextS, currentLang)}"
+    case BuildingKind.LaboFondamental =>
+      s"$name — ${rate(Resource.Crystal)}, ${TooltipText.noResearchBonusYet(currentLang)}"
+    case BuildingKind.LaboNaturel | BuildingKind.LaboSombre | BuildingKind.LaboDeRecherche | BuildingKind.LaboDeLaLoi |
+        BuildingKind.LaboDuChaos =>
+      s"$name — ${rate(Resource.Crystal)}, ${researchLevelText(maze, kind)}"
+    case BuildingKind.Stonehenge =>
+      s"$name — ${TooltipText.noSpawnLabel(currentLang)}, ${TooltipText.nextSpawnIn(UnitKind.Tree, nextS, currentLang)}"
+    case BuildingKind.PassingGate =>
+      s"$name — ${TooltipText.spawnsNothing(currentLang)}, " +
+        s"${TooltipText.passingGateAbility(Balance.PassingGateDamagePerSec, Balance.PassingGateDeathShadowFraction * 100, currentLang)}"
 
 // ── HTML overlay ────────────────────────────────────────────────────────
 
@@ -2066,19 +1993,25 @@ private def updateProgressBar(id: String, current: Double, target: Double): Unit
 // One WON/LOST banner per maze half (not a single "You win!"/"AI wins!" overlay) —
 // each stays confined to pointer-events: none (see index.html's .game-over-side), so
 // buildings on either side stay hoverable for their info tooltip after the match ends.
+// result.reason itself is always English (MatchResult.reason is persisted verbatim — see
+// Persistence/MatchLog — so it never changes shape); the banner shows a live, localized
+// recomputation instead (VictoryText.reason), read off whichever side actually won.
 private def updateGameOverBanner(battle: BattleState): Unit =
   battle.outcome match
     case Some(result) =>
       val playerWon = result.isInstanceOf[MatchResult.PlayerWins]
-      setGameOverSide("player", won = playerWon, result.reason)
-      setGameOverSide("ai", won = !playerWon, result.reason)
+      val reason =
+        if playerWon then VictoryText.reason(battle.player, battle.ai, currentLang)
+        else VictoryText.reason(battle.ai, battle.player, currentLang)
+      setGameOverSide("player", won = playerWon, reason)
+      setGameOverSide("ai", won = !playerWon, reason)
     case None =>
       document.getElementById("game-over-player").classList.remove("visible")
       document.getElementById("game-over-ai").classList.remove("visible")
 
 private def setGameOverSide(prefix: String, won: Boolean, reason: String): Unit =
   val title = document.getElementById(s"game-over-$prefix-title")
-  title.textContent = if won then "WON" else "LOST"
+  title.textContent = if won then Ui.won(currentLang) else Ui.lost(currentLang)
   title.classList.remove("won")
   title.classList.remove("lost")
   title.classList.add(if won then "won" else "lost")

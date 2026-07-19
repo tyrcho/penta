@@ -1,15 +1,12 @@
 ---
-faction: "[Mort](Mort.md)"
 type: batiment
+faction: "[Mort](Mort.md)"
 cout en bois: 20
-ressources:
-  - "[Bois](Bois.md)"
-  - "[Ombre](Ombre.md)"
 cout en ombre: 40
 ---
 
-![](Pasted%20image%2020260717195128.png)
-Produit 0.5 ombre / sec.
+![Château Noir](../../game/assets/chateau-noir.png)
 
+Produit 0.5 [Ombre](Ombre.md) par seconde.
 
-Toutes les 10 sec  genere un [Elfe](Elf
+Toutes les 10 secondes, génère un [Vampire](Vampire.md).

@@ -314,7 +314,7 @@
     <h1>tower-defense-poc</h1>
     <span class="spacer"></span>
     <div class="panel" id="ai-level-panel">
-      <label for="ai-level-select" style="font-size: 0.85rem; font-weight: 600;">AI:</label>
+      <label for="ai-level-select" id="ai-label" style="font-size: 0.85rem; font-weight: 600;">AI:</label>
       <select class="speed-btn" id="ai-level-select"></select>
     </div>
     <span id="spectate-label"></span>
@@ -325,101 +325,102 @@
       <span id="speed-label">1x</span>
       <button class="speed-btn" id="new-game-btn">New Game</button>
       <button class="speed-btn" id="fullscreen-btn">Full</button>
+      <button class="speed-btn" id="lang-btn">EN</button>
     </div>
   </header>
   <div id="concept-rows">
     <div class="concept-row">
-      <span class="concept-name" title="Nature">🌳</span>
+      <span class="concept-name" data-i18n="nature" title="Nature">🌳</span>
       <div class="concept-side player-side">
-        <span class="stat wood" title="Wood">🪵<span id="player-wood">0</span><span class="rate" id="player-wood-rate"></span></span>
-        <span class="stat progress" title="Forests">🌲<span id="player-forests">0/0</span><span class="progress-bar"><span class="progress-bar-fill" id="player-forests-bar"></span></span></span>
+        <span class="stat wood" data-i18n="wood" title="Wood">🪵<span id="player-wood">0</span><span class="rate" id="player-wood-rate"></span></span>
+        <span class="stat progress" data-i18n="forests" title="Forests">🌲<span id="player-forests">0/0</span><span class="progress-bar"><span class="progress-bar-fill" id="player-forests-bar"></span></span></span>
       </div>
       <div class="concept-buildings">
-        <button class="build-btn selected" id="build-grove"><img src="./assets/grove.png" alt="Bosquet"></button>
-        <button class="build-btn" id="build-stonehenge"><img src="./assets/stonehenge.png" alt="Stonehenge"></button>
+        <button class="build-btn selected" id="build-grove"><img src="./assets/grove.png" alt="Bosquet" data-i18n-alt="grove"></button>
+        <button class="build-btn" id="build-stonehenge"><img src="./assets/stonehenge.png" alt="Stonehenge" data-i18n-alt="stonehenge"></button>
         <span class="build-slot-placeholder">?</span>
         <span class="build-slot-placeholder">?</span>
         <span class="build-slot-placeholder">?</span>
       </div>
       <div class="concept-side ai-side">
-        <span class="stat progress" title="Forests">🌲<span id="ai-forests">0/0</span><span class="progress-bar"><span class="progress-bar-fill" id="ai-forests-bar"></span></span></span>
-        <span class="stat wood" title="Wood">🪵<span id="ai-wood">0</span><span class="rate" id="ai-wood-rate"></span></span>
+        <span class="stat progress" data-i18n="forests" title="Forests">🌲<span id="ai-forests">0/0</span><span class="progress-bar"><span class="progress-bar-fill" id="ai-forests-bar"></span></span></span>
+        <span class="stat wood" data-i18n="wood" title="Wood">🪵<span id="ai-wood">0</span><span class="rate" id="ai-wood-rate"></span></span>
       </div>
     </div>
     <div class="concept-row">
-      <span class="concept-name" title="Chaos">👹</span>
+      <span class="concept-name" data-i18n="chaos" title="Chaos">👹</span>
       <div class="concept-side player-side">
-        <span class="stat fire" title="Fire">🔥<span id="player-fire">0</span><span class="rate" id="player-fire-rate"></span></span>
-        <span class="stat progress" title="Plundered">💰<span id="player-plundered">0/0</span><span class="progress-bar"><span class="progress-bar-fill" id="player-plundered-bar"></span></span></span>
+        <span class="stat fire" data-i18n="fire" title="Fire">🔥<span id="player-fire">0</span><span class="rate" id="player-fire-rate"></span></span>
+        <span class="stat progress" data-i18n="plundered" title="Plundered">💰<span id="player-plundered">0/0</span><span class="progress-bar"><span class="progress-bar-fill" id="player-plundered-bar"></span></span></span>
       </div>
       <div class="concept-buildings">
-        <button class="build-btn" id="build-cave"><img src="./assets/cave.png" alt="Cave"></button>
-        <button class="build-btn" id="build-labyrinthe"><img src="./assets/labyrinthe.png" alt="Labyrinthe"></button>
+        <button class="build-btn" id="build-cave"><img src="./assets/cave.png" alt="Cave" data-i18n-alt="cave"></button>
+        <button class="build-btn" id="build-labyrinthe"><img src="./assets/labyrinthe.png" alt="Labyrinthe" data-i18n-alt="labyrinth"></button>
         <span class="build-slot-placeholder">?</span>
         <span class="build-slot-placeholder">?</span>
         <span class="build-slot-placeholder">?</span>
       </div>
       <div class="concept-side ai-side">
-        <span class="stat progress" title="Plundered">💰<span id="ai-plundered">0/0</span><span class="progress-bar"><span class="progress-bar-fill" id="ai-plundered-bar"></span></span></span>
-        <span class="stat fire" title="Fire">🔥<span id="ai-fire">0</span><span class="rate" id="ai-fire-rate"></span></span>
+        <span class="stat progress" data-i18n="plundered" title="Plundered">💰<span id="ai-plundered">0/0</span><span class="progress-bar"><span class="progress-bar-fill" id="ai-plundered-bar"></span></span></span>
+        <span class="stat fire" data-i18n="fire" title="Fire">🔥<span id="ai-fire">0</span><span class="rate" id="ai-fire-rate"></span></span>
       </div>
     </div>
     <div class="concept-row">
-      <span class="concept-name" title="Loi">⚖️</span>
+      <span class="concept-name" data-i18n="loi" title="Loi">⚖️</span>
       <div class="concept-side player-side">
-        <span class="stat light" title="Light">💡<span id="player-light">0</span><span class="rate" id="player-light-rate"></span></span>
+        <span class="stat light" data-i18n="light" title="Light">💡<span id="player-light">0</span><span class="rate" id="player-light-rate"></span></span>
         <!-- Eglise/Watchtower feed no VictoryConditions target today — placeholder until one exists. -->
-        <span class="stat unknown" title="Victory">🏆 —</span>
+        <span class="stat unknown" data-i18n="victory" title="Victory">🏆 —</span>
       </div>
       <div class="concept-buildings">
-        <button class="build-btn" id="build-eglise"><img src="./assets/eglise.png" alt="Eglise"></button>
-        <button class="build-btn" id="build-watchtower"><img src="./assets/watchtower.png" alt="Tour de guet"></button>
-        <button class="build-btn" id="build-angel"><img src="./assets/angel.png" alt="Ange"></button>
+        <button class="build-btn" id="build-eglise"><img src="./assets/eglise.png" alt="Eglise" data-i18n-alt="church"></button>
+        <button class="build-btn" id="build-watchtower"><img src="./assets/watchtower.png" alt="Tour de guet" data-i18n-alt="watchtower"></button>
+        <button class="build-btn" id="build-angel"><img src="./assets/angel.png" alt="Ange" data-i18n-alt="angel"></button>
         <span class="build-slot-placeholder">?</span>
         <span class="build-slot-placeholder">?</span>
       </div>
       <div class="concept-side ai-side">
-        <span class="stat unknown" title="Victory">🏆 —</span>
-        <span class="stat light" title="Light">💡<span id="ai-light">0</span><span class="rate" id="ai-light-rate"></span></span>
+        <span class="stat unknown" data-i18n="victory" title="Victory">🏆 —</span>
+        <span class="stat light" data-i18n="light" title="Light">💡<span id="ai-light">0</span><span class="rate" id="ai-light-rate"></span></span>
       </div>
     </div>
     <div class="concept-row">
-      <span class="concept-name" title="Mort">💀</span>
+      <span class="concept-name" data-i18n="mort" title="Mort">💀</span>
       <div class="concept-side player-side">
-        <span class="stat shadow" title="Shadow">🌑<span id="player-shadow">0</span><span class="rate" id="player-shadow-rate"></span></span>
-        <span class="stat progress" title="Corrupted">☠️<span id="player-corrupted">0/0</span><span class="progress-bar"><span class="progress-bar-fill" id="player-corrupted-bar"></span></span></span>
+        <span class="stat shadow" data-i18n="shadow" title="Shadow">🌑<span id="player-shadow">0</span><span class="rate" id="player-shadow-rate"></span></span>
+        <span class="stat progress" data-i18n="corrupted" title="Corrupted">☠️<span id="player-corrupted">0/0</span><span class="progress-bar"><span class="progress-bar-fill" id="player-corrupted-bar"></span></span></span>
       </div>
       <div class="concept-buildings">
-        <button class="build-btn" id="build-tomb"><img src="./assets/tomb.png" alt="Tombe"></button>
-        <button class="build-btn" id="build-chateau-noir"><img src="./assets/chateau-noir.png" alt="Chateau Noir"></button>
-        <button class="build-btn" id="build-death-house"><img src="./assets/death-house.png" alt="Maison de la Mort"></button>
-        <button class="build-btn" id="build-passing-gate"><img src="./assets/passing-gate.png" alt="Portail"></button>
+        <button class="build-btn" id="build-tomb"><img src="./assets/tomb.png" alt="Tombe" data-i18n-alt="tomb"></button>
+        <button class="build-btn" id="build-chateau-noir"><img src="./assets/chateau-noir.png" alt="Chateau Noir" data-i18n-alt="blackCastle"></button>
+        <button class="build-btn" id="build-death-house"><img src="./assets/death-house.png" alt="Maison de la Mort" data-i18n-alt="deathHouse"></button>
+        <button class="build-btn" id="build-passing-gate"><img src="./assets/passing-gate.png" alt="Portail" data-i18n-alt="passingGate"></button>
         <span class="build-slot-placeholder">?</span>
       </div>
       <div class="concept-side ai-side">
-        <span class="stat progress" title="Corrupted">☠️<span id="ai-corrupted">0/0</span><span class="progress-bar"><span class="progress-bar-fill" id="ai-corrupted-bar"></span></span></span>
-        <span class="stat shadow" title="Shadow">🌑<span id="ai-shadow">0</span><span class="rate" id="ai-shadow-rate"></span></span>
+        <span class="stat progress" data-i18n="corrupted" title="Corrupted">☠️<span id="ai-corrupted">0/0</span><span class="progress-bar"><span class="progress-bar-fill" id="ai-corrupted-bar"></span></span></span>
+        <span class="stat shadow" data-i18n="shadow" title="Shadow">🌑<span id="ai-shadow">0</span><span class="rate" id="ai-shadow-rate"></span></span>
       </div>
     </div>
     <div class="concept-row">
-      <span class="concept-name" title="Science">🧪</span>
+      <span class="concept-name" data-i18n="science" title="Science">🧪</span>
       <div class="concept-side player-side">
-        <span class="stat crystal" title="Crystal">💎<span id="player-crystal">0</span><span class="rate" id="player-crystal-rate"></span></span>
-        <span class="stat progress" title="Fondamentale">🔬<span id="player-fondamentale">0/0</span><span class="progress-bar"><span class="progress-bar-fill" id="player-fondamentale-bar"></span></span></span>
+        <span class="stat crystal" data-i18n="crystal" title="Crystal">💎<span id="player-crystal">0</span><span class="rate" id="player-crystal-rate"></span></span>
+        <span class="stat progress" data-i18n="fondamentale" title="Fondamentale">🔬<span id="player-fondamentale">0/0</span><span class="progress-bar"><span class="progress-bar-fill" id="player-fondamentale-bar"></span></span></span>
       </div>
       <div class="concept-buildings">
         <!-- The only Science build button — LaboNaturel/Sombre/DeRecherche/DeLaLoi/DuChaos
              are reached by upgrading this one, chosen via the tooltip's 5 upgrade buttons
              (see index.html's #tooltip-upgrade-0..4), never built directly. -->
-        <button class="build-btn" id="build-labo-fondamental"><img src="./assets/labo-fondamental.png" alt="Labo Fondamental"></button>
+        <button class="build-btn" id="build-labo-fondamental"><img src="./assets/labo-fondamental.png" alt="Labo Fondamental" data-i18n-alt="laboFondamental"></button>
         <span class="build-slot-placeholder">?</span>
         <span class="build-slot-placeholder">?</span>
         <span class="build-slot-placeholder">?</span>
         <span class="build-slot-placeholder">?</span>
       </div>
       <div class="concept-side ai-side">
-        <span class="stat progress" title="Fondamentale">🔬<span id="ai-fondamentale">0/0</span><span class="progress-bar"><span class="progress-bar-fill" id="ai-fondamentale-bar"></span></span></span>
-        <span class="stat crystal" title="Crystal">💎<span id="ai-crystal">0</span><span class="rate" id="ai-crystal-rate"></span></span>
+        <span class="stat progress" data-i18n="fondamentale" title="Fondamentale">🔬<span id="ai-fondamentale">0/0</span><span class="progress-bar"><span class="progress-bar-fill" id="ai-fondamentale-bar"></span></span></span>
+        <span class="stat crystal" data-i18n="crystal" title="Crystal">💎<span id="ai-crystal">0</span><span class="rate" id="ai-crystal-rate"></span></span>
       </div>
     </div>
   </div>

@@ -1,17 +1,12 @@
 ---
-faction: "[Mort](Mort.md)"
 type: batiment
+faction: "[Mort](Mort.md)"
 cout en bois: 5
-ressources:
-  - "[Bois](Bois.md)"
-  - "[Ombre](Ombre.md)"
 cout en ombre: 10
 ---
-Envoie un [Zombie](Zombie.md) toutes les 10s.
-![](Pasted%20image%2020260717194441.png)
 
+![Tombe](../../game/assets/tomb.png)
 
-Produit 0.2 ombre / sec.
+Produit 0.2 [Ombre](Ombre.md) par seconde.
 
-
-Toutes les 10 sec  genere un [Elfe](Elfe.md).
+Toutes les 10 secondes, génère un [Zombie](Zombie.md).

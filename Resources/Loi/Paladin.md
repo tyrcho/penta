@@ -1,10 +1,11 @@
 ---
-faction: "[Loi](Loi.md)"
 type: unite
+faction: "[Loi](Loi.md)"
 PV: "50"
 ---
+
 ![Paladin](../../game/assets/paladin.png)
 
-Produit par l'[Église](Eglise.md)
+Produit par [Église](Eglise.md).
 
-Aura : protege les unites adjacentes de 2 degats.
+Aura : protège les unités alliées adjacentes de 2 dégâts par seconde.

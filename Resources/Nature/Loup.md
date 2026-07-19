@@ -1,8 +1,9 @@
 ---
 type: unite
 faction: "[Nature](Nature.md)"
-PV: "40"
+PV: "30"
 ---
 
-![](../../game/assets/wolf-reference.png)
-Se deplace 1.5x plus vite que les unites standard comme [Elfe](Elfe.md), et augmente la vitesse de deplacement des unites a 2 cases de 50%.
+![Loup](../../game/assets/wolf-reference.png)
+
+Se déplace 1.5x plus vite que les unités standard comme l'[Elfe](Elfe.md), et augmente la vitesse de déplacement des unités alliées à 2 cases de distance de 50%.

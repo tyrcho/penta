@@ -1,17 +1,17 @@
 ---
-faction: "[Nature](Nature.md)"
 type: batiment
-cout en bois: 30
-ressources:
-  - "[Bois](Bois.md)"
+faction: "[Nature](Nature.md)"
+cout en bois: 20
 ---
-![](../../game/assets/forest.png)
 
-Produit 1 bois / 2 sec.
+![Forêt](../../game/assets/forest.png)
 
-Amelioration du [Bosquet](Bosquet.md).
+Produit 0.5 [Bois](Bois.md) par seconde.
 
-Contient des Ents qui attaquent les unites qui passent sur les cases adjacentes pour 2 degats/sec.
+Amélioration du [Bosquet](Bosquet.md).
 
-Soigne la corruption (voir [Corruption](../Mort/Corruption.md)) de lui-meme et des 8
-batiments environnants de 2% par seconde.
+Contient des Ents qui attaquent les unités passant sur les cases adjacentes pour 2 dégâts/sec.
+
+Toutes les 10 secondes, génère un [Elfe](Elfe.md).
+
+Soigne la corruption (voir [Corruption](../Mort/Corruption.md)) de lui-même et des 8 bâtiments environnants de 0.3% par seconde.

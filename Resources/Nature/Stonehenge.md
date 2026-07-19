@@ -1,13 +1,9 @@
 ---
-faction: "[Nature](Nature.md)"
 type: batiment
+faction: "[Nature](Nature.md)"
 cout en bois: 150
-ressources:
-  - "[Bois](Bois.md)"
 ---
-![](../../game/assets/stonehenge.png)
 
-Produit un [Arbre Animé](Arbre Animé.md) toutes les 10 sec, qui part attaquer
-l'adversaire comme toutes les autres unites — mais compte quand meme pour la condition
-de victoire de la Nature (Expansion Inarrêtable) tant qu'il est en vie, meme pendant
-qu'il attaque.
+![Stonehenge](../../game/assets/stonehenge.png)
+
+Génère un [Arbre Animé](Arbre%20Animé.md) toutes les 10 secondes, qui part attaquer l'adversaire comme n'importe quelle autre unité — mais compte quand même pour la condition de victoire de la Nature (Expansion Inarrêtable) tant qu'il est en vie, même pendant qu'il attaque.

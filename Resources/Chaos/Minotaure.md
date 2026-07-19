@@ -1,8 +1,11 @@
 ---
-faction: "[Chaos](Chaos.md)"
 type: unite
+faction: "[Chaos](Chaos.md)"
 PV: "50"
 ---
+
 ![Minotaure](../../game/assets/minotaur.png)
 
-Pille 10 ressources de chaque type.
+Produit par [Labyrinthe](Labyrinthe.md).
+
+Pille 10 [Bois](../Nature/Bois.md) et 10 [Feu](Feu.md).

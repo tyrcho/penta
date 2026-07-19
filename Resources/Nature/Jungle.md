@@ -1,16 +1,17 @@
 ---
-faction: "[Nature](Nature.md)"
 type: batiment
-cout en bois: 60
-ressources:
-  - "[Bois](Bois.md)"
+faction: "[Nature](Nature.md)"
+cout en bois: 50
 ---
-![](../../game/assets/jungle-reference.png)
-Produit 1 bois / sec.
 
-Amelioration de la [Foret](Foret.md)
+![Jungle](../../game/assets/jungle.png)
 
-Produit un [Loup](Loup.md) toutes les 5 sec.
+Produit 1 [Bois](Bois.md) par seconde.
 
-Soigne la corruption (voir [Corruption](../Mort/Corruption.md)) de lui-meme et des 8
-batiments environnants de 3% par seconde.
+Amélioration de la [Forêt](Foret.md).
+
+Contient des Ents qui attaquent les unités passant sur les cases adjacentes pour 2 dégâts/sec.
+
+Toutes les 10 secondes, génère un [Loup](Loup.md).
+
+Soigne la corruption (voir [Corruption](../Mort/Corruption.md)) de lui-même et des 8 bâtiments environnants de 0.5% par seconde.

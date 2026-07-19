@@ -1,10 +1,12 @@
 ---
 type: batiment
 faction: "[Loi](Loi.md)"
-cout en bois: 40
-cout en lumiere: 20
+cout en bois: 20
+cout en lumiere: 40
 ---
-Produit 0.3 [Lumière](Lumière.md) par seconde.
-![Eglise](../../game/assets/eglise.png)
 
-Toutes les 10 secondes genere un [Paladin](Paladin.md)
+![Église](../../game/assets/eglise.png)
+
+Produit 0.3 [Lumière](Lumière.md) par seconde.
+
+Toutes les 10 secondes, génère un [Paladin](Paladin.md).

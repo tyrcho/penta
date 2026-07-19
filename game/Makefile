@@ -1,4 +1,4 @@
-.PHONY: dev test test-js sim sim-tune build clean help
+.PHONY: dev test test-js sim sim-tune docs build clean help
 
 help:
 	@echo "make dev      — compile + watch + dev server on :8082"
@@ -7,6 +7,7 @@ help:
 	@echo "make sim      — headless AI-vs-AI battles: make sim ARGS='linear balanced 200'"
 	@echo "                add --log <path> for a one-match transcript: ARGS='linear comb 1 --log /tmp/match.log'"
 	@echo "make sim-tune — sweep CompositeStrategy weights: make sim-tune ARGS='linear 50 0.25'"
+	@echo "make docs     — regenerate the vault's building/unit/resource pages (FR in place, EN under ../Resources-en/)"
 	@echo "make build    — production JS build → public/"
 	@echo "make clean    — remove build artifacts"
 
