@@ -1,17 +1,59 @@
 stages:
+  - build
   - deploy
 
-pages:
-  stage: deploy
+# Builds the playable game (unchanged from before Quartz was added) — see game/README.md.
+build-game:
+  stage: build
   image: sbtscala/scala-sbt:eclipse-temurin-jammy-21.0.2_13_1.10.1_3.3.3
   script:
     - cd game
     - sbt --batch "js/fullLinkJS"
+    - mkdir -p ../game-site
+    - cp js/target/scala-3.3.3/towerdefense-js-opt/*.js js/target/scala-3.3.3/towerdefense-js-opt/*.js.map ../game-site/
+    - cp index.html ../game-site/
+    - cp -r assets ../game-site/
+  artifacts:
+    paths:
+      - game-site
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+
+# Builds the design vault (Resources/, Resources-en/, Engendre/Controle/Victoire) with
+# Quartz — same vendoring approach as the japon repo (see Makefile/scripts/setup-quartz.sh).
+build-vault:
+  stage: build
+  image: node:24
+  cache:
+    key:
+      files:
+        - .quartz-version
+        - quartz.lock.json
+    paths:
+      - .quartz-engine/
+      - node_modules/
+      - .quartz/
+  script:
+    - make build
+    - mv public vault-site
+  artifacts:
+    paths:
+      - vault-site
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+
+# Combines both into one Pages site: the game at the root, the vault under /wiki/.
+pages:
+  stage: deploy
+  image: alpine:3
+  needs:
+    - build-game
+    - build-vault
+  script:
     - mkdir -p public
-    - cp js/target/scala-3.3.3/towerdefense-js-opt/*.js js/target/scala-3.3.3/towerdefense-js-opt/*.js.map public/
-    - cp index.html public/
-    - cp -r assets public/
-    - mv public ../public
+    - cp -r game-site/. public/
+    - mkdir -p public/wiki
+    - cp -r vault-site/. public/wiki/
   artifacts:
     paths:
       - public

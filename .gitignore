@@ -1,1 +1,29 @@
 .obsidian/
+
+# Quartz (see Makefile/scripts/setup-quartz.sh, scripts/stage-content.sh) — the vendored
+# engine and build output are all regenerable, not source of truth.
+#
+# content/ is deliberately NOT listed here even though it's also just a generated staging
+# copy (scripts/stage-content.sh) — Quartz's own file walker (quartz/util/glob.ts) treats
+# content/ as an Obsidian vault and respects gitignore rules to decide what to *publish*
+# (its own private-notes feature), so a root-level "content/" entry here would make Quartz
+# skip every staged file and silently publish an empty site. Left untracked by discipline
+# instead (never `git add content`), same as japon leaves its other generated paths
+# (.quartz-engine/, node_modules/, etc.) untracked without needing a rule for each.
+.quartz-engine/
+.quartz/
+quartz/
+quartz.ts
+package.json
+package-lock.json
+tsconfig.json
+globals.d.ts
+index.d.ts
+LICENSE.txt
+.node-version
+.npmrc
+.prettierrc
+.prettierignore
+.gitattributes
+node_modules/
+public/
