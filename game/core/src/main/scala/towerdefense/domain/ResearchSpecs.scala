@@ -9,7 +9,7 @@ package towerdefense.domain
 // VictoryConditions.hasWonViaFondamentale), so its list is empty.
 case class ResearchSpec(baseCost: Map[Resource, Double], effectByLevel: List[Double]):
   def costAtLevel(level: Int): Map[Resource, Double] =
-    baseCost.view.mapValues(_ * math.pow(2.0, (level - 1).toDouble)).toMap
+    baseCost.view.mapValues(_ * math.pow(3.0, (level - 1).toDouble)).toMap
 
   def effectAtLevel(level: Int): Double =
     if level <= 0 then 0.0 else effectByLevel(level - 1)

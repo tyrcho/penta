@@ -29,8 +29,8 @@ package towerdefense.domain
 // game doesn't have anywhere yet (see CLAUDE.md/README's note on that gap).
 case class BuildingSpec(
     cost: Map[Resource, Double],
-    produces: Map[Resource, Double], // rate per second
-    spawns: Option[(UnitKind, Double)], // (unit kind, interval ms) — None for Watchtower and the Science labs
+    produces: Map[Resource, Double]=Map.empty, // rate per second
+    spawns: Option[(UnitKind, Double)] = None, // (unit kind, interval ms) — None for Watchtower and the Science labs
     buildableDirectly: Boolean = true,
     maxPerMaze: Option[Int] = None
 )
@@ -54,8 +54,6 @@ object BuildingSpecs:
       spawns = Some(UnitKind.Wolf -> Balance.WolfSpawnIntervalMs),
       buildableDirectly = false
     ),
-    // Stonehenge.md: unlike Grove/Forest/Jungle's Elf/Wolf (sent to raid the opponent —
-    // see BattleEngine.stayHomeUnitKinds), the Tree it spawns stays in this SAME maze.
     BuildingKind.Stonehenge -> BuildingSpec(
       cost = Map(Resource.Wood -> Balance.StonehengeCostWood),
       produces = Map.empty,
