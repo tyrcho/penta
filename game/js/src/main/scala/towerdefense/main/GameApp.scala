@@ -157,8 +157,9 @@ private object AssetPaths:
   val Flames =
     List("./assets/flame1.png", "./assets/flame2.png", "./assets/flame3.png", "./assets/flame4.png")
   val Wolf = List("./assets/wolf/run-0.png", "./assets/wolf/run-1.png", "./assets/wolf/run-2.png")
-  // Single-facing 10-frame walk cycle (see LICENSE-zombie.txt: supplied directly, no
-  // source page) — animated like Wolf, not direction-swapped like Goblin/Elf's 4 sets.
+  // Single-facing 10-frame walk cycle, original hand-authored art (see
+  // game/assets/src/zombie/) — animated like Wolf, not direction-swapped like
+  // Goblin/Elf's 4 sets.
   val ZombieFrames: List[String] = (0 until 10).map(i => f"./assets/zombie/walk-$i%02d.png").toList
   // Necromancien.md/Ame.md: cropped from a labeled reference sheet supplied directly by
   // the project owner (see LICENSE-necromancer.txt) — single-facing walk cycles, same

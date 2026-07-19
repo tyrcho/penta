@@ -4,7 +4,7 @@ faction: "[Mort](Mort.md)"
 PV: "15"
 ---
 
-![Zombie](../../game/assets/zombie/walk-00.png)
+![Zombie](../../game/assets/zombie/walk.gif)
 
 Produit par [Tombe](Tombe.md).
 

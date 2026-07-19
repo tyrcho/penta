@@ -200,7 +200,7 @@ object EntityNames:
       Faction.Mort,
       I18nText("Zombie", "Zombie"),
       I18nText("Zombie.md", "Zombie.md"),
-      "zombie/walk-00.png"
+      "zombie/walk.gif"
     ),
     UnitKind.Vampire -> UnitKindInfo(Faction.Mort, I18nText("Vampire", "Vampire"), I18nText("Vampire.md", "Vampire.md"), "vampire.png"),
     UnitKind.Necromancer -> UnitKindInfo(

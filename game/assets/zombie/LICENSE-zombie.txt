@@ -1,4 +1,0 @@
-Zombie walk-cycle frames (walk-00.png .. walk-09.png) were supplied directly by the
-project owner as a zip upload, without an accompanying source page or license file.
-Origin/license unknown — best-effort placeholder per game/CLAUDE.md's asset policy.
-If the original source is identified later, replace this note with its actual terms.

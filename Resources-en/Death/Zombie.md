@@ -4,7 +4,7 @@ faction: "[Death](../../Resources/Mort/Mort.md)"
 HP: "15"
 ---
 
-![Zombie](../../game/assets/zombie/walk-00.png)
+![Zombie](../../game/assets/zombie/walk.gif)
 
 Spawned by [Tomb](Tomb.md).
 

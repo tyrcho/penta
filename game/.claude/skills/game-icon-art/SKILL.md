@@ -1,6 +1,6 @@
 ---
 name: game-icon-art
-description: Draws or redraws a game/assets/*.png icon (building, unit, or resource art) for this tower-defense game in its established hand-drawn cartoon style — bold dark outlines, flat cel-shaded colors, transparent background — and wires it into GameApp.scala/index.html correctly. Use this whenever the user asks to create, replace, redraw, improve, or "make better" any in-game icon or image, asks for art that's "more recognizable", "more cartoon", "more thematic", or ties an icon more clearly to its faction (Chaos/Nature/Undead/etc.) — even if they just say "the image for X looks bad" or "can we get a nicer icon for Y". No external image-generation tool is available in this environment; this skill produces art by hand-authoring SVG and rendering it locally.
+description: Draws or redraws game/assets/*.png art for this tower-defense game — building/unit/resource icons AND multi-frame animated unit sprites (walk cycles like Zombie/Goblin/Wolf) — in the established hand-drawn cartoon style (bold dark outlines, flat cel-shaded colors, transparent background), and wires it into GameApp.scala/index.html/EntityNames.scala correctly. Use this whenever the user asks to create, replace, redraw, improve, or "make better" any in-game icon, sprite, or animation, asks for art that's "more recognizable", "more cartoon", "darker/more horrific", "more thematic", or ties an icon more clearly to its faction (Chaos/Nature/Undead/etc.) — even if they just say "the image for X looks bad" or "can we get a nicer icon for Y" or "animate X". No external image-generation tool is available in this environment; this skill produces art by hand-authoring SVG (rigged with per-limb joints for animated sprites) and rendering it locally.
 ---
 
 # Game icon art
@@ -177,3 +177,61 @@ the SVG should never drift apart. Then apply the step-1 findings:
   touches unrelated lines, you likely over-edited; back it out.
 - Re-read the full-size PNG one more time as a final look before considering the
   task done.
+
+## Animated multi-frame sprites (e.g. a unit's walk cycle)
+
+Steps 0-8 above are for a single static icon. A unit like Zombie/Goblin/Wolf is instead
+a numbered sequence (`walk-00.png`, `walk-01.png`, ...) played back as a loop — see
+`AssetPaths.ZombieFrames`/`GoblinFrames`/`Wolf` in `GameApp.scala`. Hand-drawing each
+frame independently is both slow and risky: tiny inconsistencies between frames (a
+slightly different head size, a limb in the wrong place) show up as jitter the instant
+the sequence plays. The fix is to build one **rigged** character and *pose* it per
+frame programmatically, rather than redrawing it per frame:
+
+1. Design the character as SVG body-part groups (head, torso, and one `<g>` per limb),
+   each limb attached at a joint with `transform="translate(pivotX,pivotY)
+   rotate(angle)"` so rotating that one group swings the whole limb around its
+   shoulder/hip. Keep limbs as simple rigid capsules (a single rotating segment, no
+   knee/elbow bend) unless the extra complexity earns its keep — for a stiff/shambling
+   creature a rigid limb is often *more* on-character, not a shortcut.
+2. Write a small Python generator (not 10 hand-authored SVGs) that computes each
+   frame's joint angles from a walk-cycle function (e.g. `angle = amplitude *
+   sin(2*pi*t + phase)`, with the two legs 180° out of phase, a vertical body bob at
+   twice the leg frequency, and a small counter-swing on the arms) and emits
+   `walk-00.svg` .. `walk-NN.svg` by formatting the same template with different
+   angles. See `game/assets/src/zombie/generate.py` for a worked example.
+   - **Watch for duplicate frames**: sampling a plain sine at N evenly-spaced points
+     over one full period is mirror-symmetric around each peak, so two samples
+     straddling a peak can land on the *exact* same angle — frame k and frame
+     (period−k) render pixel-identical, quietly wasting frame slots. Add a small
+     constant phase offset to the sampling grid (still a full sweep, so it still loops
+     at the seam) to desync from that symmetry; `generate.py`'s `phase_eps` is the
+     fix, and `assemble.py`/a quick `md5sum walk-*.png | sort` catches it if it
+     recurs.
+3. Render every frame through the usual `render.js` (large size, e.g. 600-800px, for
+   clean edges), same as a static icon.
+4. Crop and resize all frames **identically** — do NOT run the static-icon workflow's
+   per-file independent alpha-trim on each frame, since trimming each to its own
+   content box shifts the character around and makes it jitter in place instead of
+   walking smoothly. Compute the union of all frames' bounding boxes once, crop every
+   frame to that same rectangle, then resize all of them by the same factor. See
+   `game/assets/src/zombie/assemble.py`, which also emits a `walk.gif` preview (frames
+   composited onto an opaque background and upscaled — GIF doesn't do partial alpha
+   well) in the same step.
+5. Sanity-check the loop as an actual animation, not just a contact-sheet grid of
+   frames — motion problems (a held/stuttering pose, a limb popping instead of
+   swinging) are often invisible frame-by-frame but obvious once it plays. Send the
+   `walk.gif` to the user with `SendUserFile` so they can actually see it move; a
+   static Read of a GIF only shows one frame.
+6. Match the target size to sibling *animated* units (goblin/wolf/zombie are all
+   64-128px tall), not to the much larger building-icon sizes from step 5 above.
+7. Same cleanup as a static icon: delete a stale `LICENSE-<name>.txt` if the old
+   frames were third-party/unknown-provenance, fix any code comments that referenced
+   it, and confirm no tint/CSS-filter hack needs removing.
+8. If a lore doc embeds a representative frame (`![Zombie](.../zombie/walk-00.png)`),
+   consider pointing it at the new `walk.gif` instead so the doc shows the actual
+   motion — but check whether that doc is hand-written or **generated** first (grep
+   for the asset path in `game/core/.../i18n/EntityNames.scala` and
+   `game/sim/.../docgen/DocGenerator.scala`); if it's generated, edit the source table
+   entry, not just the `.md` file, or the next doc-generation run will silently
+   revert it.
