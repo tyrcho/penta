@@ -261,15 +261,30 @@ private def resourceName(res: Resource): String = res match
 
 private val MazeGapPx = GridConfig.cellSize
 
+// While actually Playing (a human controls one side), the AI's maze is purely something
+// to watch, not interact with — CLAUDE.md's symmetry rule is about capability (either
+// side can build/win the same way), not screen real estate, so shrinking it here to give
+// the player's own maze (the thing they're actually tapping on, on a small phone screen
+// most of all) more space is a pure UI choice. Spectating keeps both sides at equal
+// billing (aiScaleFor below), since neither side is "the player" there.
+private val AiMazeScaleWhenPlaying = 0.6
+
+private def aiScaleFor(mode: Mode): Double = mode match
+  case Mode.Playing    => AiMazeScaleWhenPlaying
+  case Mode.Spectating(_, _) => 1.0
+
 // Side-by-side on wide screens, stacked (player maze above the AI's) on narrow/portrait
-// ones — e.g. a phone on WiFi (see game/CLAUDE.md: both mazes always keep equal billing,
-// so "stacked" here is purely a layout choice, not a capability difference).
+// ones — e.g. a phone on WiFi (see game/CLAUDE.md: both mazes always keep equal billing
+// capability-wise, so "stacked" here is purely a layout choice, not a capability
+// difference). aiScale (aiScaleFor's doc) shrinks only the AI's contribution to the
+// overall bounding box — at aiScale = 1.0 this reduces to the original always-equal
+// formula exactly (2x a side, or width+width), so Spectating's layout is unchanged.
 private case class Layout(portrait: Boolean, battleWidth: Double, battleHeight: Double)
 
-private def currentLayout(screenW: Double, screenH: Double): Layout =
+private def currentLayout(screenW: Double, screenH: Double, aiScale: Double): Layout =
   if screenH > screenW then
-    Layout(portrait = true, GridConfig.width, GridConfig.height * 2 + MazeGapPx)
-  else Layout(portrait = false, GridConfig.width * 2 + MazeGapPx, GridConfig.height)
+    Layout(portrait = true, GridConfig.width, GridConfig.height * (1.0 + aiScale) + MazeGapPx)
+  else Layout(portrait = false, GridConfig.width * (1.0 + aiScale) + MazeGapPx, GridConfig.height)
 
 @main def main(): Unit =
   if document.readyState == "loading" then
@@ -396,7 +411,7 @@ def onReady(app: Application, textures: js.Dictionary[Texture]): Unit =
     "pointerdown",
     (e: FederatedPointerEvent) => {
       val clickedBuilding =
-        cellAt(app, e).flatMap { case (col, row) => buildingAt(battle.player, isPlayer = true, col, row) }
+        cellAt(app, e, mode).flatMap { case (col, row) => buildingAt(battle.player, isPlayer = true, col, row) }
       clickedBuilding match
         case Some(target) =>
           selectedTarget = Some(target)
@@ -404,7 +419,7 @@ def onReady(app: Application, textures: js.Dictionary[Texture]): Unit =
           positionTooltip(canvasRect.left + e.globalX, canvasRect.top + e.globalY)
         case None =>
           selectedTarget = None
-          if mode == Mode.Playing then battle = handleTap(app, battle, e, selectedBuilding)
+          if mode == Mode.Playing then battle = handleTap(app, battle, e, selectedBuilding, mode)
     }
   )
   app.stage.on(
@@ -419,7 +434,7 @@ def onReady(app: Application, textures: js.Dictionary[Texture]): Unit =
       // Tracked unconditionally (unlike the tooltip positioning above) — the range-preview
       // overlay needs to keep following the cursor over blank cells too, not just latch
       // onto an actual creature/building the way hovered/selectedTarget do.
-      hoveredCell = cellAt(app, e)
+      hoveredCell = cellAt(app, e, mode)
     }
   )
   app.stage.on("pointerleave", (_: FederatedPointerEvent) => hoveredCell = None)
@@ -512,7 +527,7 @@ def onReady(app: Application, textures: js.Dictionary[Texture]): Unit =
       isPlayer = false,
       h => hovered = h
     )
-    applyViewTransform(app, battleWorld, aiWorld)
+    applyViewTransform(app, battleWorld, aiWorld, mode)
     updateModeUi(mode)
     updateAuraOverlay(auraOverlay, battle.player, selectedTarget, selectedBuilding, hoveredCell, mode)
     updateOverlay(battle)
@@ -846,6 +861,14 @@ private def formatDecimal(d: Double): String =
   val rounded = roundToSignificantDigits(d, digits = 2)
   if rounded == rounded.toInt then rounded.toInt.toString else rounded.toString
 
+// Blank at a zero rate rather than "+0/s" — one of the concept-rows' biggest sources of
+// clutter (5 of these per row, both sides) was showing a rate readout even for the
+// factions a maze hasn't invested in at all yet, which says nothing useful and, on a
+// narrow phone, is often exactly what pushed a row's text past one line into a wrap that
+// ate the vertical space the maze canvas needed (see index.html's concept-rows doc).
+private def rateText(perSec: Double): String =
+  if perSec == 0.0 then "" else s"+${formatDecimal(perSec)}/s"
+
 private def roundToSignificantDigits(value: Double, digits: Int): Double =
   if value == 0.0 then 0.0
   else
@@ -917,7 +940,7 @@ private def toggleFullscreen(): Unit =
 
 private def updateFullscreenLabel(): Unit =
   document.getElementById("fullscreen-btn").textContent =
-    if fullscreenElement().isDefined then "Exit Fullscreen" else "Fullscreen"
+    if fullscreenElement().isDefined then "Exit" else "Full"
 
 private def fullscreenElement(): Option[dom.Element] =
   val el = document.asInstanceOf[js.Dynamic].fullscreenElement
@@ -933,9 +956,11 @@ private def clearSprites(world: Container, sprites: MazeSprites): Unit =
 
 // The player's maze occupies local x/y in [0, GridConfig.width)/[0, GridConfig.height) —
 // see currentLayout/computeViewTransform. None outside that (including clicks on the
-// AI's maze, which the player never directly interacts with).
-private def cellAt(app: Application, e: FederatedPointerEvent): Option[(Int, Int)] =
-  val layout = currentLayout(app.screen.width, app.screen.height)
+// AI's maze, which the player never directly interacts with) — always at full scale
+// regardless of aiScaleFor(mode), so this bound never needs to shrink to match a smaller
+// AI maze; only `layout`'s overall size (and so vt.scale/offset) depends on it.
+private def cellAt(app: Application, e: FederatedPointerEvent, mode: Mode): Option[(Int, Int)] =
+  val layout = currentLayout(app.screen.width, app.screen.height, aiScaleFor(mode))
   val vt = computeViewTransform(app.screen.width, app.screen.height, layout)
   val localX = (e.globalX - vt.offsetX) / vt.scale
   val localY = (e.globalY - vt.offsetY) / vt.scale
@@ -946,11 +971,12 @@ private def handleTap(
     app: Application,
     battle: BattleState,
     e: FederatedPointerEvent,
-    choice: BuildingKind
+    choice: BuildingKind,
+    mode: Mode
 ): BattleState =
   if battle.outcome.isDefined then battle
   else
-    cellAt(app, e) match
+    cellAt(app, e, mode) match
       case None => battle
       case Some((col, row)) =>
         battle.copy(
@@ -972,17 +998,50 @@ private def computeViewTransform(screenW: Double, screenH: Double, layout: Layou
   val offsetY = (screenH - layout.battleHeight * scale) / 2
   ViewTransform(scale, offsetX, offsetY)
 
-private def applyViewTransform(app: Application, battleWorld: Container, aiWorld: Container): Unit =
-  val layout = currentLayout(app.screen.width, app.screen.height)
-  aiWorld.x = if layout.portrait then 0 else GridConfig.width + MazeGapPx
-  aiWorld.y = if layout.portrait then GridConfig.height + MazeGapPx else 0
+// aiWorld gets its own local scale on top of battleWorld's shared one (playerWorld
+// always renders at exactly battleWorld's scale — it's never given a local scale of its
+// own), so the two mazes can end up different apparent sizes on screen even though every
+// sprite inside each is still laid out in the same GridConfig coordinate space. Centered
+// within whatever strip currentLayout allotted it (its box is <= that strip whenever
+// aiScale < 1.0), for a deliberate "mini-map" look rather than a stray corner.
+private def applyViewTransform(app: Application, battleWorld: Container, aiWorld: Container, mode: Mode): Unit =
+  val aiScale = aiScaleFor(mode)
+  val layout = currentLayout(app.screen.width, app.screen.height, aiScale)
+  aiWorld.scale.set(aiScale)
+  if layout.portrait then
+    aiWorld.x = GridConfig.width * (1.0 - aiScale) / 2.0
+    aiWorld.y = GridConfig.height + MazeGapPx
+  else
+    aiWorld.x = GridConfig.width + MazeGapPx + GridConfig.width * (1.0 - aiScale) / 2.0
+    aiWorld.y = GridConfig.height * (1.0 - aiScale) / 2.0
   val vt = computeViewTransform(app.screen.width, app.screen.height, layout)
   battleWorld.scale.set(vt.scale)
   battleWorld.x = vt.offsetX
   battleWorld.y = vt.offsetY
-  // Mirrors aiWorld's own side-by-side/stacked choice above, so the WON/LOST banners
-  // (see updateGameOverBanner, index.html's .game-over-side) split the same way.
-  document.getElementById("game-container").classList.toggle("layout-portrait", layout.portrait)
+  updateGameOverBoxes(vt, aiWorld, aiScale)
+
+// The WON/LOST banners (index.html's .game-over-side) used to be positioned by static
+// 50/50 CSS percentages, which only happened to be correct because both mazes were
+// always the same size — now that aiScaleFor(Mode.Playing) can shrink the AI's box below
+// half the screen, each banner's exact on-screen rectangle has to be computed the same
+// way the mazes themselves are (from vt/aiWorld), not assumed. At aiScale = 1.0 this
+// still lands exactly on the old 50/50 split, so Spectating looks unchanged.
+private def updateGameOverBoxes(vt: ViewTransform, aiWorld: Container, aiScale: Double): Unit =
+  setBoxStyle("game-over-player", vt.offsetX, vt.offsetY, GridConfig.width * vt.scale, GridConfig.height * vt.scale)
+  setBoxStyle(
+    "game-over-ai",
+    vt.offsetX + aiWorld.x * vt.scale,
+    vt.offsetY + aiWorld.y * vt.scale,
+    GridConfig.width * aiScale * vt.scale,
+    GridConfig.height * aiScale * vt.scale
+  )
+
+private def setBoxStyle(id: String, x: Double, y: Double, w: Double, h: Double): Unit =
+  val style = document.getElementById(id).asInstanceOf[dom.html.Element].style
+  style.left = s"${x}px"
+  style.top = s"${y}px"
+  style.width = s"${w}px"
+  style.height = s"${h}px"
 
 // ── Sprite sync (one maze's GameState → its Pixi sprites) ──────────────
 
@@ -1962,16 +2021,18 @@ private def updateMazePanel(prefix: String, maze: MazeState, opponent: MazeState
     maze.resources.getOrElse(Resource.Crystal, 0.0).toInt.toString
   // Same CombatEngine function that actually applies production each tick — see its
   // doc for why (a hand-rolled `count * rate` here could silently drift out of sync).
+  // Blank (not "+0/s") at a zero rate — one more word of clutter this row doesn't need
+  // when there's nothing to report yet (see rateText's doc).
   document.getElementById(s"$prefix-wood-rate").textContent =
-    s"(+${formatDecimal(CombatEngine.productionPerSec(maze, Resource.Wood))}/s)"
+    rateText(CombatEngine.productionPerSec(maze, Resource.Wood))
   document.getElementById(s"$prefix-fire-rate").textContent =
-    s"(+${formatDecimal(CombatEngine.productionPerSec(maze, Resource.Fire))}/s)"
+    rateText(CombatEngine.productionPerSec(maze, Resource.Fire))
   document.getElementById(s"$prefix-light-rate").textContent =
-    s"(+${formatDecimal(CombatEngine.productionPerSec(maze, Resource.Light))}/s)"
+    rateText(CombatEngine.productionPerSec(maze, Resource.Light))
   document.getElementById(s"$prefix-shadow-rate").textContent =
-    s"(+${formatDecimal(CombatEngine.productionPerSec(maze, Resource.Shadow))}/s)"
+    rateText(CombatEngine.productionPerSec(maze, Resource.Shadow))
   document.getElementById(s"$prefix-crystal-rate").textContent =
-    s"(+${formatDecimal(CombatEngine.productionPerSec(maze, Resource.Crystal))}/s)"
+    rateText(CombatEngine.productionPerSec(maze, Resource.Crystal))
   // Same number VictoryConditions.evaluate itself compares against (real Forest/Jungle
   // buildings plus any of this maze's own Trees currently raiding `opponent` — see its doc).
   val forestCount = VictoryConditions.forestCount(maze, opponent)
@@ -1993,7 +2054,7 @@ private def updateMazePanel(prefix: String, maze: MazeState, opponent: MazeState
   val fondamentaleReady = VictoryConditions.fondamentaleReadyLabCount(maze)
   val fondamentaleTotal = ResearchSpecs.otherLabKinds.size
   document.getElementById(s"$prefix-fondamentale").textContent =
-    s"$fondamentaleReady/$fondamentaleTotal (Lv$fondamentaleLevel)"
+    s"$fondamentaleReady/$fondamentaleTotal L$fondamentaleLevel"
   updateProgressBar(s"$prefix-fondamentale-bar", fondamentaleReady, fondamentaleTotal)
 
 // Visual companion to the "current/target" text above — lets you compare at a glance
