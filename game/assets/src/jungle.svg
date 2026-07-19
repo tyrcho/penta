@@ -1,0 +1,104 @@
+<svg id="art" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400">
+  <defs>
+    <filter id="softBlur" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="8"/>
+    </filter>
+    <clipPath id="canopyClip">
+      <path d="M166.1,190.0 Q155.6,204.4 155.2,220.9 Q138.2,228.1 128.2,240.4 Q109.9,237.0 96.0,252.8 Q81.0,240.6 61.4,244.2 Q52.0,229.7 40.8,218.8 Q40.0,203.5 26.4,190.0 Q42.8,177.1 36.1,158.8 Q53.5,151.6 64.5,140.8 Q80.0,135.9 96.0,126.3 Q110.2,142.3 130.0,136.8 Q136.2,153.7 150.6,161.5 Q155.1,175.7 166.1,190.0 Z"/>
+      <path d="M365.8,190.0 Q358.3,203.1 362.8,220.5 Q346.7,228.4 338.3,243.5 Q318.3,238.1 304.0,245.7 Q290.4,235.6 270.1,242.8 Q261.9,227.9 245.3,220.5 Q246.3,203.9 242.8,190.0 Q252.1,177.5 245.2,159.5 Q265.2,155.1 270.1,137.1 Q288.7,138.6 304.0,133.6 Q318.6,141.0 337.5,137.9 Q341.4,156.4 362.0,159.9 Q357.8,177.0 365.8,190.0 Z"/>
+      <path d="M360.1,150.0 Q344.7,168.3 345.5,187.7 Q317.3,197.6 334.5,227.9 Q296.7,227.1 295.3,254.5 Q267.0,254.9 247.5,266.4 Q222.1,261.3 200.0,281.2 Q179.7,252.2 151.0,270.1 Q135.9,250.3 109.0,249.9 Q95.5,233.4 65.9,227.7 Q76.1,200.3 48.2,189.3 Q67.8,166.7 44.1,150.0 Q57.2,132.0 41.1,108.8 Q67.8,96.3 68.1,73.6 Q105.3,74.5 110.2,51.4 Q138.3,53.4 148.0,22.5 Q177.1,34.7 200.0,23.4 Q222.7,35.6 247.5,33.3 Q260.7,54.9 299.7,40.6 Q296.6,73.0 330.2,74.6 Q330.4,97.0 347.0,111.9 Q336.3,132.8 360.1,150.0 Z"/>
+    </clipPath>
+  </defs>
+
+  <!-- ground contact shadow (grounding, matches grove/forest) -->
+  <ellipse cx="200" cy="384" rx="132" ry="20" fill="#000000" opacity="0.22" filter="url(#softBlur)"/>
+
+  <!-- wolf paw print in the dirt, lurking near the base -->
+  <g fill="#3A2A18" opacity="0.42">
+    <ellipse cx="304" cy="362" rx="11" ry="8.5" transform="rotate(18 304 362)"/>
+    <ellipse cx="292" cy="347" rx="4.2" ry="5.4" transform="rotate(-6 292 347)"/>
+    <ellipse cx="302" cy="343" rx="4.4" ry="5.6"/>
+    <ellipse cx="313" cy="345" rx="4.2" ry="5.4" transform="rotate(10 313 345)"/>
+    <ellipse cx="320" cy="352" rx="3.8" ry="4.8" transform="rotate(24 320 352)"/>
+  </g>
+
+  <!-- roots flaring into the ground -->
+  <path d="M160,318 Q142,340 118,358 Q140,354 162,342 Q166,358 158,376 Q182,364 184,340
+           Q200,368 200,376 Q216,368 212,340 Q222,364 244,376 Q238,358 240,340
+           Q260,354 282,358 Q262,340 244,318 Z"
+        fill="#8A5A38" stroke="#402C18" stroke-width="6" stroke-linejoin="round"/>
+
+  <!-- trunk (upper part tucks behind the canopy; face sits in the visible lower band) -->
+  <path d="M172,222 Q160,262 166,296 Q152,320 158,344 Q172,336 182,344
+           Q192,334 200,344 Q208,334 218,344 Q228,336 242,344
+           Q248,320 234,296 Q240,262 228,222
+           Q200,236 172,222 Z"
+        fill="#9B6440" stroke="#402C18" stroke-width="6" stroke-linejoin="round"/>
+  <!-- trunk highlight strip -->
+  <path d="M180,228 Q170,266 176,298 Q166,318 170,338 Q178,332 184,336
+           Q188,306 184,278 Q188,248 190,228 Z"
+        fill="#BC7A4B" opacity="0.75"/>
+  <!-- bark texture lines -->
+  <g stroke="#402C18" stroke-width="3.2" stroke-linecap="round" fill="none" opacity="0.6">
+    <path d="M184,238 Q180,264 184,284"/>
+    <path d="M202,234 Q200,262 204,288"/>
+    <path d="M218,240 Q222,264 218,284"/>
+  </g>
+
+  <!-- hidden Ent face in the lower bark: faint knot-hole eyes, camouflaged in trunk tones -->
+  <g fill="#241505" opacity="0.32">
+    <ellipse cx="183" cy="303" rx="4.5" ry="6.5"/>
+    <ellipse cx="213" cy="303" rx="4.5" ry="6.5"/>
+  </g>
+  <path d="M180,322 Q198,326 216,322" stroke="#241505" stroke-width="2.6" fill="none"
+        stroke-linecap="round" opacity="0.3"/>
+
+  <!-- hanging vines with small leaves either side of the canopy -->
+  <g fill="none" stroke="#17331F" stroke-width="5" stroke-linecap="round">
+    <path d="M78,214 Q56,244 66,276 Q74,300 56,322"/>
+    <path d="M322,214 Q346,242 336,274 Q328,300 348,324"/>
+  </g>
+  <g fill="#6FAE4A" stroke="#17331F" stroke-width="3.5" stroke-linejoin="round">
+    <path d="M66,242 Q54,236 48,246 Q56,254 68,250 Z"/>
+    <path d="M70,278 Q56,276 52,288 Q64,294 74,284 Z"/>
+    <path d="M60,310 Q46,308 44,320 Q56,326 66,316 Z"/>
+    <path d="M334,240 Q346,234 352,244 Q344,252 332,248 Z"/>
+    <path d="M330,276 Q344,274 348,286 Q336,292 326,282 Z"/>
+    <path d="M340,308 Q354,306 356,318 Q344,324 334,314 Z"/>
+  </g>
+
+  <!-- canopy: two side lobes + one big scalloped cloud mass, bigger + denser than forest -->
+  <g stroke="#17331F" stroke-width="6" stroke-linejoin="round">
+    <path fill="#4B9351" d="M166.1,190.0 Q155.6,204.4 155.2,220.9 Q138.2,228.1 128.2,240.4 Q109.9,237.0 96.0,252.8 Q81.0,240.6 61.4,244.2 Q52.0,229.7 40.8,218.8 Q40.0,203.5 26.4,190.0 Q42.8,177.1 36.1,158.8 Q53.5,151.6 64.5,140.8 Q80.0,135.9 96.0,126.3 Q110.2,142.3 130.0,136.8 Q136.2,153.7 150.6,161.5 Q155.1,175.7 166.1,190.0 Z"/>
+    <path fill="#4B9351" d="M365.8,190.0 Q358.3,203.1 362.8,220.5 Q346.7,228.4 338.3,243.5 Q318.3,238.1 304.0,245.7 Q290.4,235.6 270.1,242.8 Q261.9,227.9 245.3,220.5 Q246.3,203.9 242.8,190.0 Q252.1,177.5 245.2,159.5 Q265.2,155.1 270.1,137.1 Q288.7,138.6 304.0,133.6 Q318.6,141.0 337.5,137.9 Q341.4,156.4 362.0,159.9 Q357.8,177.0 365.8,190.0 Z"/>
+    <path fill="#4B9351" d="M360.1,150.0 Q344.7,168.3 345.5,187.7 Q317.3,197.6 334.5,227.9 Q296.7,227.1 295.3,254.5 Q267.0,254.9 247.5,266.4 Q222.1,261.3 200.0,281.2 Q179.7,252.2 151.0,270.1 Q135.9,250.3 109.0,249.9 Q95.5,233.4 65.9,227.7 Q76.1,200.3 48.2,189.3 Q67.8,166.7 44.1,150.0 Q57.2,132.0 41.1,108.8 Q67.8,96.3 68.1,73.6 Q105.3,74.5 110.2,51.4 Q138.3,53.4 148.0,22.5 Q177.1,34.7 200.0,23.4 Q222.7,35.6 247.5,33.3 Q260.7,54.9 299.7,40.6 Q296.6,73.0 330.2,74.6 Q330.4,97.0 347.0,111.9 Q336.3,132.8 360.1,150.0 Z"/>
+  </g>
+
+  <!-- interior shading, clipped to the canopy silhouette so nothing spills outside it -->
+  <g clip-path="url(#canopyClip)">
+    <!-- deeper green toward the lower/outer edges for volume -->
+    <g fill="#2C5E37" opacity="0.55">
+      <ellipse cx="90" cy="220" rx="46" ry="38"/>
+      <ellipse cx="310" cy="220" rx="46" ry="38"/>
+      <ellipse cx="150" cy="250" rx="44" ry="34"/>
+      <ellipse cx="250" cy="250" rx="44" ry="34"/>
+      <ellipse cx="200" cy="262" rx="40" ry="30"/>
+      <ellipse cx="60" cy="170" rx="30" ry="34"/>
+      <ellipse cx="340" cy="170" rx="30" ry="34"/>
+    </g>
+    <!-- lighter green cluster toward the top-left, catching the light -->
+    <ellipse cx="176" cy="86" rx="46" ry="40" fill="#8DCB6C" opacity="0.85"/>
+    <ellipse cx="140" cy="118" rx="30" ry="28" fill="#8DCB6C" opacity="0.8"/>
+    <ellipse cx="214" cy="66" rx="30" ry="26" fill="#8DCB6C" opacity="0.75"/>
+    <!-- small pale glint accents scattered through the canopy (family motif shared with grove/forest) -->
+    <g fill="#C9E67A" opacity="0.9">
+      <ellipse cx="108" cy="90" rx="6" ry="9" transform="rotate(-20 108 90)"/>
+      <ellipse cx="266" cy="130" rx="5.5" ry="8.5" transform="rotate(24 266 130)"/>
+      <ellipse cx="196" cy="205" rx="5" ry="8" transform="rotate(-10 196 205)"/>
+      <ellipse cx="80" cy="160" rx="4.5" ry="7" transform="rotate(16 80 160)"/>
+      <ellipse cx="318" cy="175" rx="4.5" ry="7" transform="rotate(-14 318 175)"/>
+      <ellipse cx="236" cy="52" rx="4.5" ry="7" transform="rotate(8 236 52)"/>
+      <ellipse cx="120" cy="205" rx="4.5" ry="7" transform="rotate(-16 120 205)"/>
+    </g>
+  </g>
+</svg>

@@ -1,0 +1,145 @@
+<svg id="art" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400">
+  <defs>
+    <radialGradient id="glow" cx="50%" cy="45%" r="60%">
+      <stop offset="0%" stop-color="#d8ffb0" stop-opacity="0.95"/>
+      <stop offset="55%" stop-color="#8fe667" stop-opacity="0.55"/>
+      <stop offset="100%" stop-color="#8fe667" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <!-- ground shadow -->
+  <ellipse cx="200" cy="378" rx="150" ry="16" fill="#000000" opacity="0.16"/>
+
+  <!-- dirt / grass mound base -->
+  <path d="M55,352 Q75,330 130,336 Q170,322 200,326 Q230,322 270,336 Q325,330 345,352
+           Q356,368 335,382 Q200,398 65,382 Q44,368 55,352 Z"
+        fill="#5c3d25" stroke="#241b13" stroke-width="7" stroke-linejoin="round"/>
+  <path d="M60,356 Q200,376 340,356 Q356,368 335,382 Q200,398 65,382 Q44,368 60,356 Z"
+        fill="#432a17" opacity="0.55"/>
+  <path d="M70,338 Q200,324 330,338" fill="none" stroke="#7a5636" stroke-width="8"
+        stroke-linecap="round" opacity="0.5"/>
+
+  <!-- ===== back trilithon (two uprights + lintel) ===== -->
+  <g stroke="#241b13" stroke-width="7" stroke-linejoin="round" stroke-linecap="round">
+    <!-- left upright -->
+    <path d="M150,88 Q146,76 162,72 Q178,68 190,76 Q196,84 192,110
+             Q198,180 194,232 Q196,246 186,252 Q166,258 154,250
+             Q146,244 148,230 Q142,170 146,108 Q146,96 150,88 Z"
+          fill="#8f8880"/>
+    <path d="M182,80 Q192,150 190,232 Q194,244 186,252 Q178,255 170,254
+             Q182,190 178,110 Q180,92 182,80 Z" fill="#645d55" opacity="0.45"/>
+    <path d="M152,90 Q150,160 154,228" fill="none" stroke="#b6afa4" stroke-width="6" opacity="0.5"/>
+    <path d="M160,120 L172,132 M158,170 L168,180" stroke="#241b13" stroke-width="3.5" opacity="0.55"/>
+
+    <!-- right upright -->
+    <path d="M212,76 Q224,68 240,72 Q256,76 252,88 Q256,96 256,108
+             Q260,170 254,230 Q256,244 248,250 Q236,258 216,252
+             Q206,246 208,232 Q204,180 210,110 Q206,84 212,76 Z"
+          fill="#948d85"/>
+    <path d="M244,80 Q252,150 250,228 Q254,242 248,250 Q240,255 232,253
+             Q242,190 238,110 Q240,92 244,80 Z" fill="#6b6459" opacity="0.4"/>
+    <path d="M220,95 Q216,160 220,226" fill="none" stroke="#bdb6ab" stroke-width="6" opacity="0.5"/>
+
+    <!-- lintel resting across both uprights -->
+    <path d="M126,88 Q140,66 200,70 Q260,64 276,86 Q282,98 270,104
+             Q200,120 132,104 Q120,98 126,88 Z"
+          fill="#9b948b"/>
+    <path d="M132,90 Q200,106 270,90 Q272,98 264,102 Q200,116 138,100 Q130,96 132,90 Z"
+          fill="#645d54" opacity="0.4"/>
+    <path d="M140,84 Q200,98 262,84" fill="none" stroke="#c4bdb2" stroke-width="5" opacity="0.55"/>
+  </g>
+
+  <!-- small stones peeking through the gaps, continuing the ring -->
+  <g stroke="#241b13" stroke-width="6.5" stroke-linejoin="round" stroke-linecap="round">
+    <path d="M122,150 Q118,138 130,134 Q142,130 148,140 Q152,148 148,160
+             Q152,220 146,278 Q148,290 138,294 Q126,298 120,290
+             Q114,284 116,272 Q112,214 116,158 Q116,154 122,150 Z" fill="#867e75"/>
+    <path d="M140,144 Q148,216 144,288 Q136,294 128,292 Q136,216 132,146 Q136,144 140,144 Z"
+          fill="#5c554d" opacity="0.4"/>
+
+    <path d="M278,150 Q282,138 270,134 Q258,130 252,140 Q248,148 252,160
+             Q248,220 254,278 Q252,290 262,294 Q274,298 280,290
+             Q286,284 284,272 Q288,214 284,158 Q284,154 278,150 Z" fill="#8a827a"/>
+    <path d="M260,144 Q252,216 256,288 Q264,294 272,292 Q264,216 268,146 Q264,144 260,144 Z"
+          fill="#5f584f" opacity="0.35"/>
+  </g>
+
+  <!-- glowing nature-magic circle on the ground, seen through the ring -->
+  <ellipse cx="200" cy="300" rx="98" ry="42" fill="url(#glow)"/>
+  <ellipse cx="200" cy="300" rx="70" ry="27" fill="none" stroke="#bdf59a" stroke-width="3"
+           stroke-dasharray="3 10" stroke-linecap="round" opacity="0.85"/>
+  <g fill="none" stroke="#a9ef86" stroke-width="3" stroke-linecap="round" opacity="0.8">
+    <path d="M200,278 L206,292 L192,292 Z"/>
+    <path d="M162,300 L176,296 L176,306 Z"/>
+    <path d="M238,300 L224,296 L224,306 Z"/>
+  </g>
+
+  <!-- central altar stone with a sprouting animated sapling -->
+  <g stroke="#241b13" stroke-width="6" stroke-linejoin="round" stroke-linecap="round">
+    <path d="M172,308 Q170,298 182,296 Q200,292 218,296 Q230,298 228,308
+             Q230,318 218,320 Q200,324 182,320 Q170,318 172,308 Z" fill="#8f887f"/>
+    <path d="M182,300 Q200,306 220,300" fill="none" stroke="#c4bdb2" stroke-width="4" opacity="0.6"/>
+  </g>
+  <g stroke="#1f3a12" stroke-width="4.5" stroke-linejoin="round" stroke-linecap="round">
+    <path d="M200,300 Q196,282 200,266" fill="none" stroke="#3c7a24"/>
+    <path d="M200,282 Q186,276 182,264 Q194,264 200,276 Z" fill="#7ee06b"/>
+    <path d="M200,278 Q214,270 220,258 Q206,260 200,272 Z" fill="#9df26f"/>
+    <circle cx="200" cy="262" r="7" fill="#d8ffb0" opacity="0.9" stroke="none"/>
+  </g>
+
+  <!-- front-left standing stone -->
+  <g stroke="#241b13" stroke-width="7" stroke-linejoin="round" stroke-linecap="round">
+    <path d="M62,170 Q56,156 74,150 Q94,144 106,156 Q114,166 108,184
+             Q114,246 106,316 Q110,330 96,336 Q74,344 60,332
+             Q50,324 54,310 Q46,250 52,182 Q54,176 62,170 Z" fill="#9c948a"/>
+    <path d="M94,160 Q104,244 98,330 Q88,338 76,336 Q86,244 80,162 Q86,160 94,160 Z"
+          fill="#655e54" opacity="0.4"/>
+    <path d="M66,176 Q60,246 64,326" fill="none" stroke="#c9c2b6" stroke-width="6" opacity="0.55"/>
+    <path d="M72,206 L84,218 M64,262 L76,270" stroke="#241b13" stroke-width="3.5" opacity="0.5"/>
+  </g>
+
+  <!-- front-right standing stone (mirrored) -->
+  <g stroke="#241b13" stroke-width="7" stroke-linejoin="round" stroke-linecap="round">
+    <path d="M338,170 Q344,156 326,150 Q306,144 294,156 Q286,166 292,184
+             Q286,246 294,316 Q290,330 304,336 Q326,344 340,332
+             Q350,324 346,310 Q354,250 348,182 Q346,176 338,170 Z" fill="#a39a8f"/>
+    <path d="M306,160 Q294,244 300,330 Q310,338 322,336 Q312,244 318,162 Q312,160 306,160 Z"
+          fill="#6b6459" opacity="0.35"/>
+    <path d="M334,176 Q340,246 336,326" fill="none" stroke="#d1cabe" stroke-width="6" opacity="0.55"/>
+  </g>
+
+  <!-- small mossy pebbles grounding the front of the ring -->
+  <g stroke="#241b13" stroke-width="5" stroke-linejoin="round">
+    <ellipse cx="150" cy="352" rx="18" ry="11" fill="#847c72"/>
+    <ellipse cx="250" cy="354" rx="15" ry="10" fill="#8a8278"/>
+  </g>
+
+  <!-- moss growing on the stones -->
+  <g fill="#5c9138" stroke="#233b16" stroke-width="3" stroke-linejoin="round" opacity="0.92">
+    <path d="M60,300 Q52,290 62,282 Q76,278 80,290 Q84,302 72,308 Q62,310 60,300 Z"/>
+    <path d="M340,296 Q348,286 338,278 Q324,274 320,286 Q316,298 328,304 Q338,306 340,296 Z"/>
+    <path d="M130,272 Q124,264 134,260 Q146,258 148,268 Q150,278 138,280 Q132,278 130,272 Z"/>
+    <path d="M100,266 Q94,258 104,254 Q114,252 116,262 Q118,270 108,274 Q102,272 100,266 Z"/>
+  </g>
+
+  <!-- ivy climbing the front-left stone -->
+  <path d="M66,336 Q58,300 72,268 Q64,240 78,206 Q70,186 82,160"
+        fill="none" stroke="#3c7a24" stroke-width="4.5" stroke-linecap="round"/>
+  <g fill="#6fbf3f" stroke="#233b16" stroke-width="2.5" stroke-linejoin="round">
+    <ellipse cx="60" cy="312" rx="8" ry="6" transform="rotate(-30 60 312)"/>
+    <ellipse cx="76" cy="252" rx="8" ry="6" transform="rotate(20 76 252)"/>
+    <ellipse cx="66" cy="196" rx="7" ry="5.5" transform="rotate(-20 66 196)"/>
+    <ellipse cx="84" cy="172" rx="7" ry="5.5" transform="rotate(25 84 172)"/>
+  </g>
+
+  <!-- grass tufts grounding the stones at the front -->
+  <g fill="#6fa83c" stroke="#233b16" stroke-width="4" stroke-linejoin="round">
+    <path d="M114,346 Q108,326 118,332 Q120,318 128,332 Q136,322 132,342 Q122,350 114,346 Z"/>
+    <path d="M286,346 Q280,326 290,333 Q292,318 300,332 Q308,322 304,342 Q294,350 286,346 Z"/>
+    <path d="M195,362 Q190,346 200,352 Q203,340 210,352 Q218,346 212,362 Q203,368 195,362 Z"/>
+  </g>
+  <g fill="#5c9138" stroke="#233b16" stroke-width="3" stroke-linejoin="round" opacity="0.9">
+    <ellipse cx="150" cy="348" rx="7" ry="5"/>
+    <ellipse cx="250" cy="350" rx="6" ry="4.5"/>
+  </g>
+</svg>

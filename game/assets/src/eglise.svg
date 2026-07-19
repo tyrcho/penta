@@ -1,0 +1,121 @@
+<svg id="art" viewBox="0 0 400 400" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="wallFill" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#f6ecd4"/>
+      <stop offset="100%" stop-color="#d9c49c"/>
+    </linearGradient>
+    <linearGradient id="roofFill" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#71829c"/>
+      <stop offset="100%" stop-color="#48566d"/>
+    </linearGradient>
+    <radialGradient id="windowGlow" cx="50%" cy="50%" r="55%">
+      <stop offset="0%" stop-color="#fff8da" stop-opacity="0.95"/>
+      <stop offset="45%" stop-color="#fde68a" stop-opacity="0.85"/>
+      <stop offset="78%" stop-color="#f0c419" stop-opacity="0.35"/>
+      <stop offset="100%" stop-color="#f0c419" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="haloGlow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#fde68a" stop-opacity="0.55"/>
+      <stop offset="100%" stop-color="#fde68a" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <!-- ground shadow -->
+  <ellipse cx="200" cy="366" rx="148" ry="19" fill="#000000" opacity="0.18"/>
+
+  <!-- soft holy-gold halo bleeding behind the whole chapel -->
+  <circle cx="200" cy="220" r="175" fill="url(#haloGlow)"/>
+
+  <!-- dirt mound base -->
+  <path d="M52,354 Q45,320 90,313 Q80,297 122,291 Q144,270 200,274 Q258,268 282,291 Q322,296 316,318 Q356,323 350,354 Z"
+        fill="#7a4a26" stroke="#2b1d12" stroke-width="7" stroke-linejoin="round"/>
+  <path d="M70,338 Q120,328 168,336" fill="none" stroke="#5c3719" stroke-width="5" stroke-linecap="round" opacity="0.7"/>
+  <path d="M232,340 Q282,330 320,338" fill="none" stroke="#5c3719" stroke-width="5" stroke-linecap="round" opacity="0.7"/>
+
+  <!-- main gable roof -->
+  <path d="M66,206 Q64,196 78,192 L200,120 L322,192 Q336,196 334,206 Q300,222 200,225 Q100,222 66,206 Z"
+        fill="url(#roofFill)" stroke="#2b1d12" stroke-width="8" stroke-linejoin="round"/>
+  <path d="M200,120 L296,188 Q312,193 318,203 Q276,216 210,221 Q250,175 200,120 Z" fill="#33404f" opacity="0.45"/>
+  <path d="M200,120 L104,188 Q88,193 82,203 Q95,209 118,213 Q160,168 200,120 Z" fill="#9caec4" opacity="0.4"/>
+  <path d="M78,192 Q140,206 200,207 Q260,206 322,192" fill="none" stroke="#2b1d12" stroke-width="5" stroke-linecap="round" opacity="0.55"/>
+
+  <!-- bell tower body, rising in front of the roof ridge -->
+  <path d="M174,172 Q170,166 176,162 L224,162 Q230,166 226,172 L228,142 Q228,134 220,132 L180,132 Q172,134 172,142 Z"
+        fill="url(#roofFill)" stroke="#2b1d12" stroke-width="7" stroke-linejoin="round"/>
+
+  <!-- tower cap (small spire) -->
+  <path d="M168,138 Q166,131 172,128 L200,72 L228,128 Q234,131 232,138 Q200,150 168,138 Z"
+        fill="url(#roofFill)" stroke="#2b1d12" stroke-width="7" stroke-linejoin="round"/>
+  <path d="M200,72 L216,128 Q222,131 220,137 Q210,141 200,142 Z" fill="#33404f" opacity="0.55"/>
+  <path d="M200,72 L186,126 Q182,128 183,133 Q191,137 198,138 Z" fill="#9caec4" opacity="0.45"/>
+
+  <!-- cross atop the spire -->
+  <g stroke="#2b1d12" stroke-width="4" stroke-linejoin="round" stroke-linecap="round">
+    <rect x="195" y="34" width="10" height="38" rx="3" fill="#f0c419"/>
+    <rect x="184" y="44" width="32" height="10" rx="3" fill="#f0c419"/>
+  </g>
+
+  <!-- bell arch opening in the tower -->
+  <path d="M186,150 Q186,136 200,136 Q214,136 214,150 L214,172 L186,172 Z"
+        fill="#241a12" stroke="#2b1d12" stroke-width="5" stroke-linejoin="round"/>
+  <!-- bell -->
+  <path d="M193,155 Q193,147 200,147 Q207,147 207,155 Q211,162 209,169 L191,169 Q189,162 193,155 Z"
+        fill="#e0b23a" stroke="#2b1d12" stroke-width="3.5" stroke-linejoin="round"/>
+  <rect x="191" y="169" width="18" height="4" rx="1.5" fill="#c9962a" stroke="#2b1d12" stroke-width="3"/>
+  <circle cx="200" cy="174" r="2.6" fill="#8a6a1a"/>
+
+  <!-- chapel wall block -->
+  <path d="M100,206 Q94,200 104,196 L296,196 Q306,200 300,206 Q308,240 302,270 Q309,300 300,326 Q296,332 286,332
+           L114,332 Q104,332 100,326 Q91,300 98,270 Q92,240 100,206 Z"
+        fill="url(#wallFill)" stroke="#2b1d12" stroke-width="8" stroke-linejoin="round"/>
+
+  <!-- wall shading (right side, away from the light) -->
+  <path d="M232,204 Q262,204 270,206 Q278,240 272,270 Q279,300 270,326 Q266,331 258,331 L218,331
+           Q244,290 240,260 Q246,228 232,204 Z" fill="#b8a276" opacity="0.45"/>
+  <!-- wall highlight (left side) -->
+  <path d="M120,204 Q104,206 102,212 Q96,240 101,268 Q95,296 102,320 Q118,290 116,258 Q112,228 120,204 Z"
+        fill="#fff7e2" opacity="0.5"/>
+
+  <!-- stone coursing lines -->
+  <path d="M104,236 Q200,242 296,236" fill="none" stroke="#b8a276" stroke-width="3.5" stroke-linecap="round" opacity="0.4"/>
+  <path d="M101,300 Q200,306 299,300" fill="none" stroke="#b8a276" stroke-width="3.5" stroke-linecap="round" opacity="0.4"/>
+
+  <!-- rose window glow -->
+  <circle cx="200" cy="240" r="52" fill="url(#windowGlow)"/>
+
+  <!-- rose window frame -->
+  <circle cx="200" cy="240" r="36" fill="#2c2013" stroke="#2b1d12" stroke-width="7"/>
+  <circle cx="200" cy="240" r="29" fill="#fde68a"/>
+  <!-- tracery: sun-cross spokes -->
+  <g stroke="#c9962a" stroke-width="4" stroke-linecap="round">
+    <line x1="200" y1="213" x2="200" y2="267"/>
+    <line x1="173" y1="240" x2="227" y2="240"/>
+    <line x1="181" y1="221" x2="219" y2="259"/>
+    <line x1="219" y1="221" x2="181" y2="259"/>
+  </g>
+  <circle cx="200" cy="240" r="9" fill="#fff8da" stroke="#c9962a" stroke-width="3"/>
+  <circle cx="200" cy="240" r="29" fill="none" stroke="#2b1d12" stroke-width="4"/>
+
+  <!-- arched wooden door -->
+  <path d="M178,332 L178,296 Q178,272 200,272 Q222,272 222,296 L222,332 Z"
+        fill="#8a5a2e" stroke="#2b1d12" stroke-width="7" stroke-linejoin="round"/>
+  <path d="M200,332 L200,278" fill="none" stroke="#5c3719" stroke-width="4" stroke-linecap="round" opacity="0.7"/>
+  <circle cx="209" cy="312" r="3.2" fill="#f0c419" stroke="#2b1d12" stroke-width="1.5"/>
+  <!-- small carved sunburst transom above the door -->
+  <g transform="translate(200,270)" stroke="#c9962a" stroke-width="3" stroke-linecap="round">
+    <line x1="0" y1="-2" x2="0" y2="-14"/>
+    <line x1="-10" y1="2" x2="-17" y2="-8"/>
+    <line x1="10" y1="2" x2="17" y2="-8"/>
+  </g>
+
+  <!-- hanging banner (paladin cue: steel blue with gold trim) -->
+  <g transform="translate(266,204)">
+    <path d="M-3,0 L21,0 L21,80 Q9,92 -3,80 Z"
+          fill="#3f5f8f" stroke="#2b1d12" stroke-width="5.5" stroke-linejoin="round"/>
+    <path d="M-3,0 L21,0 L21,8 L-3,8 Z" fill="#2c4368"/>
+    <circle cx="9" cy="34" r="8" fill="#fde68a" stroke="#c9962a" stroke-width="2.5"/>
+    <path d="M9,29 L11,34 L9,39 L7,34 Z" fill="#3f5f8f"/>
+    <rect x="-6" y="-6" width="30" height="8" rx="3" fill="#8a5a2e" stroke="#2b1d12" stroke-width="4"/>
+  </g>
+
+</svg>

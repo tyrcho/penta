@@ -1,0 +1,125 @@
+<svg id="art" viewBox="0 0 400 400" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <radialGradient id="holyGlow" cx="50%" cy="42%" r="55%">
+      <stop offset="0%" stop-color="#fff6d6" stop-opacity="0.95"/>
+      <stop offset="45%" stop-color="#fde68a" stop-opacity="0.55"/>
+      <stop offset="100%" stop-color="#fde68a" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="baseGlow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#fde68a" stop-opacity="0.85"/>
+      <stop offset="100%" stop-color="#fde68a" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="stoneFill" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#a8adb8"/>
+      <stop offset="100%" stop-color="#7c818f"/>
+    </linearGradient>
+  </defs>
+
+  <!-- ground shadow -->
+  <ellipse cx="200" cy="374" rx="132" ry="17" fill="#000000" opacity="0.2"/>
+
+  <!-- soft holy radiance behind the whole statue -->
+  <circle cx="200" cy="190" r="175" fill="url(#holyGlow)"/>
+
+  <!-- faint light rays -->
+  <g opacity="0.5">
+    <path d="M200,180 L120,40 L150,120 Z" fill="#fde68a" opacity="0.35"/>
+    <path d="M200,180 L280,40 L250,120 Z" fill="#fde68a" opacity="0.35"/>
+    <path d="M200,180 L60,140 L140,155 Z" fill="#fde68a" opacity="0.3"/>
+    <path d="M200,180 L340,140 L260,155 Z" fill="#fde68a" opacity="0.3"/>
+  </g>
+
+  <!-- dirt/rock ground mound, grounding the altar -->
+  <path d="M62,362 Q54,340 96,336 Q90,322 128,318 L272,318 Q310,322 304,336 Q346,340 338,362
+           Q344,376 296,380 L104,380 Q56,376 62,362 Z"
+        fill="#6b4a2a" stroke="#2b1d12" stroke-width="7" stroke-linejoin="round"/>
+  <path d="M84,352 Q130,344 176,350" fill="none" stroke="#523419" stroke-width="4" stroke-linecap="round" opacity="0.7"/>
+  <path d="M228,352 Q276,344 320,352" fill="none" stroke="#523419" stroke-width="4" stroke-linecap="round" opacity="0.7"/>
+
+  <!-- stone altar / pedestal (blocky, architectural) -->
+  <path d="M84,340 L316,340 L300,308 L100,308 Z"
+        fill="url(#stoneFill)" stroke="#2b1d12" stroke-width="7" stroke-linejoin="round"/>
+  <path d="M104,308 L296,308 L286,282 L114,282 Z"
+        fill="#9298a4" stroke="#2b1d12" stroke-width="7" stroke-linejoin="round"/>
+  <path d="M128,282 L272,282 L266,266 L134,266 Z"
+        fill="#aeb3bd" stroke="#2b1d12" stroke-width="7" stroke-linejoin="round"/>
+  <!-- pedestal shading -->
+  <path d="M240,308 L300,308 L316,340 L262,340 Z" fill="#5c6270" opacity="0.45"/>
+  <path d="M104,308 L140,308 L134,282 L114,282 Z" fill="#c7ccd4" opacity="0.5"/>
+  <!-- glowing rune on the altar face -->
+  <circle cx="200" cy="323" r="10" fill="#fde68a" opacity="0.9"/>
+  <path d="M200,314 L200,332 M191,323 L209,323" stroke="#fff6d6" stroke-width="3" stroke-linecap="round"/>
+
+  <!-- ground-level holy aura ring (sells the damage/slow aura) -->
+  <ellipse cx="200" cy="360" rx="150" ry="14" fill="url(#baseGlow)" opacity="0.55"/>
+
+  <!-- ===== wings (folded, contained span) ===== -->
+  <g stroke="#2b1d12" stroke-width="6.5" stroke-linejoin="round">
+    <!-- left wing -->
+    <path d="M172,168 Q118,150 82,168 Q52,182 66,214 Q46,224 66,246
+             Q52,258 78,266 Q108,272 132,254 Q118,238 132,220
+             Q118,206 138,192 Q126,182 150,178 Q160,172 172,168 Z"
+          fill="#f4f2ea"/>
+    <path d="M120,190 Q92,196 76,216" fill="none" stroke="#c9c6ba" stroke-width="4" opacity="0.8" stroke-linecap="round"/>
+    <path d="M122,216 Q96,224 84,244" fill="none" stroke="#c9c6ba" stroke-width="4" opacity="0.8" stroke-linecap="round"/>
+    <path d="M108,244 Q92,252 90,264" fill="none" stroke="#c9c6ba" stroke-width="4" opacity="0.8" stroke-linecap="round"/>
+    <path d="M172,168 Q140,176 132,220 Q140,244 132,254 Q150,240 156,206 Q160,184 172,168 Z"
+          fill="#d9d5c8" opacity="0.6" stroke="none"/>
+
+    <!-- right wing (mirrored) -->
+    <path d="M228,168 Q282,150 318,168 Q348,182 334,214 Q354,224 334,246
+             Q348,258 322,266 Q292,272 268,254 Q282,238 268,220
+             Q282,206 262,192 Q274,182 250,178 Q240,172 228,168 Z"
+          fill="#f4f2ea"/>
+    <path d="M280,190 Q308,196 324,216" fill="none" stroke="#c9c6ba" stroke-width="4" opacity="0.8" stroke-linecap="round"/>
+    <path d="M278,216 Q304,224 316,244" fill="none" stroke="#c9c6ba" stroke-width="4" opacity="0.8" stroke-linecap="round"/>
+    <path d="M292,244 Q308,252 310,264" fill="none" stroke="#c9c6ba" stroke-width="4" opacity="0.8" stroke-linecap="round"/>
+    <path d="M228,168 Q260,176 268,220 Q260,244 268,254 Q250,240 244,206 Q240,184 228,168 Z"
+          fill="#d9d5c8" opacity="0.6" stroke="none"/>
+  </g>
+
+  <!-- ===== robe (bell-shaped statue body) ===== -->
+  <path d="M158,300 Q150,258 170,228 Q163,196 178,168 Q172,146 200,140
+           Q228,146 222,168 Q237,196 230,228 Q250,258 242,300
+           Q200,316 158,300 Z"
+        fill="#f3ecd9" stroke="#2b1d12" stroke-width="7" stroke-linejoin="round"/>
+  <!-- robe shadow (right side fold) -->
+  <path d="M222,168 Q237,196 230,228 Q250,258 242,300 Q222,308 205,310
+           Q216,270 210,230 Q214,196 208,166 Q216,166 222,168 Z"
+        fill="#c9b98f" opacity="0.55"/>
+  <!-- robe highlight (left side) -->
+  <path d="M178,168 Q172,146 200,140 Q188,150 184,172 Q178,200 182,226
+           Q170,214 170,190 Q172,178 178,168 Z"
+        fill="#fffaef" opacity="0.7"/>
+  <!-- hem fold lines -->
+  <path d="M170,270 Q200,282 230,270" fill="none" stroke="#c9b98f" stroke-width="4" opacity="0.6"/>
+  <path d="M164,288 Q200,302 236,288" fill="none" stroke="#c9b98f" stroke-width="4" opacity="0.6"/>
+
+  <!-- shoulders / collar -->
+  <path d="M172,168 Q200,152 228,168 Q222,180 200,182 Q178,180 172,168 Z"
+        fill="#e4dcc4" stroke="#2b1d12" stroke-width="6.5" stroke-linejoin="round"/>
+
+  <!-- ===== sword, held point-down in front of the robe ===== -->
+  <g stroke="#2b1d12" stroke-width="6" stroke-linejoin="round" stroke-linecap="round">
+    <path d="M193,196 L207,196 L202,292 Q200,300 198,292 Z" fill="#e7ebf0"/>
+    <path d="M200,196 L200,286" stroke="#c3cad4" stroke-width="2.5" opacity="0.8"/>
+    <rect x="176" y="188" width="48" height="11" rx="4" fill="#fde68a"/>
+    <rect x="194" y="174" width="12" height="18" rx="3" fill="#8a6a2e"/>
+    <circle cx="200" cy="170" r="9" fill="#fde68a"/>
+  </g>
+
+  <!-- halo -->
+  <circle cx="200" cy="108" r="38" fill="none" stroke="#fde68a" stroke-width="9" opacity="0.95"/>
+  <circle cx="200" cy="108" r="38" fill="none" stroke="#fff6d6" stroke-width="3" opacity="0.9"/>
+
+  <!-- head -->
+  <path d="M170,128 Q166,96 200,88 Q234,96 230,128 Q230,150 200,154 Q170,150 170,128 Z"
+        fill="#f6f0e0" stroke="#2b1d12" stroke-width="7" stroke-linejoin="round"/>
+  <!-- serene closed eyes -->
+  <path d="M182,120 Q188,124 194,120" fill="none" stroke="#2b1d12" stroke-width="4" stroke-linecap="round"/>
+  <path d="M206,120 Q212,124 218,120" fill="none" stroke="#2b1d12" stroke-width="4" stroke-linecap="round"/>
+  <path d="M196,132 Q200,135 204,132" fill="none" stroke="#7a6a42" stroke-width="3" stroke-linecap="round" opacity="0.6"/>
+  <!-- face shading -->
+  <path d="M216,96 Q230,108 230,128 Q230,142 216,150 Q224,130 220,112 Q219,102 216,96 Z"
+        fill="#d9cba8" opacity="0.5"/>
+</svg>
