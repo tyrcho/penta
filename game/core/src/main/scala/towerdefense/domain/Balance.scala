@@ -368,6 +368,17 @@ object Balance:
   // tapping speed. Found by actually running the game, not decided upfront.
   val AiBuildCooldownMs: Double = 3_000.0
 
+  // Every damage-dealing building (Watchtower, Forest/Jungle's Ent aura, Angel, Passing
+  // Gate) fires one discrete full-rate hit every time this interval elapses, rather than
+  // smoothly dribbling out `damagePerSec * deltaMs/1000` on every single engine tick —
+  // matches the vault docs' own wording literally (Tour de guet.md: "chaque seconde a une
+  // cible"; Foret.md/Ange.md/Portail.md: "X degats par seconde"/"par seconde"). A hit that
+  // overkills its target (deals more than its remaining hp) simply wastes the excess —
+  // hp floors at 0 and the creature dies, there's no partial-hit carryover or splash to
+  // another target. See CombatEngine.tickDamageCooldown for the per-building countdown
+  // this drives.
+  val DamageTickIntervalMs: Double = 1_000.0
+
   // Victoire.md leaves both targets as an unfilled "XX" — POC defaults, tuned to be
   // reachable within a few minutes of play at the rates above. Each is a floor: the
   // actual target is whichever is higher between this floor and

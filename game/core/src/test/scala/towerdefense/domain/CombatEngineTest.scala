@@ -514,6 +514,54 @@ class CombatEngineTest extends munit.FunSuite:
     assertEquals(result.state.buildings.head.flashMs, 0.0)
   }
 
+  // ── damage cadence (once per Balance.DamageTickIntervalMs, not smoothly continuous) ──
+
+  test("a watchtower does not deal a second hit until a full DamageTickIntervalMs has elapsed") {
+    val watchtower = Building(100, col = 5, row = 5, BuildingKind.Watchtower, 0.0)
+    val target =
+      Creature(1, GridConfig.cellCenter(6, 5), hp = 100.0, maxHp = 100.0, speedPerMs = 0.0, UnitKind.Elf)
+    val state = withResources().copy(creatures = List(target), buildings = List(watchtower))
+    val afterFirstHit = CombatEngine.tick(state, deltaMs = 1000.0)
+    assertEquals(afterFirstHit.state.creatures.head.hp, target.hp - Balance.WatchtowerDamagePerSec)
+    val stillWithinSameSecond = CombatEngine.tick(afterFirstHit.state, deltaMs = 500.0)
+    assertEquals(
+      stillWithinSameSecond.state.creatures.head.hp,
+      afterFirstHit.state.creatures.head.hp,
+      "no damage should land again before a full second has passed since the last hit"
+    )
+  }
+
+  test("a watchtower deals its second hit once the remaining time since the first elapses") {
+    val watchtower = Building(100, col = 5, row = 5, BuildingKind.Watchtower, 0.0)
+    val target =
+      Creature(1, GridConfig.cellCenter(6, 5), hp = 100.0, maxHp = 100.0, speedPerMs = 0.0, UnitKind.Elf)
+    val state = withResources().copy(creatures = List(target), buildings = List(watchtower))
+    val afterFirstHit = CombatEngine.tick(state, deltaMs = 1000.0)
+    val partial = CombatEngine.tick(afterFirstHit.state, deltaMs = 500.0)
+    val afterSecondHit = CombatEngine.tick(partial.state, deltaMs = 500.0)
+    assertEquals(afterSecondHit.state.creatures.head.hp, target.hp - Balance.WatchtowerDamagePerSec * 2.0)
+  }
+
+  test("a forest aura follows the same once-per-second cadence as a watchtower") {
+    val forest = Building(100, col = 5, row = 5, BuildingKind.Forest, Balance.ElfSpawnIntervalMs)
+    val target =
+      Creature(1, GridConfig.cellCenter(6, 5), hp = 100.0, maxHp = 100.0, speedPerMs = 0.0, UnitKind.Elf)
+    val state = withResources().copy(creatures = List(target), buildings = List(forest))
+    val afterFirstHit = CombatEngine.tick(state, deltaMs = 1000.0)
+    val stillWithinSameSecond = CombatEngine.tick(afterFirstHit.state, deltaMs = 900.0)
+    assertEquals(stillWithinSameSecond.state.creatures.head.hp, afterFirstHit.state.creatures.head.hp)
+  }
+
+  test("a lump hit that overkills its target wastes the excess instead of carrying it anywhere") {
+    val watchtower = Building(100, col = 5, row = 5, BuildingKind.Watchtower, 0.0)
+    val fragile =
+      Creature(1, GridConfig.cellCenter(6, 5), hp = 1.0, maxHp = 1.0, speedPerMs = 0.0, UnitKind.Elf)
+    val state = withResources().copy(creatures = List(fragile), buildings = List(watchtower))
+    val result = CombatEngine.tick(state, deltaMs = 1000.0)
+    assertEquals(result.state.creatures, Nil)
+    assertEquals(result.deaths, List(Death(1, UnitKind.Elf, DeathCause.Watchtower)))
+  }
+
   test("a paladin shields its target from watchtower damage too, not just forest aura") {
     val watchtower = Building(100, col = 5, row = 5, BuildingKind.Watchtower, 0.0)
     val shieldedPos = GridConfig.cellCenter(6, 5)

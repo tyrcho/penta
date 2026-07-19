@@ -85,6 +85,14 @@ case class Creature(
 // — purely a UI cue (GameApp.scala tints the sprite while it's positive), read by nothing
 // else in the domain. Inert (0.0, never set) for every other kind, same reasoning as
 // spawnCountdownMs/corruptionPercent above.
+// damageCooldownMs: counts down toward this building's next full damage hit, for any
+// kind dealt via CombatEngine.applyDamageSources (Watchtower, Forest/Jungle/Angel/
+// PassingGate) — see Balance.DamageTickIntervalMs's doc. Meaningless (never read) for
+// every other kind. Defaults to a full DamageTickIntervalMs, same as spawnCountdownMs's
+// own "the first hit/spawn only lands after waiting out one full interval, not
+// instantly" convention (see Placement's spawnCountdownMs initialization) — a
+// freshly-placed Watchtower doesn't get a free instant snipe against whatever's already
+// standing adjacent to it the moment it's built.
 case class Building(
     id: Long,
     col: Int,
@@ -92,7 +100,8 @@ case class Building(
     kind: BuildingKind,
     spawnCountdownMs: Double,
     corruptionPercent: Double = 0.0,
-    flashMs: Double = 0.0
+    flashMs: Double = 0.0,
+    damageCooldownMs: Double = Balance.DamageTickIntervalMs
 )
 
 // One player's maze: grid, economy and units currently walking it. A battle is two of these.

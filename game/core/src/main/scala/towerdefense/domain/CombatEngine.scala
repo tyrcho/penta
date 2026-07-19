@@ -187,23 +187,34 @@ object CombatEngine:
   // on the receiving maze's side of the fight, same as the units it protects. This combat
   // math is intentionally kept as kind-based special cases, not folded into BuildingSpec/
   // CreatureSpec (see the refactor's confirmed scope).
+  //
+  // Each source fires a single discrete full-rate hit every Balance.DamageTickIntervalMs
+  // (see its doc and tickDamageCooldown) rather than dribbling out a deltaMs-scaled
+  // fraction every engine tick — so the reduction/shield amounts below are flat per-hit
+  // values too, applied only in a tick where something actually fired, not scaled by
+  // deltaMs the way a continuous rate would need.
   private def applyDamageSources(state: MazeState, deltaMs: Double): (MazeState, List[Death]) =
     // Recherches loyales.md: "Augmente les degats infliges par les batiments" — purely
     // local to `state` (the maze whose own buildings are dealing the damage), unlike
     // chaotiques' plunder bonus above which needs the *opponent's* research instead.
     val loyalesLevel = state.researchLevels.getOrElse(BuildingKind.LaboDeLaLoi, 0)
     val loyalesMultiplier = 1.0 + ResearchSpecs.all(BuildingKind.LaboDeLaLoi).effectAtLevel(loyalesLevel)
-    val watchtowerDamagePerHit = Balance.WatchtowerDamagePerSec * deltaMs / 1000.0 * loyalesMultiplier
-    val forests = state.buildings.filter(b => auraBuildingKinds.contains(b.kind))
-    val watchtowers = state.buildings.filter(_.kind == BuildingKind.Watchtower)
-    val fromForests = forests.foldLeft(Map.empty[Long, Double])((acc, f) =>
-      accumulateAuraHits(f, state.creatures, auraDamagePerSecFor(f.kind) * deltaMs / 1000.0 * loyalesMultiplier, acc)
-    )
-    val fromTowers = watchtowers.foldLeft(Map.empty[Long, Double])((acc, w) =>
-      accumulateWatchtowerHit(w, state.creatures, watchtowerDamagePerHit, acc)
-    )
+    val watchtowerDamagePerHit = Balance.WatchtowerDamagePerSec * loyalesMultiplier
+
+    val forestsTicked = state.buildings.filter(b => auraBuildingKinds.contains(b.kind)).map(tickDamageCooldown(_, deltaMs))
+    val towersTicked = state.buildings.filter(_.kind == BuildingKind.Watchtower).map(tickDamageCooldown(_, deltaMs))
+
+    val fromForests = forestsTicked.foldLeft(Map.empty[Long, Double]) { case (acc, (f, fires)) =>
+      if fires then accumulateAuraHits(f, state.creatures, auraDamagePerSecFor(f.kind) * loyalesMultiplier, acc)
+      else acc
+    }
+    val fromTowers = towersTicked.foldLeft(Map.empty[Long, Double]) { case (acc, (w, fires)) =>
+      if fires then accumulateWatchtowerHit(w, state.creatures, watchtowerDamagePerHit, acc) else acc
+    }
+    val tickedById = (forestsTicked ++ towersTicked).map { case (b, _) => b.id -> b }.toMap
+    val buildingsAfterCooldowns = state.buildings.map(b => tickedById.getOrElse(b.id, b))
+
     val damageByCreature = mergeSum(fromForests, fromTowers)
-    val reductionPerHit = Balance.PaladinAuraDamageReductionPerSec * deltaMs / 1000.0
     val shielded = paladinShieldedIds(state.creatures)
     val damaged = state.creatures.map { c =>
       val raw = damageByCreature.getOrElse(c.id, 0.0)
@@ -212,7 +223,8 @@ object CombatEngine:
       // standing adjacent to one, and instead gets its own unconditional flat reduction
       // applied to whatever raw damage it takes from any source.
       val afterShield =
-        if c.kind != UnitKind.Vampire && shielded.contains(c.id) then math.max(0.0, raw - reductionPerHit)
+        if c.kind != UnitKind.Vampire && shielded.contains(c.id) then
+          math.max(0.0, raw - Balance.PaladinAuraDamageReductionPerSec)
         else raw
       val taken =
         if c.kind == UnitKind.Vampire then afterShield * (1.0 - Balance.VampireDamageReductionFraction)
@@ -221,8 +233,20 @@ object CombatEngine:
     }
     val dead = damaged.filter(_.hp <= 0)
     val deaths = dead.map(c => Death(c.id, c.kind, deathCause(c.id, fromForests, fromTowers)))
-    val withoutDead = state.copy(creatures = damaged.filter(_.hp > 0))
+    val withoutDead = state.copy(buildings = buildingsAfterCooldowns, creatures = damaged.filter(_.hp > 0))
     (applyPassingGateHarvest(withoutDead, dead, deltaMs), deaths)
+
+  // Decrements a damage-dealing building's cooldown by deltaMs and reports whether it
+  // fires its one discrete full-rate hit this tick (Balance.DamageTickIntervalMs's doc).
+  // On firing, the new cooldown carries forward whatever the decrement overshot by
+  // (Balance.DamageTickIntervalMs + remaining, where remaining is <= 0) instead of
+  // resetting to a flat DamageTickIntervalMs, so a building's long-run hit rate stays
+  // exactly one per interval regardless of how deltaMs happens to divide it — the same
+  // "preserve the phase" approach spawnCountdownMs/flashMs use elsewhere in this domain.
+  private def tickDamageCooldown(building: Building, deltaMs: Double): (Building, Boolean) =
+    val remaining = building.damageCooldownMs - deltaMs
+    if remaining <= 0.0 then (building.copy(damageCooldownMs = Balance.DamageTickIntervalMs + remaining), true)
+    else (building.copy(damageCooldownMs = remaining), false)
 
   private def mergeSum(a: Map[Long, Double], b: Map[Long, Double]): Map[Long, Double] =
     b.foldLeft(a) { case (acc, (id, amount)) => acc.updated(id, acc.getOrElse(id, 0.0) + amount) }

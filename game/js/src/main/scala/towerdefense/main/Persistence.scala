@@ -117,7 +117,8 @@ private object Persistence:
       kind = b.kind.toString,
       spawnCountdownMs = b.spawnCountdownMs,
       corruptionPercent = b.corruptionPercent,
-      flashMs = b.flashMs
+      flashMs = b.flashMs,
+      damageCooldownMs = b.damageCooldownMs
     )
 
   private def encodeOutcome(m: MatchResult): js.Dynamic = m match
@@ -278,7 +279,12 @@ private object Persistence:
       corruptionPercent = if js.isUndefined(d.corruptionPercent) then 0.0 else asDouble(d.corruptionPercent),
       // Pre-PassingGate saves have no flashMs at all — default to 0.0 (no flash), same
       // fallback shape as sizeFraction above.
-      flashMs = if js.isUndefined(d.flashMs) then 0.0 else asDouble(d.flashMs)
+      flashMs = if js.isUndefined(d.flashMs) then 0.0 else asDouble(d.flashMs),
+      // Pre-once-per-second-damage saves have no damageCooldownMs at all — default to a
+      // full DamageTickIntervalMs, matching the case class's own default for a building
+      // that hasn't started counting down toward its next hit yet.
+      damageCooldownMs =
+        if js.isUndefined(d.damageCooldownMs) then Balance.DamageTickIntervalMs else asDouble(d.damageCooldownMs)
     )
 
   private def decodeOutcome(d: js.Dynamic): Option[MatchResult] =
