@@ -1,0 +1,123 @@
+<svg id="art" viewBox="0 0 400 400" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="wallFill" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#7d6c8f"/>
+      <stop offset="100%" stop-color="#5a4a6b"/>
+    </linearGradient>
+    <radialGradient id="doorGlow" cx="50%" cy="70%" r="75%">
+      <stop offset="0%" stop-color="#d4ffb0"/>
+      <stop offset="30%" stop-color="#8fe05a"/>
+      <stop offset="62%" stop-color="#6a2fa0"/>
+      <stop offset="100%" stop-color="#180a22"/>
+    </radialGradient>
+    <radialGradient id="windowGlow" cx="50%" cy="55%" r="65%">
+      <stop offset="0%" stop-color="#c6ff8a"/>
+      <stop offset="45%" stop-color="#7a3fb0"/>
+      <stop offset="100%" stop-color="#1c0e28"/>
+    </radialGradient>
+  </defs>
+
+  <!-- ground shadow -->
+  <ellipse cx="200" cy="362" rx="146" ry="20" fill="#000000" opacity="0.18"/>
+
+  <!-- dirt mound -->
+  <path d="M48,352 Q40,316 88,308 Q76,288 124,280 Q148,256 200,260 Q253,256 278,280 Q322,288 312,308 Q360,316 352,352 Z"
+        fill="#5c3d22" stroke="#2b1d12" stroke-width="7" stroke-linejoin="round"/>
+  <path d="M66,338 Q116,326 164,336" fill="none" stroke="#3d2712" stroke-width="5" stroke-linecap="round" opacity="0.7"/>
+  <path d="M232,340 Q282,328 322,338" fill="none" stroke="#3d2712" stroke-width="5" stroke-linecap="round" opacity="0.7"/>
+
+  <!-- crooked house, slight overall lean -->
+  <g transform="rotate(-4.5 195 330)">
+
+    <!-- roof (asymmetric, off-center peak for a haunted lean) -->
+    <path d="M84,200 Q78,192 88,186 L158,82 Q166,72 176,82 L306,180 Q312,190 302,196 L282,182 L108,196 Z"
+          fill="#241a29" stroke="#2b1d12" stroke-width="7" stroke-linejoin="round"/>
+    <path d="M158,82 L176,82 L220,124 L150,130 Z" fill="#160f1a" opacity="0.6"/>
+    <path d="M120,150 Q150,140 176,146" fill="none" stroke="#3a2c42" stroke-width="4" stroke-linecap="round" opacity="0.6"/>
+    <path d="M200,150 Q240,158 268,172" fill="none" stroke="#3a2c42" stroke-width="4" stroke-linecap="round" opacity="0.6"/>
+
+    <!-- chimney -->
+    <g transform="translate(252,140) rotate(4)">
+      <rect x="-14" y="-46" width="28" height="66" fill="#2e2233" stroke="#2b1d12" stroke-width="6"/>
+      <path d="M-16,-46 L16,-46 L20,-56 L-20,-56 Z" fill="#382a40" stroke="#2b1d12" stroke-width="6" stroke-linejoin="round"/>
+      <path d="M-14,-28 L14,-28" stroke="#1c1420" stroke-width="3" opacity="0.6"/>
+      <path d="M-14,-12 L14,-12" stroke="#1c1420" stroke-width="3" opacity="0.6"/>
+    </g>
+
+    <!-- ghostly green smoke -->
+    <g opacity="0.55" fill="#8fe05a">
+      <ellipse cx="248" cy="66" rx="12" ry="9" transform="rotate(-10 248 66)"/>
+      <ellipse cx="238" cy="42" rx="14" ry="10" opacity="0.75" transform="rotate(12 238 42)" fill="#a6ff6b"/>
+      <ellipse cx="252" cy="16" rx="11" ry="8" opacity="0.4" transform="rotate(-8 252 16)"/>
+    </g>
+
+    <!-- wall (leaning trapezoid) -->
+    <path d="M114,326 Q106,258 108,188 Q109,180 118,178 L268,161 Q278,163 279,171 Q286,246 273,320 Q198,338 114,326 Z"
+          fill="url(#wallFill)" stroke="#2b1d12" stroke-width="7" stroke-linejoin="round"/>
+    <!-- wall shadow (right side) -->
+    <path d="M210,172 Q272,168 279,171 Q286,246 273,320 Q240,332 205,335 Q232,250 210,172 Z"
+          fill="#382c46" opacity="0.45"/>
+    <!-- wall highlight (left side) -->
+    <path d="M118,178 Q109,180 108,188 Q106,258 114,326 Q126,328 140,329 Q122,250 130,182 Q124,180 118,178 Z"
+          fill="#9c8cae" opacity="0.35"/>
+    <!-- plank texture lines -->
+    <path d="M112,220 Q190,214 276,206" fill="none" stroke="#392c46" stroke-width="3" opacity="0.4"/>
+    <path d="M111,270 Q192,266 275,258" fill="none" stroke="#392c46" stroke-width="3" opacity="0.4"/>
+
+    <!-- window with tattered curtains, upper-left of facade -->
+    <g transform="translate(138,224)">
+      <ellipse cx="0" cy="0" rx="22" ry="21" fill="url(#windowGlow)" stroke="#2b1d12" stroke-width="6"/>
+      <path d="M-13,-27 Q-19,-12 -14,3 L-9,-3 Q-13,-14 -9,-25 Q-11,-27 -13,-27 Z" fill="#7a6a8a" stroke="#2b1d12" stroke-width="3" stroke-linejoin="round"/>
+      <path d="M13,-27 Q19,-10 11,5 L7,-2 Q12,-13 9,-25 Q11,-27 13,-27 Z" fill="#7a6a8a" stroke="#2b1d12" stroke-width="3" stroke-linejoin="round"/>
+    </g>
+
+    <!-- door: jack-o-lantern style witch-light glow -->
+    <path d="M148,326 L148,262 Q148,228 179,225 Q210,228 210,262 L210,326 Z"
+          fill="url(#doorGlow)" stroke="#2b1d12" stroke-width="7" stroke-linejoin="round"/>
+    <ellipse cx="167" cy="262" rx="8" ry="11" fill="#d4ffb0"/>
+    <ellipse cx="193" cy="262" rx="8" ry="11" fill="#d4ffb0"/>
+    <ellipse cx="167" cy="262" rx="8" ry="11" fill="none" stroke="#1c3a05" stroke-width="2.5"/>
+    <ellipse cx="193" cy="262" rx="8" ry="11" fill="none" stroke="#1c3a05" stroke-width="2.5"/>
+    <path d="M160,292 Q179,304 200,290" fill="none" stroke="#1c3a05" stroke-width="4" stroke-linecap="round"/>
+
+    <!-- skull mounted above the door -->
+    <g transform="translate(179,192) rotate(-2) scale(0.62)">
+      <path d="M-22,0 Q-24,-26 0,-28 Q24,-26 22,0 Q22,14 12,18 L12,28 L4,28 L4,18 L-4,18 L-4,28 L-12,28 L-12,18 Q-22,14 -22,0 Z"
+            fill="#e8ddc7" stroke="#2b1d12" stroke-width="6" stroke-linejoin="round"/>
+      <ellipse cx="-9" cy="-2" rx="6" ry="8" fill="#241b30"/>
+      <ellipse cx="9" cy="-2" rx="6" ry="8" fill="#241b30"/>
+      <path d="M-4,10 L0,15 L4,10" fill="none" stroke="#2b1d12" stroke-width="4" stroke-linejoin="round"/>
+    </g>
+
+  </g>
+
+  <!-- raven perched on the right eave, silhouetted clear of the dark roof -->
+  <g transform="translate(292,187) rotate(-2)">
+    <path d="M-22,14 Q-28,-4 -12,-14 Q0,-21 12,-15 Q25,-9 23,7 Q21,18 6,20 Q-10,22 -22,14 Z"
+          fill="#17111a" stroke="#2b1d12" stroke-width="5" stroke-linejoin="round"/>
+    <path d="M14,-8 Q10,4 -2,10 Q10,10 18,2 Q22,-4 14,-8 Z" fill="#2c2430" stroke="#2b1d12" stroke-width="3" stroke-linejoin="round"/>
+    <circle cx="13" cy="-12" r="9" fill="#17111a" stroke="#2b1d12" stroke-width="5"/>
+    <path d="M21,-12 L32,-9 L21,-6 Z" fill="#caa24a" stroke="#2b1d12" stroke-width="2.5" stroke-linejoin="round"/>
+    <circle cx="15" cy="-14" r="1.7" fill="#c6ff8a"/>
+  </g>
+
+  <!-- spellbook and candle by the entrance -->
+  <g transform="translate(252,346) rotate(-5)">
+    <!-- book: open pages seen at a low angle, spine in the middle -->
+    <path d="M-36,10 Q-38,-4 -20,-10 Q-8,-13 -1,-8 L-1,16 Q-10,10 -20,10 Q-30,10 -36,10 Z"
+          fill="#e8ddc7" stroke="#2b1d12" stroke-width="5" stroke-linejoin="round"/>
+    <path d="M36,10 Q38,-4 20,-10 Q8,-13 1,-8 L1,16 Q10,10 20,10 Q30,10 36,10 Z"
+          fill="#d8c9b0" stroke="#2b1d12" stroke-width="5" stroke-linejoin="round"/>
+    <path d="M-1,-8 Q-8,-13 -20,-10 Q-38,-4 -36,10" fill="none" stroke="#5a4a6b" stroke-width="2.5" opacity="0.5"/>
+    <!-- small glowing rune on the page -->
+    <circle cx="-16" cy="0" r="7" fill="none" stroke="#8fe05a" stroke-width="2.5" opacity="0.9"/>
+    <path d="M-16,-6 L-16,6 M-22,0 L-10,0" stroke="#8fe05a" stroke-width="2" opacity="0.9"/>
+    <!-- candle -->
+    <g transform="translate(26,-9)">
+      <rect x="-5" y="0" width="10" height="14" rx="2" fill="#e8ddc7" stroke="#2b1d12" stroke-width="4"/>
+      <path d="M-5,3 L5,3" stroke="#c9b896" stroke-width="2" opacity="0.7"/>
+      <path d="M0,-1 Q-6,-11 0,-17 Q6,-11 0,-1 Z" fill="#8fe05a" stroke="#2b1d12" stroke-width="2.5" stroke-linejoin="round"/>
+      <path d="M0,-4 Q-3,-11 0,-14 Q3,-11 0,-4 Z" fill="#d4ffb0"/>
+    </g>
+  </g>
+</svg>

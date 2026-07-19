@@ -1,0 +1,145 @@
+<svg id="art" viewBox="0 0 400 400" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="wallFill" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#a89bc4"/>
+      <stop offset="100%" stop-color="#766a92"/>
+    </linearGradient>
+    <linearGradient id="roofFill" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#453a5c"/>
+      <stop offset="100%" stop-color="#221a30"/>
+    </linearGradient>
+    <radialGradient id="windowGlow" cx="50%" cy="50%" r="55%">
+      <stop offset="0%" stop-color="#ffb0c6" stop-opacity="0.95"/>
+      <stop offset="40%" stop-color="#ff4d7a" stop-opacity="0.85"/>
+      <stop offset="78%" stop-color="#d61f5c" stop-opacity="0.35"/>
+      <stop offset="100%" stop-color="#d61f5c" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="haloGlow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#6a4fb0" stop-opacity="0.16"/>
+      <stop offset="100%" stop-color="#6a4fb0" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <!-- ground shadow -->
+  <ellipse cx="200" cy="356" rx="150" ry="20" fill="#000000" opacity="0.2"/>
+
+  <!-- ambient shadow-essence halo -->
+  <circle cx="185" cy="220" r="175" fill="url(#haloGlow)"/>
+
+  <!-- dirt mound base -->
+  <path d="M50,352 Q45,318 90,313 Q80,298 122,292 Q144,271 200,275 Q260,268 285,295 Q320,298 315,320 Q355,325 350,352 Z"
+        fill="#6b4a35" stroke="#1c1424" stroke-width="7" stroke-linejoin="round"/>
+  <path d="M68,336 Q118,326 168,334" fill="none" stroke="#4f3626" stroke-width="5" stroke-linecap="round" opacity="0.7"/>
+  <path d="M228,338 Q278,328 316,336" fill="none" stroke="#4f3626" stroke-width="5" stroke-linecap="round" opacity="0.7"/>
+
+  <!-- lavender shadow crystals jutting from the mound -->
+  <g>
+    <path d="M75,330 L67,306 L77,288 L87,304 Z" fill="#a78bd6" stroke="#1c1424" stroke-width="4" stroke-linejoin="round"/>
+    <path d="M77,288 L72,304 L78,314" fill="none" stroke="#e3d9f7" stroke-width="2.5" opacity="0.7"/>
+    <path d="M95,333 L90,317 L97,306 L104,316 Z" fill="#8f6fc9" stroke="#1c1424" stroke-width="4" stroke-linejoin="round"/>
+  </g>
+
+  <!-- connector curtain wall between keep and turret -->
+  <path d="M208,282 Q204,276 210,272 L242,272 Q248,276 244,282 L246,332 L206,332 Z"
+        fill="url(#wallFill)" stroke="#1c1424" stroke-width="6" stroke-linejoin="round"/>
+  <g fill="#5c5178" stroke="#1c1424" stroke-width="3" stroke-linejoin="round">
+    <rect x="213" y="261" width="11" height="13" rx="2"/>
+    <rect x="230" y="261" width="11" height="13" rx="2"/>
+  </g>
+
+  <!-- === right turret === -->
+  <path d="M244,220 Q238,214 246,210 L296,210 Q304,214 298,220 Q304,260 299,296 Q306,316 298,332 Q294,337 287,337
+           L255,337 Q248,337 244,332 Q236,316 242,296 Q237,260 244,220 Z"
+        fill="url(#wallFill)" stroke="#1c1424" stroke-width="7" stroke-linejoin="round"/>
+  <path d="M275,214 Q292,216 297,222 Q302,258 298,294 Q304,314 297,330 Q294,335 288,335 L268,335
+           Q282,300 279,266 Q282,238 275,214 Z" fill="#584d74" opacity="0.5"/>
+
+  <!-- right turret crenellations -->
+  <g fill="url(#wallFill)" stroke="#1c1424" stroke-width="3.5" stroke-linejoin="round">
+    <rect x="250" y="202" width="13" height="18"/>
+    <rect x="277" y="202" width="13" height="18"/>
+  </g>
+
+  <!-- right turret roof -->
+  <path d="M241,204 Q238,198 244,195 L270,140 L296,195 Q302,198 299,204 Q270,210 241,204 Z"
+        fill="url(#roofFill)" stroke="#1c1424" stroke-width="7" stroke-linejoin="round"/>
+  <path d="M270,140 L290,193 Q296,197 294,202 Q283,206 273,207 Z" fill="#171128" opacity="0.55"/>
+  <path d="M270,140 L253,192 Q248,196 250,201 Q258,205 265,206 Z" fill="#7a6c9c" opacity="0.4"/>
+
+  <!-- flag on turret spire -->
+  <g>
+    <rect x="267" y="103" width="6" height="40" rx="2" fill="#221a30" stroke="#1c1424" stroke-width="3"/>
+    <path d="M273,107 L313,117 L297,127 L313,137 L273,145 Z" fill="#150f1c" stroke="#1c1424" stroke-width="4" stroke-linejoin="round"/>
+    <path d="M273,107 L273,145" stroke="#a78bd6" stroke-width="2.5" opacity="0.8"/>
+  </g>
+
+  <!-- turret slit window -->
+  <rect x="264" y="246" width="12" height="34" rx="4" fill="#150f1c" stroke="#1c1424" stroke-width="4"/>
+
+  <!-- === main keep === -->
+  <path d="M112,172 Q105,165 114,161 L206,161 Q215,165 208,172
+           Q214,222 209,262 Q216,302 208,332 Q204,338 195,338
+           L125,338 Q116,338 112,332 Q104,302 111,262 Q105,222 112,172 Z"
+        fill="url(#wallFill)" stroke="#1c1424" stroke-width="8" stroke-linejoin="round"/>
+
+  <!-- keep wall shading -->
+  <path d="M170,166 Q198,168 206,174 Q212,222 207,262 Q214,300 206,330 Q202,336 194,336 L162,336
+           Q182,290 178,258 Q184,210 170,166 Z" fill="#584d74" opacity="0.5"/>
+  <path d="M132,166 Q116,169 113,177 Q106,222 111,260 Q104,298 112,328 Q126,294 123,258 Q118,214 132,166 Z"
+        fill="#c7bcdf" opacity="0.45"/>
+
+  <!-- keep crenellations -->
+  <g fill="url(#wallFill)" stroke="#1c1424" stroke-width="4" stroke-linejoin="round">
+    <rect x="117" y="152" width="14" height="19"/>
+    <rect x="141" y="152" width="14" height="19"/>
+    <rect x="165" y="152" width="14" height="19"/>
+    <rect x="189" y="152" width="14" height="19"/>
+  </g>
+
+  <!-- keep roof (main spire) -->
+  <path d="M108,152 Q104,145 112,141 L160,60 L208,141 Q216,145 212,152 Q160,160 108,152 Z"
+        fill="url(#roofFill)" stroke="#1c1424" stroke-width="8" stroke-linejoin="round"/>
+  <path d="M160,60 L198,138 Q207,142 203,150 Q182,156 162,157 Z" fill="#171128" opacity="0.55"/>
+  <path d="M160,60 L122,136 Q114,141 117,148 Q138,155 158,156 Z" fill="#7a6c9c" opacity="0.4"/>
+
+  <!-- bat perched on the spire tip -->
+  <circle cx="160" cy="57" r="5" fill="url(#roofFill)" stroke="#1c1424" stroke-width="2.5"/>
+  <g transform="translate(160,58)">
+    <path d="M-3,0 Q-20,-10 -40,-2 Q-28,0 -24,6 Q-34,10 -42,18 Q-24,10 -14,12 Q-6,14 -2,9 Z"
+          fill="#1c1424" stroke="#1c1424" stroke-width="2" stroke-linejoin="round"/>
+    <path d="M3,0 Q20,-10 40,-2 Q28,0 24,6 Q34,10 42,18 Q24,10 14,12 Q6,14 2,9 Z"
+          fill="#1c1424" stroke="#1c1424" stroke-width="2" stroke-linejoin="round"/>
+    <path d="M-4,-6 L-6,-13 L-1,-8 Z" fill="#1c1424"/>
+    <path d="M4,-6 L6,-13 L1,-8 Z" fill="#1c1424"/>
+    <path d="M-5,5 Q-6,-5 0,-7 Q6,-5 5,5 Q5,12 0,14 Q-5,12 -5,5 Z" fill="#1c1424"/>
+  </g>
+
+  <!-- cobweb in the open gap between keep and turret -->
+  <g fill="none" stroke="#d8d0e6" stroke-width="2" opacity="0.6" stroke-linecap="round">
+    <path d="M209,205 L232,192"/>
+    <path d="M209,205 L236,212"/>
+    <path d="M209,205 L226,232"/>
+    <path d="M219,199 Q222,208 217,217"/>
+    <path d="M229,194 Q233,211 223,228"/>
+  </g>
+
+  <!-- glow halo behind the window (bleeds past the frame) -->
+  <circle cx="160" cy="248" r="40" fill="url(#windowGlow)"/>
+
+  <!-- gothic arch window frame -->
+  <path d="M138,286 L138,244 Q138,221 160,221 Q182,221 182,244 L182,286 Z"
+        fill="#3a2f4d" stroke="#1c1424" stroke-width="6" stroke-linejoin="round"/>
+  <!-- glowing glass -->
+  <path d="M147,283 L147,247 Q147,231 160,231 Q173,231 173,247 L173,283 Z" fill="#ff3d70"/>
+  <path d="M147,283 L147,247 Q147,231 160,231 Q173,231 173,247 L173,283 Z" fill="url(#windowGlow)" opacity="0.5"/>
+  <!-- something watching -->
+  <ellipse cx="154" cy="253" rx="4" ry="5.2" fill="#1c1424" opacity="0.85"/>
+  <ellipse cx="166" cy="253" rx="4" ry="5.2" fill="#1c1424" opacity="0.85"/>
+
+  <!-- arched door -->
+  <path d="M141,337 L141,312 Q141,295 160,295 Q179,295 179,312 L179,337 Z"
+        fill="#241a30" stroke="#1c1424" stroke-width="6" stroke-linejoin="round"/>
+  <ellipse cx="160" cy="335" rx="20" ry="5" fill="#ff3d70" opacity="0.28"/>
+  <path d="M160,295 L160,334" stroke="#0f0a17" stroke-width="3" stroke-linecap="round" opacity="0.6"/>
+
+</svg>

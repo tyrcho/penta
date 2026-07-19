@@ -1,0 +1,55 @@
+<svg id="art" viewBox="0 0 400 400" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <radialGradient id="flameCore" cx="50%" cy="85%" r="75%">
+      <stop offset="0%" stop-color="#fff6c2"/>
+      <stop offset="35%" stop-color="#ffd35c"/>
+      <stop offset="70%" stop-color="#ff9a2e"/>
+      <stop offset="100%" stop-color="#ff6a1a"/>
+    </radialGradient>
+  </defs>
+
+  <!-- smouldering ember chunk the flame rises from -->
+  <path d="M120,338 Q108,312 136,300 Q148,282 180,290 Q196,270 226,282
+           Q258,276 272,300 Q294,310 278,336 Q296,354 266,368
+           Q230,382 198,372 Q162,382 132,366 Q102,360 120,338 Z"
+        fill="#241207" stroke="#170b04" stroke-width="8" stroke-linejoin="round"/>
+  <!-- glowing cracks in the ember -->
+  <path d="M146,332 L170,320" stroke="#ff7a2e" stroke-width="4" stroke-linecap="round" opacity="0.85"/>
+  <path d="M212,344 L242,330" stroke="#ff7a2e" stroke-width="4" stroke-linecap="round" opacity="0.85"/>
+  <path d="M178,358 L202,352" stroke="#ffb24a" stroke-width="3" stroke-linecap="round" opacity="0.7"/>
+
+  <!-- left wisp: small tongue peeling off behind the main flame -->
+  <path d="M140,295 Q85,230 100,150 Q130,190 141,225 Q152,260 170,290 Z"
+        fill="#b5390f" stroke="#1c0d05" stroke-width="8" stroke-linejoin="round"/>
+
+  <!-- right wisp: bigger tongue peeling off behind the main flame, mirrors the left -->
+  <path d="M260,296 Q325,225 305,135 Q272,180 258,220 Q245,258 228,290 Z"
+        fill="#b5390f" stroke="#1c0d05" stroke-width="8" stroke-linejoin="round"/>
+
+  <!-- main flame tongue: tall, leaning right, with a jagged notch on the right edge -->
+  <path d="M165,300
+           Q110,180 200,35
+           Q270,110 240,150
+           Q255,220 235,300
+           Z"
+        fill="#d1441b" stroke="#1c0d05" stroke-width="9" stroke-linejoin="round"/>
+
+  <!-- highlight sliver: flat light patch inset on the upper-left of the main tongue -->
+  <path d="M150,270 Q128,190 165,110 Q150,190 158,260 Z" fill="#ff9a52" opacity="0.55"/>
+
+  <!-- shadow sliver: flat dark patch inset on the right of the main tongue -->
+  <path d="M228,270 Q248,200 234,140 Q248,200 240,270 Z" fill="#6f1607" opacity="0.4"/>
+
+  <!-- inner hot core -->
+  <path d="M185,295
+           Q160,230 203,115
+           Q225,200 218,200
+           Q230,250 218,295
+           Z"
+        fill="url(#flameCore)"/>
+
+  <!-- drifting embers / sparks (with a chaos-purple glint) -->
+  <circle cx="332" cy="80" r="9" fill="#ffb24a" stroke="#8a2d0c" stroke-width="3"/>
+  <circle cx="310" cy="45" r="6" fill="#ffd88a" stroke="#8a2d0c" stroke-width="2.5"/>
+  <path d="M348,118 L355,102 L362,118 L355,134 Z" fill="#b24bff" stroke="#3a1050" stroke-width="3" stroke-linejoin="round"/>
+</svg>

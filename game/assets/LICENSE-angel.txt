@@ -1,6 +1,0 @@
-Angel building icon (assets/angel.png) was supplied directly by the project owner via
-chat upload — no source page attached, so licensing/provenance isn't known.
-
-Per CLAUDE.md ("Art asset licensing is not a current concern"): used as-is on a
-best-effort basis for this local hobby project. Replace with a properly licensed or
-commissioned asset before using it beyond that.
