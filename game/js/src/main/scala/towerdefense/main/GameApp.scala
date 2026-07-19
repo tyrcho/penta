@@ -1887,45 +1887,102 @@ private def effectiveRate(maze: MazeState, kind: BuildingKind, resource: Resourc
     CombatEngine.researchProductionMultiplier(maze, kind, resource) *
     (1.0 + CombatEngine.engendreBoost(maze, resource))
 
+// One entry per kind, each a small closure over (Building, MazeState) rather than a
+// `kind match` arm — the same "data, not a switch" shape as BuildingSpecs.all, applied to
+// live-state hover text: what a kind's hover line needs (which resource's rate? which
+// unit's spawn countdown? an aura/ranged-damage sentence? a research level readout?) is
+// fixed once here; `currentLang` is still read fresh inside each closure on every call
+// (not captured at Map-construction time), so a language toggle mid-session is honored
+// without rebuilding this table.
+private def nextSpawnSeconds(b: Building): Int = (b.spawnCountdownMs / 1000).ceil.toInt
+
+private def laboHoverRenderer(kind: BuildingKind): (Building, MazeState) => String =
+  (_, maze) =>
+    val name = EntityNames.buildingName(kind, currentLang)
+    val rate = TooltipText.rate(Resource.Crystal, effectiveRate(maze, kind, Resource.Crystal), currentLang)
+    s"$name — $rate, ${researchLevelText(maze, kind)}"
+
+private val perKindHoverRenderers: Map[BuildingKind, (Building, MazeState) => String] = Map(
+  BuildingKind.Grove -> { (b, maze) =>
+    val name = EntityNames.buildingName(BuildingKind.Grove, currentLang)
+    val rate = TooltipText.rate(Resource.Wood, effectiveRate(maze, BuildingKind.Grove, Resource.Wood), currentLang)
+    s"$name — $rate, ${TooltipText.nextSpawnIn(UnitKind.Elf, nextSpawnSeconds(b), currentLang)}"
+  },
+  BuildingKind.Forest -> { (b, maze) =>
+    val name = EntityNames.buildingName(BuildingKind.Forest, currentLang)
+    val rate = TooltipText.rate(Resource.Wood, effectiveRate(maze, BuildingKind.Forest, Resource.Wood), currentLang)
+    s"$name — ${TooltipText.adjacentDamage(Balance.AuraDamagePerSec, currentLang)}, $rate, " +
+      s"${TooltipText.nextSpawnIn(UnitKind.Elf, nextSpawnSeconds(b), currentLang)}"
+  },
+  BuildingKind.Jungle -> { (b, maze) =>
+    val name = EntityNames.buildingName(BuildingKind.Jungle, currentLang)
+    val rate = TooltipText.rate(Resource.Wood, effectiveRate(maze, BuildingKind.Jungle, Resource.Wood), currentLang)
+    s"$name — ${TooltipText.adjacentDamage(Balance.AuraDamagePerSec, currentLang)}, $rate, " +
+      s"${TooltipText.nextSpawnIn(UnitKind.Wolf, nextSpawnSeconds(b), currentLang)}"
+  },
+  BuildingKind.Cave -> { (b, maze) =>
+    val name = EntityNames.buildingName(BuildingKind.Cave, currentLang)
+    val rate = TooltipText.rate(Resource.Fire, effectiveRate(maze, BuildingKind.Cave, Resource.Fire), currentLang)
+    s"$name — $rate, ${TooltipText.nextSpawnIn(UnitKind.Goblin, nextSpawnSeconds(b), currentLang)}"
+  },
+  BuildingKind.Labyrinth -> { (b, _) =>
+    val name = EntityNames.buildingName(BuildingKind.Labyrinth, currentLang)
+    s"$name — ${TooltipText.nextSpawnIn(UnitKind.Minotaur, nextSpawnSeconds(b), currentLang)}"
+  },
+  BuildingKind.Church -> { (b, maze) =>
+    val name = EntityNames.buildingName(BuildingKind.Church, currentLang)
+    val rate = TooltipText.rate(Resource.Light, effectiveRate(maze, BuildingKind.Church, Resource.Light), currentLang)
+    s"$name — $rate, ${TooltipText.nextSpawnIn(UnitKind.Paladin, nextSpawnSeconds(b), currentLang)}"
+  },
+  BuildingKind.Watchtower -> { (_, maze) =>
+    val name = EntityNames.buildingName(BuildingKind.Watchtower, currentLang)
+    val rate = TooltipText.rate(Resource.Light, effectiveRate(maze, BuildingKind.Watchtower, Resource.Light), currentLang)
+    s"$name — $rate, ${TooltipText.rangedDamage(Balance.WatchtowerDamagePerSec, Balance.WatchtowerRangeCells, currentLang)}"
+  },
+  BuildingKind.Angel -> { (_, maze) =>
+    val name = EntityNames.buildingName(BuildingKind.Angel, currentLang)
+    val rate = TooltipText.rate(Resource.Light, effectiveRate(maze, BuildingKind.Angel, Resource.Light), currentLang)
+    s"$name — $rate, ${TooltipText.adjacentDamageAndSlow(Balance.AngelDamagePerSec, Balance.AngelSlowFraction * 100, currentLang)}"
+  },
+  BuildingKind.Tomb -> { (b, maze) =>
+    val name = EntityNames.buildingName(BuildingKind.Tomb, currentLang)
+    val rate = TooltipText.rate(Resource.Shadow, effectiveRate(maze, BuildingKind.Tomb, Resource.Shadow), currentLang)
+    s"$name — $rate, ${TooltipText.nextSpawnIn(UnitKind.Zombie, nextSpawnSeconds(b), currentLang)}"
+  },
+  BuildingKind.BlackCastle -> { (b, maze) =>
+    val name = EntityNames.buildingName(BuildingKind.BlackCastle, currentLang)
+    val rate = TooltipText.rate(Resource.Shadow, effectiveRate(maze, BuildingKind.BlackCastle, Resource.Shadow), currentLang)
+    s"$name — $rate, ${TooltipText.nextSpawnIn(UnitKind.Vampire, nextSpawnSeconds(b), currentLang)}"
+  },
+  BuildingKind.DeathHouse -> { (b, maze) =>
+    val name = EntityNames.buildingName(BuildingKind.DeathHouse, currentLang)
+    val rate = TooltipText.rate(Resource.Shadow, effectiveRate(maze, BuildingKind.DeathHouse, Resource.Shadow), currentLang)
+    s"$name — $rate, ${TooltipText.nextSpawnIn(UnitKind.Necromancer, nextSpawnSeconds(b), currentLang)}"
+  },
+  BuildingKind.LaboFondamental -> { (_, maze) =>
+    val name = EntityNames.buildingName(BuildingKind.LaboFondamental, currentLang)
+    val rate =
+      TooltipText.rate(Resource.Crystal, effectiveRate(maze, BuildingKind.LaboFondamental, Resource.Crystal), currentLang)
+    s"$name — $rate, ${TooltipText.noResearchBonusYet(currentLang)}"
+  },
+  BuildingKind.LaboNaturel -> laboHoverRenderer(BuildingKind.LaboNaturel),
+  BuildingKind.LaboSombre -> laboHoverRenderer(BuildingKind.LaboSombre),
+  BuildingKind.LaboDeRecherche -> laboHoverRenderer(BuildingKind.LaboDeRecherche),
+  BuildingKind.LaboDeLaLoi -> laboHoverRenderer(BuildingKind.LaboDeLaLoi),
+  BuildingKind.LaboDuChaos -> laboHoverRenderer(BuildingKind.LaboDuChaos),
+  BuildingKind.Stonehenge -> { (b, _) =>
+    val name = EntityNames.buildingName(BuildingKind.Stonehenge, currentLang)
+    s"$name — ${TooltipText.noSpawnLabel(currentLang)}, ${TooltipText.nextSpawnIn(UnitKind.Tree, nextSpawnSeconds(b), currentLang)}"
+  },
+  BuildingKind.PassingGate -> { (_, _) =>
+    val name = EntityNames.buildingName(BuildingKind.PassingGate, currentLang)
+    s"$name — ${TooltipText.spawnsNothing(currentLang)}, " +
+      s"${TooltipText.passingGateAbility(Balance.PassingGateDamagePerSec, Balance.PassingGateDeathShadowFraction * 100, currentLang)}"
+  }
+)
+
 private def perKindHoverText(kind: BuildingKind, b: Building, maze: MazeState): String =
-  val name = EntityNames.buildingName(kind, currentLang)
-  def nextS = (b.spawnCountdownMs / 1000).ceil.toInt
-  def rate(res: Resource) = TooltipText.rate(res, effectiveRate(maze, kind, res), currentLang)
-  kind match
-    case BuildingKind.Grove =>
-      s"$name — ${rate(Resource.Wood)}, ${TooltipText.nextSpawnIn(UnitKind.Elf, nextS, currentLang)}"
-    case BuildingKind.Forest =>
-      s"$name — ${TooltipText.adjacentDamage(Balance.AuraDamagePerSec, currentLang)}, ${rate(Resource.Wood)}, " +
-        s"${TooltipText.nextSpawnIn(UnitKind.Elf, nextS, currentLang)}"
-    case BuildingKind.Jungle =>
-      s"$name — ${TooltipText.adjacentDamage(Balance.AuraDamagePerSec, currentLang)}, ${rate(Resource.Wood)}, " +
-        s"${TooltipText.nextSpawnIn(UnitKind.Wolf, nextS, currentLang)}"
-    case BuildingKind.Cave =>
-      s"$name — ${rate(Resource.Fire)}, ${TooltipText.nextSpawnIn(UnitKind.Goblin, nextS, currentLang)}"
-    case BuildingKind.Labyrinth =>
-      s"$name — ${TooltipText.nextSpawnIn(UnitKind.Minotaur, nextS, currentLang)}"
-    case BuildingKind.Church =>
-      s"$name — ${rate(Resource.Light)}, ${TooltipText.nextSpawnIn(UnitKind.Paladin, nextS, currentLang)}"
-    case BuildingKind.Watchtower =>
-      s"$name — ${rate(Resource.Light)}, ${TooltipText.rangedDamage(Balance.WatchtowerDamagePerSec, Balance.WatchtowerRangeCells, currentLang)}"
-    case BuildingKind.Angel =>
-      s"$name — ${rate(Resource.Light)}, ${TooltipText.adjacentDamageAndSlow(Balance.AngelDamagePerSec, Balance.AngelSlowFraction * 100, currentLang)}"
-    case BuildingKind.Tomb =>
-      s"$name — ${rate(Resource.Shadow)}, ${TooltipText.nextSpawnIn(UnitKind.Zombie, nextS, currentLang)}"
-    case BuildingKind.BlackCastle =>
-      s"$name — ${rate(Resource.Shadow)}, ${TooltipText.nextSpawnIn(UnitKind.Vampire, nextS, currentLang)}"
-    case BuildingKind.DeathHouse =>
-      s"$name — ${rate(Resource.Shadow)}, ${TooltipText.nextSpawnIn(UnitKind.Necromancer, nextS, currentLang)}"
-    case BuildingKind.LaboFondamental =>
-      s"$name — ${rate(Resource.Crystal)}, ${TooltipText.noResearchBonusYet(currentLang)}"
-    case BuildingKind.LaboNaturel | BuildingKind.LaboSombre | BuildingKind.LaboDeRecherche | BuildingKind.LaboDeLaLoi |
-        BuildingKind.LaboDuChaos =>
-      s"$name — ${rate(Resource.Crystal)}, ${researchLevelText(maze, kind)}"
-    case BuildingKind.Stonehenge =>
-      s"$name — ${TooltipText.noSpawnLabel(currentLang)}, ${TooltipText.nextSpawnIn(UnitKind.Tree, nextS, currentLang)}"
-    case BuildingKind.PassingGate =>
-      s"$name — ${TooltipText.spawnsNothing(currentLang)}, " +
-        s"${TooltipText.passingGateAbility(Balance.PassingGateDamagePerSec, Balance.PassingGateDeathShadowFraction * 100, currentLang)}"
+  perKindHoverRenderers(kind)(b, maze)
 
 // ── HTML overlay ────────────────────────────────────────────────────────
 

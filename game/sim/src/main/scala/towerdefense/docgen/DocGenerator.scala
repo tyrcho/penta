@@ -45,37 +45,22 @@ object DocGenerator:
     Files.write(path, content.getBytes(StandardCharsets.UTF_8))
     1
 
-  // ── Frontmatter ──────────────────────────────────────────────────────────
+  // ── Frontmatter vocabulary — one entry per resource/page-type, not a match ─
 
   private def yamlQuoted(s: String): String = "\"" + s.replace("\"", "\\\"") + "\""
 
-  private def costKey(res: Resource, lang: Lang): String = (res, lang) match
-    case (Resource.Wood, Lang.Fr)    => "cout en bois"
-    case (Resource.Wood, Lang.En)    => "cost in wood"
-    case (Resource.Fire, Lang.Fr)    => "cout en feu"
-    case (Resource.Fire, Lang.En)    => "cost in fire"
-    case (Resource.Light, Lang.Fr)   => "cout en lumiere"
-    case (Resource.Light, Lang.En)   => "cost in light"
-    case (Resource.Shadow, Lang.Fr)  => "cout en ombre"
-    case (Resource.Shadow, Lang.En)  => "cost in shadow"
-    case (Resource.Crystal, Lang.Fr) => "cout en crystal"
-    case (Resource.Crystal, Lang.En) => "cost in crystal"
+  private val costKeys: Map[Resource, I18nText] = Map(
+    Resource.Wood -> I18nText("cout en bois", "cost in wood"),
+    Resource.Fire -> I18nText("cout en feu", "cost in fire"),
+    Resource.Light -> I18nText("cout en lumiere", "cost in light"),
+    Resource.Shadow -> I18nText("cout en ombre", "cost in shadow"),
+    Resource.Crystal -> I18nText("cout en crystal", "cost in crystal")
+  )
 
-  private def buildingTypeValue(lang: Lang): String = lang match
-    case Lang.Fr => "batiment"
-    case Lang.En => "building"
-
-  private def unitTypeValue(lang: Lang): String = lang match
-    case Lang.Fr => "unite"
-    case Lang.En => "unit"
-
-  private def resourceTypeValue(lang: Lang): String = lang match
-    case Lang.Fr => "ressource"
-    case Lang.En => "resource"
-
-  private def hpKey(lang: Lang): String = lang match
-    case Lang.Fr => "PV"
-    case Lang.En => "HP"
+  private val buildingTypeValue = I18nText("batiment", "building")
+  private val unitTypeValue = I18nText("unite", "unit")
+  private val resourceTypeValue = I18nText("ressource", "resource")
+  private val hpKey = I18nText("PV", "HP")
 
   private def frontmatter(fields: List[(String, String)]): String =
     val body = fields.map { case (k, v) => s"$k: $v" }.mkString("\n")
@@ -84,50 +69,46 @@ object DocGenerator:
   // ── Buildings ────────────────────────────────────────────────────────────
 
   private def buildingPage(kind: BuildingKind, lang: Lang): String =
-    val faction = Faction.of(kind)
+    val info = EntityNames.buildingInfo(kind)
     val spec = BuildingSpecs.all(kind)
     // Skips a resource entirely at cost 0 (e.g. BuildingSpecs.Cave's Wood -> 0.0, kept in
     // the data model only for map-shape uniformity) — matches the original vault's own
     // convention of just not mentioning a cost that doesn't apply, rather than showing
     // a "cout en bois: 0" line no hand-written page ever had.
     val costFields = Resource.values.toList.flatMap(res =>
-      spec.cost.get(res).filter(_ > 0.0).map(amount => costKey(res, lang) -> NumberFormat.decimal(amount))
+      spec.cost.get(res).filter(_ > 0.0).map(amount => costKeys(res)(lang) -> NumberFormat.decimal(amount))
     )
     val fm = frontmatter(
-      List("type" -> buildingTypeValue(lang), "faction" -> yamlQuoted(EntityNames.factionLink(faction, lang))) ++
+      List("type" -> buildingTypeValue(lang), "faction" -> yamlQuoted(EntityNames.factionLink(info.faction, lang))) ++
         costFields
     )
-    val image = AssetPaths.building(kind)
-    val imageLine = s"![${EntityNames.buildingName(kind, lang)}](../../game/assets/$image)"
+    val imageLine = s"![${info.name(lang)}](../../game/assets/${info.asset})"
     s"$fm\n$imageLine\n\n${EntityText.buildingBody(kind, lang)}\n"
 
   // ── Units ────────────────────────────────────────────────────────────────
 
   private def unitPage(kind: UnitKind, lang: Lang): String =
-    val faction = Faction.of(kind)
+    val info = EntityNames.unitInfo(kind)
     val spec = CreatureSpecs.all(kind)
     val fm = frontmatter(
       List(
         "type" -> unitTypeValue(lang),
-        "faction" -> yamlQuoted(EntityNames.factionLink(faction, lang)),
+        "faction" -> yamlQuoted(EntityNames.factionLink(info.faction, lang)),
         hpKey(lang) -> yamlQuoted(NumberFormat.decimal(spec.maxHp))
       )
     )
-    val image = AssetPaths.unit(kind)
-    val imageLine = s"![${EntityNames.unitName(kind, lang)}](../../game/assets/$image)"
+    val imageLine = s"![${info.name(lang)}](../../game/assets/${info.asset})"
     s"$fm\n$imageLine\n\n${EntityText.unitBody(kind, lang)}\n"
 
   // ── Resources ────────────────────────────────────────────────────────────
   // Minimal by design — the original vault pages are frontmatter + a reference image and
   // nothing else (a resource has no behavior of its own to describe; every building that
   // produces/costs it already links back here). Shadow has no image at all (see
-  // AssetPaths.resource's doc) — Ombre.md has always shipped without one.
+  // ResourceKindInfo's doc) — Ombre.md has always shipped without one.
 
   private def resourcePage(res: Resource, lang: Lang): String =
-    val faction = Faction.of(res)
+    val info = EntityNames.resourceInfo(res)
     val fm = frontmatter(
-      List("type" -> resourceTypeValue(lang), "faction" -> yamlQuoted(EntityNames.factionLink(faction, lang)))
+      List("type" -> resourceTypeValue(lang), "faction" -> yamlQuoted(EntityNames.factionLink(info.faction, lang)))
     )
-    AssetPaths.resource(res) match
-      case Some(image) => s"$fm\n![${EntityNames.resourceName(res, lang)}](../../game/assets/$image)\n"
-      case None         => s"$fm"
+    info.asset.fold(fm)(image => s"$fm\n![${info.name(lang)}](../../game/assets/$image)\n")

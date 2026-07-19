@@ -2,9 +2,44 @@ package towerdefense.domain.i18n
 
 import towerdefense.domain.*
 
-// Display names and vault doc paths for every Faction/Resource/BuildingKind/UnitKind, in
-// both languages — the single naming source shared by DocGenerator (which needs a
-// cross-link-safe file path per kind) and the game UI (which only needs the display name).
+// A value in each of the two supported languages — the generic (not per-kind) piece of
+// "translated text", used as a field type throughout this package instead of writing a
+// two-armed match at every call site.
+final case class I18nText(fr: String, en: String):
+  def apply(lang: Lang): String = if lang == Lang.Fr then fr else en
+  // Concatenates each language's text independently — e.g. "doesn't plunder — " ++
+  // "shields adjacent allies from 2 dmg/s" — an FR fragment can never accidentally end up
+  // appended to an EN one.
+  def ++(other: I18nText): I18nText = I18nText(fr + other.fr, en + other.en)
+
+object I18nText:
+  // Joins several I18nText fragments (e.g. a produce line, a spawn line, an ability line)
+  // into one paragraph-separated I18nText — the same shape EntityText's per-kind body
+  // entries are built from, language by language, so a paragraph can never accidentally
+  // pair an FR sentence with an EN one.
+  def combine(parts: I18nText*): I18nText =
+    I18nText(fr = parts.map(_.fr).mkString("\n\n"), en = parts.map(_.en).mkString("\n\n"))
+
+final case class FactionInfo(
+    name: I18nText, // also doubles as the vault folder name — see EntityNames.factionFolder's doc
+    overviewFrFile: String // e.g. "Nature.md" — the hand-written FR overview page's file name
+)
+
+final case class BuildingKindInfo(faction: Faction, name: I18nText, fileName: I18nText, asset: String)
+
+final case class UnitKindInfo(faction: Faction, name: I18nText, fileName: I18nText, asset: String)
+
+// asset: None for Shadow — Resources/Mort/Ombre.md has always shipped without an image,
+// and there's no ombre-reference.png in game/assets/ to give it one.
+final case class ResourceKindInfo(faction: Faction, name: I18nText, fileName: I18nText, asset: Option[String])
+
+// Display names, vault doc paths, and representative images for every Faction/Resource/
+// BuildingKind/UnitKind, in both languages — the single naming source shared by
+// DocGenerator (which needs a cross-link-safe file path and an asset per kind) and the
+// game UI (which only needs the display name/asset). Every kind's full set of properties
+// is defined once, right here, as plain data — nothing in this file branches on *which*
+// kind it was given; a lookup into `buildingInfo`/`unitInfo`/`resourceInfo`/`factionInfo`
+// always replaces what would otherwise be a per-kind match.
 //
 // FR file paths mirror the *existing* hand-written vault exactly (see Resources/), so
 // regenerating those files in place never breaks a link written anywhere else in the repo
@@ -14,24 +49,204 @@ import towerdefense.domain.*
 // "../../game/assets/..." relative asset path.
 object EntityNames:
 
-  def factionName(f: Faction, lang: Lang): String = (f, lang) match
-    case (Faction.Nature, Lang.Fr)  => "Nature"
-    case (Faction.Nature, Lang.En)  => "Nature"
-    case (Faction.Chaos, Lang.Fr)   => "Chaos"
-    case (Faction.Chaos, Lang.En)   => "Chaos"
-    case (Faction.Loi, Lang.Fr)     => "Loi"
-    case (Faction.Loi, Lang.En)     => "Law"
-    case (Faction.Mort, Lang.Fr)    => "Mort"
-    case (Faction.Mort, Lang.En)    => "Death"
-    case (Faction.Science, Lang.Fr) => "Science"
-    case (Faction.Science, Lang.En) => "Science"
+  val factionInfo: Map[Faction, FactionInfo] = Map(
+    Faction.Nature -> FactionInfo(I18nText("Nature", "Nature"), "Nature.md"),
+    Faction.Chaos -> FactionInfo(I18nText("Chaos", "Chaos"), "Chaos.md"),
+    Faction.Loi -> FactionInfo(I18nText("Loi", "Law"), "Loi.md"),
+    Faction.Mort -> FactionInfo(I18nText("Mort", "Death"), "Mort.md"),
+    Faction.Science -> FactionInfo(I18nText("Science", "Science"), "Science.md")
+  )
 
-  // Vault folder name per language — FR matches Resources/'s existing subfolders exactly;
-  // EN is this generator's own Resources-en/ layout (see the module doc above).
-  def factionFolder(f: Faction, lang: Lang): String = (f, lang) match
-    case (Faction.Loi, Lang.En)  => "Law"
-    case (Faction.Mort, Lang.En) => "Death"
-    case (other, _)              => other.toString
+  val buildingInfo: Map[BuildingKind, BuildingKindInfo] = Map(
+    BuildingKind.Grove -> BuildingKindInfo(
+      Faction.Nature,
+      I18nText("Bosquet", "Grove"),
+      I18nText("Bosquet.md", "Grove.md"),
+      "grove.png"
+    ),
+    BuildingKind.Forest -> BuildingKindInfo(
+      Faction.Nature,
+      I18nText("Forêt", "Forest"),
+      I18nText("Foret.md", "Forest.md"),
+      "forest.png"
+    ),
+    BuildingKind.Jungle -> BuildingKindInfo(
+      Faction.Nature,
+      I18nText("Jungle", "Jungle"),
+      I18nText("Jungle.md", "Jungle.md"),
+      "jungle.png"
+    ),
+    BuildingKind.Stonehenge -> BuildingKindInfo(
+      Faction.Nature,
+      I18nText("Stonehenge", "Stonehenge"),
+      I18nText("Stonehenge.md", "Stonehenge.md"),
+      "stonehenge.png"
+    ),
+    BuildingKind.Cave -> BuildingKindInfo(
+      Faction.Chaos,
+      I18nText("Cave", "Cave"),
+      I18nText("Cave.md", "Cave.md"),
+      "cave.png"
+    ),
+    BuildingKind.Labyrinth -> BuildingKindInfo(
+      Faction.Chaos,
+      I18nText("Labyrinthe", "Labyrinth"),
+      I18nText("Labyrinthe.md", "Labyrinth.md"),
+      "labyrinthe.png"
+    ),
+    BuildingKind.Church -> BuildingKindInfo(
+      Faction.Loi,
+      I18nText("Église", "Church"),
+      I18nText("Eglise.md", "Church.md"),
+      "eglise.png"
+    ),
+    BuildingKind.Watchtower -> BuildingKindInfo(
+      Faction.Loi,
+      I18nText("Tour de guet", "Watchtower"),
+      I18nText("Tour de guet.md", "Watchtower.md"),
+      "watchtower.png"
+    ),
+    BuildingKind.Angel -> BuildingKindInfo(
+      Faction.Loi,
+      I18nText("Ange", "Angel"),
+      I18nText("Ange.md", "Angel.md"),
+      "angel.png"
+    ),
+    BuildingKind.Tomb -> BuildingKindInfo(
+      Faction.Mort,
+      I18nText("Tombe", "Tomb"),
+      I18nText("Tombe.md", "Tomb.md"),
+      "tomb.png"
+    ),
+    BuildingKind.BlackCastle -> BuildingKindInfo(
+      Faction.Mort,
+      I18nText("Château Noir", "Black Castle"),
+      I18nText("Chateau Noir.md", "Black Castle.md"),
+      "chateau-noir.png"
+    ),
+    BuildingKind.DeathHouse -> BuildingKindInfo(
+      Faction.Mort,
+      I18nText("Maison de la Mort", "House of Death"),
+      I18nText("Maison de la Mort.md", "House of Death.md"),
+      "death-house.png"
+    ),
+    BuildingKind.PassingGate -> BuildingKindInfo(
+      Faction.Mort,
+      I18nText("Portail", "Passing Gate"),
+      I18nText("Portail.md", "Passing Gate.md"),
+      "passing-gate.png"
+    ),
+    BuildingKind.LaboFondamental -> BuildingKindInfo(
+      Faction.Science,
+      I18nText("Labo Fondamental", "Base Lab"),
+      I18nText("Labo Fondamental.md", "Base Lab.md"),
+      "labo-fondamental.png"
+    ),
+    BuildingKind.LaboNaturel -> BuildingKindInfo(
+      Faction.Science,
+      I18nText("Labo Naturel", "Nature Lab"),
+      I18nText("Labo Naturel.md", "Nature Lab.md"),
+      "labo-naturel.png"
+    ),
+    BuildingKind.LaboSombre -> BuildingKindInfo(
+      Faction.Science,
+      I18nText("Labo Sombre", "Shadow Lab"),
+      I18nText("Labo Sombre.md", "Shadow Lab.md"),
+      "labo-sombre.png"
+    ),
+    BuildingKind.LaboDeRecherche -> BuildingKindInfo(
+      Faction.Science,
+      I18nText("Labo de Recherche", "Research Lab"),
+      I18nText("Labo de Recherche.md", "Research Lab.md"),
+      "labo-de-recherche.png"
+    ),
+    BuildingKind.LaboDeLaLoi -> BuildingKindInfo(
+      Faction.Science,
+      I18nText("Labo de la Loi", "Law Lab"),
+      I18nText("Labo de la Loi.md", "Law Lab.md"),
+      "labo-de-la-loi.png"
+    ),
+    BuildingKind.LaboDuChaos -> BuildingKindInfo(
+      Faction.Science,
+      I18nText("Labo du Chaos", "Chaos Lab"),
+      I18nText("Labo du Chaos.md", "Chaos Lab.md"),
+      "labo-du-chaos.png"
+    )
+  )
+
+  val unitInfo: Map[UnitKind, UnitKindInfo] = Map(
+    UnitKind.Elf -> UnitKindInfo(Faction.Nature, I18nText("Elfe", "Elf"), I18nText("Elfe.md", "Elf.md"), "elf/front-walk-00.png"),
+    UnitKind.Wolf -> UnitKindInfo(Faction.Nature, I18nText("Loup", "Wolf"), I18nText("Loup.md", "Wolf.md"), "wolf-reference.png"),
+    UnitKind.Tree -> UnitKindInfo(
+      Faction.Nature,
+      I18nText("Arbre Animé", "Animated Tree"),
+      I18nText("Arbre Animé.md", "Animated Tree.md"),
+      "tree/front-walk-00.png"
+    ),
+    UnitKind.Goblin -> UnitKindInfo(
+      Faction.Chaos,
+      I18nText("Gobelin", "Goblin"),
+      I18nText("Gobelin.md", "Goblin.md"),
+      "goblin/front-walk-00.png"
+    ),
+    UnitKind.Minotaur -> UnitKindInfo(
+      Faction.Chaos,
+      I18nText("Minotaure", "Minotaur"),
+      I18nText("Minotaure.md", "Minotaur.md"),
+      "minotaur.png"
+    ),
+    UnitKind.Paladin -> UnitKindInfo(Faction.Loi, I18nText("Paladin", "Paladin"), I18nText("Paladin.md", "Paladin.md"), "paladin.png"),
+    UnitKind.Zombie -> UnitKindInfo(
+      Faction.Mort,
+      I18nText("Zombie", "Zombie"),
+      I18nText("Zombie.md", "Zombie.md"),
+      "zombie/walk-00.png"
+    ),
+    UnitKind.Vampire -> UnitKindInfo(Faction.Mort, I18nText("Vampire", "Vampire"), I18nText("Vampire.md", "Vampire.md"), "vampire.png"),
+    UnitKind.Necromancer -> UnitKindInfo(
+      Faction.Mort,
+      I18nText("Nécromancien", "Necromancer"),
+      I18nText("Necromancien.md", "Necromancer.md"),
+      "necromancer/walk-00.png"
+    ),
+    UnitKind.Soul -> UnitKindInfo(Faction.Mort, I18nText("Âme", "Soul"), I18nText("Âme.md", "Soul.md"), "soul/walk-00.png")
+  )
+
+  val resourceInfo: Map[Resource, ResourceKindInfo] = Map(
+    Resource.Wood -> ResourceKindInfo(
+      Faction.Nature,
+      I18nText("Bois", "Wood"),
+      I18nText("Bois.md", "Wood.md"),
+      Some("bois-reference.png")
+    ),
+    Resource.Fire -> ResourceKindInfo(
+      Faction.Chaos,
+      I18nText("Feu", "Fire"),
+      I18nText("Feu.md", "Fire.md"),
+      Some("feu-reference.png")
+    ),
+    Resource.Light -> ResourceKindInfo(
+      Faction.Loi,
+      I18nText("Lumière", "Light"),
+      I18nText("Lumière.md", "Light.md"),
+      Some("lumiere-reference.png")
+    ),
+    Resource.Shadow -> ResourceKindInfo(Faction.Mort, I18nText("Ombre", "Shadow"), I18nText("Ombre.md", "Shadow.md"), None),
+    Resource.Crystal -> ResourceKindInfo(
+      Faction.Science,
+      I18nText("Crystal", "Crystal"),
+      I18nText("Crystal.md", "Crystal.md"),
+      Some("crystal-reference.png")
+    )
+  )
+
+  def factionName(f: Faction, lang: Lang): String = factionInfo(f).name(lang)
+
+  // The vault folder name per language is the same string as the display name in every
+  // case (FR: bare Faction.toString; EN: "Law"/"Death" happen to double as both the
+  // display name and the folder Loi/Mort get renamed to — see FactionInfo's doc) — no
+  // separate field needed.
+  def factionFolder(f: Faction, lang: Lang): String = factionInfo(f).name(lang)
 
   // The faction's own overview page, in the *FR* vault only — Nature.md/Chaos.md/Loi.md/
   // Mort.md/Science.md are hand-written narrative pages (victory flavor text, Relations
@@ -39,176 +254,32 @@ object EntityNames:
   // CLAUDE.md's task boundary). An EN doc still needs somewhere to send the "faction"
   // frontmatter link, so it points at the same FR overview page across the two vault
   // trees rather than a nonexistent EN one.
-  def factionFrOverviewFile(f: Faction): String = s"${f.toString}.md"
+  def factionFrOverviewFile(f: Faction): String = factionInfo(f).overviewFrFile
 
-  def resourceName(r: Resource, lang: Lang): String = (r, lang) match
-    case (Resource.Wood, Lang.Fr)    => "Bois"
-    case (Resource.Wood, Lang.En)    => "Wood"
-    case (Resource.Fire, Lang.Fr)    => "Feu"
-    case (Resource.Fire, Lang.En)    => "Fire"
-    case (Resource.Light, Lang.Fr)   => "Lumière"
-    case (Resource.Light, Lang.En)   => "Light"
-    case (Resource.Shadow, Lang.Fr)  => "Ombre"
-    case (Resource.Shadow, Lang.En)  => "Shadow"
-    case (Resource.Crystal, Lang.Fr) => "Crystal"
-    case (Resource.Crystal, Lang.En) => "Crystal"
+  def resourceName(r: Resource, lang: Lang): String = resourceInfo(r).name(lang)
+  def resourceFileName(r: Resource, lang: Lang): String = resourceInfo(r).fileName(lang)
+  def buildingName(k: BuildingKind, lang: Lang): String = buildingInfo(k).name(lang)
+  def buildingFileName(k: BuildingKind, lang: Lang): String = buildingInfo(k).fileName(lang)
+  def unitName(k: UnitKind, lang: Lang): String = unitInfo(k).name(lang)
+  def unitFileName(k: UnitKind, lang: Lang): String = unitInfo(k).fileName(lang)
 
-  // FR file name matches the existing vault file exactly (accents and all); EN is this
-  // generator's own choice.
-  def resourceFileName(r: Resource, lang: Lang): String = (r, lang) match
-    case (Resource.Wood, Lang.Fr)    => "Bois.md"
-    case (Resource.Wood, Lang.En)    => "Wood.md"
-    case (Resource.Fire, Lang.Fr)    => "Feu.md"
-    case (Resource.Fire, Lang.En)    => "Fire.md"
-    case (Resource.Light, Lang.Fr)   => "Lumière.md"
-    case (Resource.Light, Lang.En)   => "Light.md"
-    case (Resource.Shadow, Lang.Fr)  => "Ombre.md"
-    case (Resource.Shadow, Lang.En)  => "Shadow.md"
-    case (Resource.Crystal, Lang.Fr) => "Crystal.md"
-    case (Resource.Crystal, Lang.En) => "Crystal.md"
-
-  def buildingName(k: BuildingKind, lang: Lang): String = (k, lang) match
-    case (BuildingKind.Grove, Lang.Fr)           => "Bosquet"
-    case (BuildingKind.Grove, Lang.En)           => "Grove"
-    case (BuildingKind.Forest, Lang.Fr)          => "Forêt"
-    case (BuildingKind.Forest, Lang.En)          => "Forest"
-    case (BuildingKind.Jungle, Lang.Fr)          => "Jungle"
-    case (BuildingKind.Jungle, Lang.En)          => "Jungle"
-    case (BuildingKind.Stonehenge, Lang.Fr)      => "Stonehenge"
-    case (BuildingKind.Stonehenge, Lang.En)      => "Stonehenge"
-    case (BuildingKind.Cave, Lang.Fr)            => "Cave"
-    case (BuildingKind.Cave, Lang.En)            => "Cave"
-    case (BuildingKind.Labyrinth, Lang.Fr)       => "Labyrinthe"
-    case (BuildingKind.Labyrinth, Lang.En)       => "Labyrinth"
-    case (BuildingKind.Church, Lang.Fr)          => "Église"
-    case (BuildingKind.Church, Lang.En)          => "Church"
-    case (BuildingKind.Watchtower, Lang.Fr)      => "Tour de guet"
-    case (BuildingKind.Watchtower, Lang.En)      => "Watchtower"
-    case (BuildingKind.Angel, Lang.Fr)           => "Ange"
-    case (BuildingKind.Angel, Lang.En)           => "Angel"
-    case (BuildingKind.Tomb, Lang.Fr)            => "Tombe"
-    case (BuildingKind.Tomb, Lang.En)            => "Tomb"
-    case (BuildingKind.BlackCastle, Lang.Fr)     => "Château Noir"
-    case (BuildingKind.BlackCastle, Lang.En)     => "Black Castle"
-    case (BuildingKind.DeathHouse, Lang.Fr)      => "Maison de la Mort"
-    case (BuildingKind.DeathHouse, Lang.En)      => "House of Death"
-    case (BuildingKind.PassingGate, Lang.Fr)     => "Portail"
-    case (BuildingKind.PassingGate, Lang.En)     => "Passing Gate"
-    case (BuildingKind.LaboFondamental, Lang.Fr) => "Labo Fondamental"
-    case (BuildingKind.LaboFondamental, Lang.En) => "Base Lab"
-    case (BuildingKind.LaboNaturel, Lang.Fr)     => "Labo Naturel"
-    case (BuildingKind.LaboNaturel, Lang.En)     => "Nature Lab"
-    case (BuildingKind.LaboSombre, Lang.Fr)      => "Labo Sombre"
-    case (BuildingKind.LaboSombre, Lang.En)      => "Shadow Lab"
-    case (BuildingKind.LaboDeRecherche, Lang.Fr) => "Labo de Recherche"
-    case (BuildingKind.LaboDeRecherche, Lang.En) => "Research Lab"
-    case (BuildingKind.LaboDeLaLoi, Lang.Fr)     => "Labo de la Loi"
-    case (BuildingKind.LaboDeLaLoi, Lang.En)     => "Law Lab"
-    case (BuildingKind.LaboDuChaos, Lang.Fr)     => "Labo du Chaos"
-    case (BuildingKind.LaboDuChaos, Lang.En)     => "Chaos Lab"
-
-  // FR file name matches the existing vault file exactly; EN is this generator's own choice.
-  def buildingFileName(k: BuildingKind, lang: Lang): String = (k, lang) match
-    case (BuildingKind.Grove, Lang.Fr)           => "Bosquet.md"
-    case (BuildingKind.Grove, Lang.En)           => "Grove.md"
-    case (BuildingKind.Forest, Lang.Fr)          => "Foret.md"
-    case (BuildingKind.Forest, Lang.En)          => "Forest.md"
-    case (BuildingKind.Jungle, Lang.Fr)          => "Jungle.md"
-    case (BuildingKind.Jungle, Lang.En)          => "Jungle.md"
-    case (BuildingKind.Stonehenge, Lang.Fr)      => "Stonehenge.md"
-    case (BuildingKind.Stonehenge, Lang.En)      => "Stonehenge.md"
-    case (BuildingKind.Cave, Lang.Fr)            => "Cave.md"
-    case (BuildingKind.Cave, Lang.En)            => "Cave.md"
-    case (BuildingKind.Labyrinth, Lang.Fr)       => "Labyrinthe.md"
-    case (BuildingKind.Labyrinth, Lang.En)       => "Labyrinth.md"
-    case (BuildingKind.Church, Lang.Fr)          => "Eglise.md"
-    case (BuildingKind.Church, Lang.En)          => "Church.md"
-    case (BuildingKind.Watchtower, Lang.Fr)      => "Tour de guet.md"
-    case (BuildingKind.Watchtower, Lang.En)      => "Watchtower.md"
-    case (BuildingKind.Angel, Lang.Fr)           => "Ange.md"
-    case (BuildingKind.Angel, Lang.En)           => "Angel.md"
-    case (BuildingKind.Tomb, Lang.Fr)            => "Tombe.md"
-    case (BuildingKind.Tomb, Lang.En)            => "Tomb.md"
-    case (BuildingKind.BlackCastle, Lang.Fr)     => "Chateau Noir.md"
-    case (BuildingKind.BlackCastle, Lang.En)     => "Black Castle.md"
-    case (BuildingKind.DeathHouse, Lang.Fr)      => "Maison de la Mort.md"
-    case (BuildingKind.DeathHouse, Lang.En)      => "House of Death.md"
-    case (BuildingKind.PassingGate, Lang.Fr)     => "Portail.md"
-    case (BuildingKind.PassingGate, Lang.En)     => "Passing Gate.md"
-    case (BuildingKind.LaboFondamental, Lang.Fr) => "Labo Fondamental.md"
-    case (BuildingKind.LaboFondamental, Lang.En) => "Base Lab.md"
-    case (BuildingKind.LaboNaturel, Lang.Fr)     => "Labo Naturel.md"
-    case (BuildingKind.LaboNaturel, Lang.En)     => "Nature Lab.md"
-    case (BuildingKind.LaboSombre, Lang.Fr)      => "Labo Sombre.md"
-    case (BuildingKind.LaboSombre, Lang.En)      => "Shadow Lab.md"
-    case (BuildingKind.LaboDeRecherche, Lang.Fr) => "Labo de Recherche.md"
-    case (BuildingKind.LaboDeRecherche, Lang.En) => "Research Lab.md"
-    case (BuildingKind.LaboDeLaLoi, Lang.Fr)     => "Labo de la Loi.md"
-    case (BuildingKind.LaboDeLaLoi, Lang.En)     => "Law Lab.md"
-    case (BuildingKind.LaboDuChaos, Lang.Fr)     => "Labo du Chaos.md"
-    case (BuildingKind.LaboDuChaos, Lang.En)     => "Chaos Lab.md"
-
-  def unitName(k: UnitKind, lang: Lang): String = (k, lang) match
-    case (UnitKind.Elf, Lang.Fr)         => "Elfe"
-    case (UnitKind.Elf, Lang.En)         => "Elf"
-    case (UnitKind.Goblin, Lang.Fr)      => "Gobelin"
-    case (UnitKind.Goblin, Lang.En)      => "Goblin"
-    case (UnitKind.Minotaur, Lang.Fr)    => "Minotaure"
-    case (UnitKind.Minotaur, Lang.En)    => "Minotaur"
-    case (UnitKind.Paladin, Lang.Fr)     => "Paladin"
-    case (UnitKind.Paladin, Lang.En)     => "Paladin"
-    case (UnitKind.Wolf, Lang.Fr)        => "Loup"
-    case (UnitKind.Wolf, Lang.En)        => "Wolf"
-    case (UnitKind.Zombie, Lang.Fr)      => "Zombie"
-    case (UnitKind.Zombie, Lang.En)      => "Zombie"
-    case (UnitKind.Vampire, Lang.Fr)     => "Vampire"
-    case (UnitKind.Vampire, Lang.En)     => "Vampire"
-    case (UnitKind.Necromancer, Lang.Fr) => "Nécromancien"
-    case (UnitKind.Necromancer, Lang.En) => "Necromancer"
-    case (UnitKind.Soul, Lang.Fr)        => "Âme"
-    case (UnitKind.Soul, Lang.En)        => "Soul"
-    case (UnitKind.Tree, Lang.Fr)        => "Arbre Animé"
-    case (UnitKind.Tree, Lang.En)        => "Animated Tree"
-
-  // FR file name matches the existing vault file exactly; EN is this generator's own choice.
-  def unitFileName(k: UnitKind, lang: Lang): String = (k, lang) match
-    case (UnitKind.Elf, Lang.Fr)         => "Elfe.md"
-    case (UnitKind.Elf, Lang.En)         => "Elf.md"
-    case (UnitKind.Goblin, Lang.Fr)      => "Gobelin.md"
-    case (UnitKind.Goblin, Lang.En)      => "Goblin.md"
-    case (UnitKind.Minotaur, Lang.Fr)    => "Minotaure.md"
-    case (UnitKind.Minotaur, Lang.En)    => "Minotaur.md"
-    case (UnitKind.Paladin, Lang.Fr)     => "Paladin.md"
-    case (UnitKind.Paladin, Lang.En)     => "Paladin.md"
-    case (UnitKind.Wolf, Lang.Fr)        => "Loup.md"
-    case (UnitKind.Wolf, Lang.En)        => "Wolf.md"
-    case (UnitKind.Zombie, Lang.Fr)      => "Zombie.md"
-    case (UnitKind.Zombie, Lang.En)      => "Zombie.md"
-    case (UnitKind.Vampire, Lang.Fr)     => "Vampire.md"
-    case (UnitKind.Vampire, Lang.En)     => "Vampire.md"
-    case (UnitKind.Necromancer, Lang.Fr) => "Necromancien.md"
-    case (UnitKind.Necromancer, Lang.En) => "Necromancer.md"
-    case (UnitKind.Soul, Lang.Fr)        => "Âme.md"
-    case (UnitKind.Soul, Lang.En)        => "Soul.md"
-    case (UnitKind.Tree, Lang.Fr)        => "Arbre Animé.md"
-    case (UnitKind.Tree, Lang.En)        => "Animated Tree.md"
-
-  def vaultRoot(lang: Lang): String = lang match
-    case Lang.Fr => "Resources"
-    case Lang.En => "Resources-en"
+  def vaultRoot(lang: Lang): String = if lang == Lang.Fr then "Resources" else "Resources-en"
 
   // Path (relative to the vault root, forward-slashed) to a building/unit/resource's own
   // doc page — used both to know where DocGenerator writes a file and to build a
   // Markdown link from a sibling doc (same faction subfolder, so a same-language,
-  // same-faction cross-link is always just the bare file name — see DocGenerator).
+  // same-faction cross-link is always just the bare file name — see relativeTo).
   def buildingPath(k: BuildingKind, lang: Lang): String =
-    s"${factionFolder(Faction.of(k), lang)}/${buildingFileName(k, lang)}"
+    val info = buildingInfo(k)
+    s"${factionFolder(info.faction, lang)}/${info.fileName(lang)}"
 
   def unitPath(k: UnitKind, lang: Lang): String =
-    s"${factionFolder(Faction.of(k), lang)}/${unitFileName(k, lang)}"
+    val info = unitInfo(k)
+    s"${factionFolder(info.faction, lang)}/${info.fileName(lang)}"
 
   def resourcePath(r: Resource, lang: Lang): String =
-    s"${factionFolder(Faction.of(r), lang)}/${resourceFileName(r, lang)}"
+    val info = resourceInfo(r)
+    s"${factionFolder(info.faction, lang)}/${info.fileName(lang)}"
 
   // ── Cross-links between generated pages ─────────────────────────────────
   // Every generated page lives in its own faction subfolder (Resources/<Faction>/ or
@@ -221,25 +292,28 @@ object EntityNames:
   // Matches the existing vault's own convention (e.g. Labo Fondamental.md's own links:
   // "[Labo Naturel](Labo%20Naturel.md)") — spaces in a link *target* are percent-encoded,
   // everything else (accented letters included) is left as-is. Only the href needs this;
-  // the actual files on disk keep their literal spaces (see EntityNames.*FileName/
-  // DocGenerator, which never route through this function).
+  // the actual files on disk keep their literal spaces (see *FileName/DocGenerator, which
+  // never route through this function).
   private def mdLink(text: String, path: String): String = s"[$text](${path.replace(" ", "%20")})"
 
   def buildingLink(from: Faction, k: BuildingKind, lang: Lang): String =
-    mdLink(buildingName(k, lang), relativeTo(from, Faction.of(k), buildingFileName(k, lang), lang))
+    val info = buildingInfo(k)
+    mdLink(info.name(lang), relativeTo(from, info.faction, info.fileName(lang), lang))
 
   def unitLink(from: Faction, k: UnitKind, lang: Lang): String =
-    mdLink(unitName(k, lang), relativeTo(from, Faction.of(k), unitFileName(k, lang), lang))
+    val info = unitInfo(k)
+    mdLink(info.name(lang), relativeTo(from, info.faction, info.fileName(lang), lang))
 
   def resourceLink(from: Faction, r: Resource, lang: Lang): String =
-    mdLink(resourceName(r, lang), relativeTo(from, Faction.of(r), resourceFileName(r, lang), lang))
+    val info = resourceInfo(r)
+    mdLink(info.name(lang), relativeTo(from, info.faction, info.fileName(lang), lang))
 
   // A link from an EN page to an FR-only page (Corruption.md, the faction overview pages)
   // that this generator doesn't produce an English version of (out of scope — see
   // factionFrOverviewFile's doc) — crosses from Resources-en/<Faction>/ back into the FR
   // Resources/<Faction>/ tree, which sits at the same depth under the repo root.
   def frFallbackLink(text: String, faction: Faction, frFileName: String): String =
-    mdLink(text, s"../../Resources/${faction.toString}/$frFileName")
+    mdLink(text, s"../../Resources/${factionFolder(faction, Lang.Fr)}/$frFileName")
 
   // A link to a vault page this generator doesn't itself produce (Corruption.md, the
   // Note/Recherche* Science pages) — an FR page links straight to the existing FR file
@@ -247,14 +321,13 @@ object EntityNames:
   // `relativeTo`); an EN page, which has no translated version of that page, falls back
   // to the same FR file across trees (see frFallbackLink).
   def outOfScopeLink(text: String, from: Faction, target: Faction, frFileName: String, lang: Lang): String =
-    lang match
-      case Lang.Fr => mdLink(text, relativeTo(from, target, frFileName, Lang.Fr))
-      case Lang.En => frFallbackLink(text, target, frFileName)
+    if lang == Lang.Fr then mdLink(text, relativeTo(from, target, frFileName, Lang.Fr))
+    else frFallbackLink(text, target, frFileName)
 
   // A page's link to its own faction's overview — FR pages link within their own tree
   // (Resources/Loi/Paladin.md -> Loi.md, same folder); EN pages have no translated
   // overview page (out of scope, see factionFrOverviewFile's doc) so they fall back to
   // the FR one, displayed under the faction's English name.
-  def factionLink(f: Faction, lang: Lang): String = lang match
-    case Lang.Fr => mdLink(factionName(f, lang), factionFrOverviewFile(f))
-    case Lang.En => frFallbackLink(factionName(f, lang), f, factionFrOverviewFile(f))
+  def factionLink(f: Faction, lang: Lang): String =
+    if lang == Lang.Fr then mdLink(factionName(f, lang), factionFrOverviewFile(f))
+    else frFallbackLink(factionName(f, lang), f, factionFrOverviewFile(f))

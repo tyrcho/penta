@@ -10,6 +10,13 @@ import towerdefense.domain.*
 // countdown) that a static doc page never needs. Every number is still passed in from
 // GameApp (which already computes it against Balance/BuildingSpecs/CombatEngine), not
 // hardcoded here — this module only owns the phrasing, in both languages.
+//
+// Every unit's ability summary and every building's "own ability beyond cost/production"
+// sentence is static per kind (it only ever reads fixed Balance constants, never anything
+// per-instance), so each is written once as a value in `unitAbilities`/`buildingOwnAbilities`
+// below — a Map literal, not a `kind match`. `researchEffectSummary` is the one exception
+// that still needs a per-call parameter (a lab's current research level's magnitude, which
+// varies at runtime) — it's a Map of small functions instead, keyed the same way.
 object TooltipText:
   import NumberFormat.decimal
 
@@ -25,88 +32,74 @@ object TooltipText:
   def buildingButtonTooltip(kind: BuildingKind, cost: Map[Resource, Double], produces: Map[Resource, Double], lang: Lang): String =
     val name = EntityNames.buildingName(kind, lang)
     val cText = costText(cost, lang)
-    val rateText = produces.toList.sortBy(_._1.ordinal) match
-      case Nil => ""
-      case rates =>
-        val joined = rates.map { case (res, rate) => s"+${decimal(rate)} ${EntityNames.resourceName(res, lang)}/s" }.mkString(", ")
-        lang match
-          case Lang.Fr => s" $joined."
-          case Lang.En => s" $joined."
-    lang match
-      case Lang.Fr => s"$name — coût $cText.$rateText"
-      case Lang.En => s"$name — cost $cText.$rateText"
+    val rates = produces.toList.sortBy(_._1.ordinal)
+    val rateText =
+      if rates.isEmpty then ""
+      else " " + rates.map { case (res, rate) => s"+${decimal(rate)} ${EntityNames.resourceName(res, lang)}/s" }.mkString(", ") + "."
+    val costWord = if lang == Lang.Fr then "coût" else "cost"
+    s"$name — $costWord $cText.$rateText"
 
-  def costLabel(lang: Lang): String = lang match
-    case Lang.Fr => "coût"
-    case Lang.En => "cost"
+  // ── Unit ability summaries — one entry per kind, all static (Balance-only) data ──────
+
+  private def plunders(amounts: List[(Resource, Double)]): I18nText =
+    val frText = amounts.map { case (res, amt) => s"${decimal(amt)} ${EntityNames.resourceName(res, Lang.Fr)}" }.mkString(" + ")
+    val enText = amounts.map { case (res, amt) => s"${decimal(amt)} ${EntityNames.resourceName(res, Lang.En)}" }.mkString(" + ")
+    I18nText(fr = s"pille $frText à l'arrivée", en = s"plunders $enText on arrival")
+
+  private val noPlunder: I18nText = I18nText(fr = "ne pille pas — ", en = "doesn't plunder — ")
+
+  private def shields(dmgPerSec: Double): I18nText = I18nText(
+    fr = s"protège les alliés adjacents de ${decimal(dmgPerSec)} dégâts/sec",
+    en = s"shields adjacent allies from ${decimal(dmgPerSec)} dmg/s"
+  )
+
+  private def speedsUp(rangeCells: Int, boostPercent: Double): I18nText = I18nText(
+    fr = s"augmente la vitesse des alliés à $rangeCells cases de ${decimal(boostPercent)}%",
+    en = s"speeds up allies within $rangeCells cells by ${decimal(boostPercent)}%"
+  )
+
+  private def corrupts(percentPerSec: Double): I18nText = I18nText(
+    fr = s"corrompt les bâtiments ennemis adjacents de ${decimal(percentPerSec)}%/sec",
+    en = s"corrupts adjacent enemy buildings by ${decimal(percentPerSec)}%/s"
+  )
+
+  private def takesLessDamage(reductionPercent: Double): I18nText = I18nText(
+    fr = s", subit ${decimal(reductionPercent)}% de dégâts en moins",
+    en = s", takes ${decimal(reductionPercent)}% less damage"
+  )
+
+  private def invokesSoul(intervalMs: Double): I18nText =
+    val secs = NumberFormat.seconds(intervalMs)
+    I18nText(fr = s"invoque une Âme toutes les ${secs}s", en = s"invokes a Soul every ${secs}s")
+
+  private def clones(intervalMs: Double, minSizePercent: Double): I18nText =
+    val secs = NumberFormat.seconds(intervalMs)
+    I18nText(
+      fr = s"se clone (en plus petit) toutes les ${secs}s (jusqu'à ${decimal(minSizePercent)}% de taille), " +
+        "compte pour la victoire de son propriétaire tant qu'il est en vie",
+      en = s"clones a smaller copy of itself every ${secs}s (down to ${decimal(minSizePercent)}% size), " +
+        "counting toward its owner's victory the whole time"
+    )
 
   // Appended to a building's tooltip (button or live hover) whenever it spawns a unit, so
   // the unit's own value proposition is visible before it's even placed — mirrors
   // GameApp's original spawnAbilitySuffix/unitAbilitySummary split.
-  def unitAbilitySummary(kind: UnitKind, lang: Lang): String = kind match
-    case UnitKind.Elf =>
-      plunders(List(Resource.Wood -> Balance.PlunderPerUnit), lang)
-    case UnitKind.Goblin =>
-      plunders(List(Resource.Wood -> Balance.PlunderPerUnit, Resource.Fire -> Balance.PlunderPerUnit), lang)
-    case UnitKind.Minotaur =>
-      plunders(List(Resource.Wood -> Balance.MinotaurPlunderPerUnit, Resource.Fire -> Balance.MinotaurPlunderPerUnit), lang)
-    case UnitKind.Paladin =>
-      noPlunder(lang) + shields(Balance.PaladinAuraDamageReductionPerSec, lang)
-    case UnitKind.Wolf =>
-      noPlunder(lang) + speedsUp(Balance.WolfSpeedAuraRangeCells, (Balance.WolfSpeedAuraMultiplier - 1) * 100, lang)
-    case UnitKind.Zombie =>
-      noPlunder(lang) + corrupts(Balance.ZombieCorruptionPercentPerSec, lang)
-    case UnitKind.Vampire =>
-      noPlunder(lang) + corrupts(Balance.VampireCorruptionPercentPerSec, lang) +
-        takesLessDamage(Balance.VampireDamageReductionFraction * 100, lang)
-    case UnitKind.Necromancer =>
-      noPlunder(lang) + invokesSoul(Balance.SoulSummonIntervalMs, lang)
-    case UnitKind.Soul =>
-      noPlunder(lang) + corrupts(Balance.SoulCorruptionPercentPerSec, lang)
-    case UnitKind.Tree =>
-      noPlunder(lang) + clones(Balance.TreeCloneIntervalMs, Balance.TreeMinCloneSizeFraction * 100, lang)
+  val unitAbilities: Map[UnitKind, I18nText] = Map(
+    UnitKind.Elf -> plunders(List(Resource.Wood -> Balance.PlunderPerUnit)),
+    UnitKind.Goblin -> plunders(List(Resource.Wood -> Balance.PlunderPerUnit, Resource.Fire -> Balance.PlunderPerUnit)),
+    UnitKind.Minotaur ->
+      plunders(List(Resource.Wood -> Balance.MinotaurPlunderPerUnit, Resource.Fire -> Balance.MinotaurPlunderPerUnit)),
+    UnitKind.Paladin -> (noPlunder ++ shields(Balance.PaladinAuraDamageReductionPerSec)),
+    UnitKind.Wolf -> (noPlunder ++ speedsUp(Balance.WolfSpeedAuraRangeCells, (Balance.WolfSpeedAuraMultiplier - 1) * 100)),
+    UnitKind.Zombie -> (noPlunder ++ corrupts(Balance.ZombieCorruptionPercentPerSec)),
+    UnitKind.Vampire ->
+      (noPlunder ++ corrupts(Balance.VampireCorruptionPercentPerSec) ++ takesLessDamage(Balance.VampireDamageReductionFraction * 100)),
+    UnitKind.Necromancer -> (noPlunder ++ invokesSoul(Balance.SoulSummonIntervalMs)),
+    UnitKind.Soul -> (noPlunder ++ corrupts(Balance.SoulCorruptionPercentPerSec)),
+    UnitKind.Tree -> (noPlunder ++ clones(Balance.TreeCloneIntervalMs, Balance.TreeMinCloneSizeFraction * 100))
+  )
 
-  private def plunders(amounts: List[(Resource, Double)], lang: Lang): String =
-    val text = amounts.map { case (res, amt) => s"${decimal(amt)} ${EntityNames.resourceName(res, lang)}" }.mkString(" + ")
-    lang match
-      case Lang.Fr => s"pille $text à l'arrivée"
-      case Lang.En => s"plunders $text on arrival"
-
-  private def noPlunder(lang: Lang): String = lang match
-    case Lang.Fr => "ne pille pas — "
-    case Lang.En => "doesn't plunder — "
-
-  private def shields(dmgPerSec: Double, lang: Lang): String = lang match
-    case Lang.Fr => s"protège les alliés adjacents de ${decimal(dmgPerSec)} dégâts/sec"
-    case Lang.En => s"shields adjacent allies from ${decimal(dmgPerSec)} dmg/s"
-
-  private def speedsUp(rangeCells: Int, boostPercent: Double, lang: Lang): String = lang match
-    case Lang.Fr => s"augmente la vitesse des alliés à $rangeCells cases de ${decimal(boostPercent)}%"
-    case Lang.En => s"speeds up allies within $rangeCells cells by ${decimal(boostPercent)}%"
-
-  private def corrupts(percentPerSec: Double, lang: Lang): String = lang match
-    case Lang.Fr => s"corrompt les bâtiments ennemis adjacents de ${decimal(percentPerSec)}%/sec"
-    case Lang.En => s"corrupts adjacent enemy buildings by ${decimal(percentPerSec)}%/s"
-
-  private def takesLessDamage(reductionPercent: Double, lang: Lang): String = lang match
-    case Lang.Fr => s", subit ${decimal(reductionPercent)}% de dégâts en moins"
-    case Lang.En => s", takes ${decimal(reductionPercent)}% less damage"
-
-  private def invokesSoul(intervalMs: Double, lang: Lang): String =
-    val secs = NumberFormat.seconds(intervalMs)
-    lang match
-      case Lang.Fr => s"invoque une Âme toutes les ${secs}s"
-      case Lang.En => s"invokes a Soul every ${secs}s"
-
-  private def clones(intervalMs: Double, minSizePercent: Double, lang: Lang): String =
-    val secs = NumberFormat.seconds(intervalMs)
-    lang match
-      case Lang.Fr =>
-        s"se clone (en plus petit) toutes les ${secs}s (jusqu'à ${decimal(minSizePercent)}% de taille), " +
-          "compte pour la victoire de son propriétaire tant qu'il est en vie"
-      case Lang.En =>
-        s"clones a smaller copy of itself every ${secs}s (down to ${decimal(minSizePercent)}% size), " +
-          "counting toward its owner's victory the whole time"
+  def unitAbilitySummary(kind: UnitKind, lang: Lang): String = unitAbilities(kind)(lang)
 
   // A live creature's hover text — same numbers as unitAbilitySummary, plus its current
   // HP and (for a Tree) its current clone size, since those vary per-instance.
@@ -123,71 +116,61 @@ object TooltipText:
     else
       val pct = corruptionPercent.round
       val max = maxPercent.toInt
-      lang match
-        case Lang.Fr => s" — corrompu à $pct%/$max%"
-        case Lang.En => s" — corrupted $pct%/$max%"
+      if lang == Lang.Fr then s" — corrompu à $pct%/$max%" else s" — corrupted $pct%/$max%"
 
-  def destroyLabel(refundText: String, lang: Lang): String = lang match
-    case Lang.Fr => s"Détruire ($refundText)"
-    case Lang.En => s"Destroy ($refundText)"
+  def destroyLabel(refundText: String, lang: Lang): String =
+    if lang == Lang.Fr then s"Détruire ($refundText)" else s"Destroy ($refundText)"
 
   def upgradeLabel(kind: BuildingKind, costText: String, lang: Lang): String =
     val name = EntityNames.buildingName(kind, lang)
-    lang match
-      case Lang.Fr => s"Améliorer en $name ($costText)"
-      case Lang.En => s"Upgrade to $name ($costText)"
+    if lang == Lang.Fr then s"Améliorer en $name ($costText)" else s"Upgrade to $name ($costText)"
 
-  def researchLabel(nextLevel: Int, maxLevel: Int, costText: String, effect: String, lang: Lang): String = lang match
-    case Lang.Fr => s"Recherche niveau $nextLevel/$maxLevel ($costText) → $effect"
-    case Lang.En => s"Research level $nextLevel/$maxLevel ($costText) → $effect"
+  def researchLabel(nextLevel: Int, maxLevel: Int, costText: String, effect: String, lang: Lang): String =
+    val word = if lang == Lang.Fr then "Recherche niveau" else "Research level"
+    s"$word $nextLevel/$maxLevel ($costText) → $effect"
 
   def researchLevelText(level: Int, maxLevel: Int, effect: Option[String], lang: Lang): String =
-    (level, effect) match
-      case (l, _) if l <= 0 =>
-        lang match
-          case Lang.Fr => s"recherche niveau 0/$maxLevel (aucun bonus)"
-          case Lang.En => s"research level 0/$maxLevel (no bonus yet)"
-      case (l, Some(e)) =>
-        lang match
-          case Lang.Fr => s"recherche niveau $l/$maxLevel ($e)"
-          case Lang.En => s"research level $l/$maxLevel ($e)"
-      case (l, None) =>
-        lang match
-          case Lang.Fr => s"recherche niveau $l/$maxLevel"
-          case Lang.En => s"research level $l/$maxLevel"
+    if level <= 0 then (if lang == Lang.Fr then s"recherche niveau 0/$maxLevel (aucun bonus)" else s"research level 0/$maxLevel (no bonus yet)")
+    else
+      val word = if lang == Lang.Fr then "recherche niveau" else "research level"
+      effect match
+        case Some(e) => s"$word $level/$maxLevel ($e)"
+        case None    => s"$word $level/$maxLevel"
+
+  // The magnitude a lab's research level actually gives (ResearchSpecs.effectAtLevel, or
+  // for Recherche fondamentale, the required other-lab level) varies at runtime, so this
+  // is a Map of small functions rather than a Map of already-baked I18nText — everything
+  // *except* that one number is still fixed per kind, defined once below.
+  private val researchEffectTemplates: Map[BuildingKind, Double => I18nText] = Map(
+    BuildingKind.LaboNaturel -> { magnitude =>
+      val v = decimal(magnitude * 100)
+      I18nText(fr = s"-$v% coût des bâtiments", en = s"-$v% building cost")
+    },
+    BuildingKind.LaboSombre -> { magnitude =>
+      val v = decimal(magnitude * 100)
+      I18nText(fr = s"+$v% conditions de victoire adverses", en = s"+$v% opponent's victory targets")
+    },
+    BuildingKind.LaboDuChaos -> { magnitude =>
+      val v = decimal(magnitude)
+      I18nText(fr = s"+$v pillage par ressource, chaque unité", en = s"+$v plunder per resource, every unit")
+    },
+    BuildingKind.LaboDeLaLoi -> { magnitude =>
+      val v = decimal(magnitude * 100)
+      I18nText(fr = s"+$v% dégâts des bâtiments", en = s"+$v% building damage")
+    },
+    BuildingKind.LaboDeRecherche -> { magnitude =>
+      val level = magnitude.toInt
+      I18nText(
+        fr = s"victoire automatique une fois chaque autre labo au niveau $level+",
+        en = s"wins outright once every other lab reaches level $level+"
+      )
+    }
+  )
 
   def researchEffectSummary(labKind: BuildingKind, magnitude: Double, lang: Lang): String =
-    labKind match
-      case BuildingKind.LaboNaturel =>
-        val v = decimal(magnitude * 100)
-        lang match
-          case Lang.Fr => s"-$v% coût des bâtiments"
-          case Lang.En => s"-$v% building cost"
-      case BuildingKind.LaboSombre =>
-        val v = decimal(magnitude * 100)
-        lang match
-          case Lang.Fr => s"+$v% conditions de victoire adverses"
-          case Lang.En => s"+$v% opponent's victory targets"
-      case BuildingKind.LaboDuChaos =>
-        val v = decimal(magnitude)
-        lang match
-          case Lang.Fr => s"+$v pillage par ressource, chaque unité"
-          case Lang.En => s"+$v plunder per resource, every unit"
-      case BuildingKind.LaboDeLaLoi =>
-        val v = decimal(magnitude * 100)
-        lang match
-          case Lang.Fr => s"+$v% dégâts des bâtiments"
-          case Lang.En => s"+$v% building damage"
-      case BuildingKind.LaboDeRecherche =>
-        val level = magnitude.toInt
-        lang match
-          case Lang.Fr => s"victoire automatique une fois chaque autre labo au niveau $level+"
-          case Lang.En => s"wins outright once every other lab reaches level $level+"
-      case _ => ""
+    researchEffectTemplates.get(labKind).map(_(magnitude)(lang)).getOrElse("")
 
-  def spawnsNothing(lang: Lang): String = lang match
-    case Lang.Fr => "n'envoie aucune unité"
-    case Lang.En => "spawns no unit"
+  def spawnsNothing(lang: Lang): String = if lang == Lang.Fr then "n'envoie aucune unité" else "spawns no unit"
 
   // ── Building live-hover building blocks ─────────────────────────────────
   // Small composable fragments `perKindHoverText` (GameApp) strings together per kind —
@@ -200,87 +183,94 @@ object TooltipText:
 
   def nextSpawnIn(unitKind: UnitKind, seconds: Int, lang: Lang): String =
     val name = EntityNames.unitName(unitKind, lang)
-    lang match
-      case Lang.Fr => s"prochain $name dans ${seconds}s"
-      case Lang.En => s"next $name in ${seconds}s"
+    if lang == Lang.Fr then s"prochain $name dans ${seconds}s" else s"next $name in ${seconds}s"
 
-  def adjacentDamage(dmgPerSec: Double, lang: Lang): String = lang match
-    case Lang.Fr => s"${decimal(dmgPerSec)} dégâts/sec aux ennemis adjacents"
-    case Lang.En => s"${decimal(dmgPerSec)} dmg/s to adjacent enemies"
+  def adjacentDamage(dmgPerSec: Double, lang: Lang): String =
+    if lang == Lang.Fr then s"${decimal(dmgPerSec)} dégâts/sec aux ennemis adjacents"
+    else s"${decimal(dmgPerSec)} dmg/s to adjacent enemies"
 
-  def adjacentDamageAndSlow(dmgPerSec: Double, slowPercent: Double, lang: Lang): String = lang match
-    case Lang.Fr => s"${decimal(dmgPerSec)} dégâts/sec aux ennemis adjacents, ralentis de ${decimal(slowPercent)}%"
-    case Lang.En => s"${decimal(dmgPerSec)} dmg/s to adjacent enemies, slows them ${decimal(slowPercent)}%"
+  def adjacentDamageAndSlow(dmgPerSec: Double, slowPercent: Double, lang: Lang): String =
+    if lang == Lang.Fr then s"${decimal(dmgPerSec)} dégâts/sec aux ennemis adjacents, ralentis de ${decimal(slowPercent)}%"
+    else s"${decimal(dmgPerSec)} dmg/s to adjacent enemies, slows them ${decimal(slowPercent)}%"
 
-  def rangedDamage(dmgPerSec: Double, rangeCells: Int, lang: Lang): String = lang match
-    case Lang.Fr => s"${decimal(dmgPerSec)} dégâts/sec à l'ennemi le plus proche jusqu'à $rangeCells cases"
-    case Lang.En => s"${decimal(dmgPerSec)} dmg/s to the nearest enemy within $rangeCells cells"
+  def rangedDamage(dmgPerSec: Double, rangeCells: Int, lang: Lang): String =
+    if lang == Lang.Fr then s"${decimal(dmgPerSec)} dégâts/sec à l'ennemi le plus proche jusqu'à $rangeCells cases"
+    else s"${decimal(dmgPerSec)} dmg/s to the nearest enemy within $rangeCells cells"
 
-  def passingGateAbility(dmgPerSec: Double, harvestPercent: Double, lang: Lang): String = lang match
-    case Lang.Fr =>
+  def passingGateAbility(dmgPerSec: Double, harvestPercent: Double, lang: Lang): String =
+    if lang == Lang.Fr then
       s"${decimal(dmgPerSec)} dégâts/sec sur ses 4 cases adjacentes, récolte ${decimal(harvestPercent)}% de vos " +
         "ressources totales en ombre à chaque mort à proximité"
-    case Lang.En =>
+    else
       s"${decimal(dmgPerSec)} dmg/s to enemies on its 4 adjacent cells, harvests ${decimal(harvestPercent)}% " +
         "of your own total resources as shadow on every nearby death"
 
-  def noResearchBonusYet(lang: Lang): String = lang match
-    case Lang.Fr => "aucun bonus de recherche — améliorez-le en un labo spécifique ci-dessous"
-    case Lang.En => "no research bonus — upgrade it into a specific lab below"
+  def noResearchBonusYet(lang: Lang): String =
+    if lang == Lang.Fr then "aucun bonus de recherche — améliorez-le en un labo spécifique ci-dessous"
+    else "no research bonus — upgrade it into a specific lab below"
 
-  def noSpawnLabel(lang: Lang): String = lang match
-    case Lang.Fr => "n'envoie aucune ressource"
-    case Lang.En => "spawns no resource"
+  def noSpawnLabel(lang: Lang): String = if lang == Lang.Fr then "n'envoie aucune ressource" else "spawns no resource"
+
+  // ── Building "own ability" sentences — one entry per kind that has one, all static ───
+
+  private def upperFirst(text: String): String = if text.isEmpty then text else text.charAt(0).toUpper.toString + text.substring(1)
+
+  private val groveUpgradeHint: I18nText =
+    val forestFr = EntityNames.buildingName(BuildingKind.Forest, Lang.Fr)
+    val forestEn = EntityNames.buildingName(BuildingKind.Forest, Lang.En)
+    val jungleFr = EntityNames.buildingName(BuildingKind.Jungle, Lang.Fr)
+    val jungleEn = EntityNames.buildingName(BuildingKind.Jungle, Lang.En)
+    I18nText(fr = s" Devient $forestFr puis $jungleFr en s'améliorant.", en = s" Upgrades into a $forestEn, then a $jungleEn.")
+
+  private val watchtowerOwnAbility: I18nText =
+    val dmg = decimal(Balance.WatchtowerDamagePerSec)
+    I18nText(
+      fr = s" ${upperFirst(spawnsNothing(Lang.Fr))} — inflige plutôt $dmg dégâts/sec à l'ennemi le plus proche " +
+        s"jusqu'à ${Balance.WatchtowerRangeCells} cases",
+      en = s" ${upperFirst(spawnsNothing(Lang.En))} — instead inflicts $dmg dmg/s to the nearest enemy within " +
+        s"${Balance.WatchtowerRangeCells} cells"
+    )
+
+  private val angelOwnAbility: I18nText =
+    val dmg = decimal(Balance.AngelDamagePerSec)
+    val slow = decimal(Balance.AngelSlowFraction * 100)
+    I18nText(
+      fr = s" ${upperFirst(spawnsNothing(Lang.Fr))} — inflige plutôt $dmg dégâts/sec aux unités adjacentes et " +
+        s"ralentit leur vitesse de $slow%",
+      en = s" ${upperFirst(spawnsNothing(Lang.En))} — instead inflicts $dmg dmg/s to adjacent enemies and slows " +
+        s"them by $slow%"
+    )
+
+  private val passingGateOwnAbility: I18nText =
+    val dmg = decimal(Balance.PassingGateDamagePerSec)
+    val harvest = decimal(Balance.PassingGateDeathShadowFraction * 100)
+    I18nText(
+      fr = s" ${upperFirst(spawnsNothing(Lang.Fr))} — inflige $dmg dégâts/sec aux ennemis sur ses 4 cases " +
+        s"adjacentes, et récolte $harvest% de vos ressources totales en ombre bonus à chaque mort sur " +
+        "l'une de ces cases",
+      en = s" ${upperFirst(spawnsNothing(Lang.En))} — inflicts $dmg dmg/s to enemies on its 4 adjacent cells, " +
+        s"and harvests $harvest% of your own total resources as bonus shadow whenever any creature dies " +
+        "on one of those cells"
+    )
+
+  private val laboFondamentalOwnAbility: I18nText = I18nText(
+    fr = " sans bonus de recherche propre. Améliorez-le en un labo spécifique pour débloquer sa ligne de " +
+      "recherche (niveau 1 gratuit) — un seul labo de chaque type spécifique par maze à la fois",
+    en = " with no research bonus of its own. Upgrade it into a specific lab to unlock that lab's own " +
+      "research line (starting at a free level 1) — only one lab of each specific kind per maze at a time"
+  )
 
   // The extra sentence a building's own tooltip needs beyond cost/production/spawn —
   // either a combat ability BuildingSpec doesn't model (Watchtower/Angel/PassingGate's
   // aura or ranged damage — see BuildingSpecs' doc on why those stay hand-coded special
-  // cases), or Grove's own upgrade-chain hint. Empty for every other kind, whose tooltip
+  // cases), or Grove's own upgrade-chain hint. Absent for every other kind, whose tooltip
   // is already complete from buildingButtonTooltip + unitAbilitySummary alone.
-  def buildingOwnAbility(kind: BuildingKind, lang: Lang): String = kind match
-    case BuildingKind.Grove =>
-      val forest = EntityNames.buildingName(BuildingKind.Forest, lang)
-      val jungle = EntityNames.buildingName(BuildingKind.Jungle, lang)
-      lang match
-        case Lang.Fr => s" Devient $forest puis $jungle en s'améliorant."
-        case Lang.En => s" Upgrades into a $forest, then a $jungle."
-    case BuildingKind.Watchtower =>
-      val dmg = decimal(Balance.WatchtowerDamagePerSec)
-      lang match
-        case Lang.Fr =>
-          s" ${spawnsNothing(lang).capitalize} — inflige plutôt $dmg dégâts/sec à l'ennemi le plus proche " +
-            s"jusqu'à ${Balance.WatchtowerRangeCells} cases"
-        case Lang.En =>
-          s" ${spawnsNothing(lang).capitalize} — instead inflicts $dmg dmg/s to the nearest enemy within " +
-            s"${Balance.WatchtowerRangeCells} cells"
-    case BuildingKind.Angel =>
-      val dmg = decimal(Balance.AngelDamagePerSec)
-      val slow = decimal(Balance.AngelSlowFraction * 100)
-      lang match
-        case Lang.Fr =>
-          s" ${spawnsNothing(lang).capitalize} — inflige plutôt $dmg dégâts/sec aux unités adjacentes et " +
-            s"ralentit leur vitesse de $slow%"
-        case Lang.En =>
-          s" ${spawnsNothing(lang).capitalize} — instead inflicts $dmg dmg/s to adjacent enemies and slows " +
-            s"them by $slow%"
-    case BuildingKind.PassingGate =>
-      val dmg = decimal(Balance.PassingGateDamagePerSec)
-      val harvest = decimal(Balance.PassingGateDeathShadowFraction * 100)
-      lang match
-        case Lang.Fr =>
-          s" ${spawnsNothing(lang).capitalize} — inflige $dmg dégâts/sec aux ennemis sur ses 4 cases " +
-            s"adjacentes, et récolte $harvest% de vos ressources totales en ombre bonus à chaque mort sur " +
-            "l'une de ces cases"
-        case Lang.En =>
-          s" ${spawnsNothing(lang).capitalize} — inflicts $dmg dmg/s to enemies on its 4 adjacent cells, " +
-            s"and harvests $harvest% of your own total resources as bonus shadow whenever any creature dies " +
-            "on one of those cells"
-    case BuildingKind.LaboFondamental =>
-      lang match
-        case Lang.Fr =>
-          " sans bonus de recherche propre. Améliorez-le en un labo spécifique pour débloquer sa ligne de " +
-            "recherche (niveau 1 gratuit) — un seul labo de chaque type spécifique par maze à la fois"
-        case Lang.En =>
-          " with no research bonus of its own. Upgrade it into a specific lab to unlock that lab's own " +
-            "research line (starting at a free level 1) — only one lab of each specific kind per maze at a time"
-    case _ => ""
+  val buildingOwnAbilities: Map[BuildingKind, I18nText] = Map(
+    BuildingKind.Grove -> groveUpgradeHint,
+    BuildingKind.Watchtower -> watchtowerOwnAbility,
+    BuildingKind.Angel -> angelOwnAbility,
+    BuildingKind.PassingGate -> passingGateOwnAbility,
+    BuildingKind.LaboFondamental -> laboFondamentalOwnAbility
+  )
+
+  def buildingOwnAbility(kind: BuildingKind, lang: Lang): String = buildingOwnAbilities.get(kind).fold("")(_(lang))
