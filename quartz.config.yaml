@@ -7,10 +7,14 @@ configuration:
   analytics:
     provider: null
   locale: fr-FR
-  # Vault is deployed under /wiki/ alongside the game itself at the site root — see
-  # .gitlab-ci.yml's pages job. Adjust once GitLab assigns the actual Pages URL (same
-  # follow-up japon needed — see its "fix baseurl" commit).
-  baseUrl: tyrcho.gitlab.io/penta/wiki
+  # Vault is deployed under /wiki/ alongside the game itself at the site root, served
+  # from the custom domain penta.tyrcho.com — which (unlike the default
+  # <namespace>.gitlab.io/<project>/ scheme) maps straight to the domain root, so there's
+  # no "/penta" project-name segment here. Everything after the host becomes the path
+  # prefix Quartz stamps onto every absolute link/asset URL it emits (enableSPA's
+  # client-side routing reads it too) — getting this wrong is what caused
+  # https://penta.tyrcho.com/penta/wiki/... double-prefix links.
+  baseUrl: penta.tyrcho.com/wiki
   ignorePatterns:
     - private
     - templates
