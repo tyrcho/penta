@@ -93,7 +93,17 @@ plugins:
   - source: github:quartz-community/crawl-links
     enabled: true
     options:
-      markdownLinkResolution: shortest
+      # "shortest" has a bug in @quartz-community/utils' transformLink: for any relative
+      # target that isn't a vault note slug (e.g. an <img src="../../game/assets/...">),
+      # its "shortest" branch falls through to the same path-rewrite as "absolute" instead
+      # of leaving the already-correct relative path alone, silently prepending a spurious
+      # extra "../" (`resources/chaos/gobelin.html`'s image ended up as
+      # "../.././../game/assets/..." instead of "../../game/assets/...", 404ing once
+      # served under the /wiki/ prefix). Every link/asset path this vault emits is already
+      # a fully-formed relative path (see EntityNames.relativeTo/mdLink and the
+      # hand-authored notes), so "relative" — which returns such targets untouched — is
+      # both correct and sufficient; we never rely on "shortest"'s bare-filename lookup.
+      markdownLinkResolution: relative
     order: 60
   - source: github:quartz-community/description
     enabled: true
