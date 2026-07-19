@@ -1,7 +1,0 @@
-Labyrinthe building icon (assets/labyrinthe.png) is cropped from:
-https://img.magnific.com/free-vector/3d-circular-maze-puzzle-pattern-background-get-lost-complexity_1017-53797.jpg
-
-This looks like Freepik-style stock content; license/attribution terms are
-not verified. Check before using this asset outside this local hobby project
-(unlike the CC0/CraftPix-Freebie assets elsewhere in assets/, which are
-already cleared).

@@ -1,0 +1,119 @@
+<svg id="art" viewBox="0 0 400 400" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <radialGradient id="floorFill" cx="47%" cy="40%" r="65%">
+      <stop offset="0%" stop-color="#d4bfe6"/>
+      <stop offset="70%" stop-color="#af8fc9"/>
+      <stop offset="100%" stop-color="#8f6ba8"/>
+    </radialGradient>
+    <linearGradient id="wallFill" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#bb9de0"/>
+      <stop offset="100%" stop-color="#7a4fa8"/>
+    </linearGradient>
+    <radialGradient id="denGlow" cx="50%" cy="50%" r="55%">
+      <stop offset="0%" stop-color="#5a2380"/>
+      <stop offset="55%" stop-color="#2a1140"/>
+      <stop offset="100%" stop-color="#0c0616"/>
+    </radialGradient>
+    <radialGradient id="auraGlow" cx="50%" cy="48%" r="52%">
+      <stop offset="0%" stop-color="#9a4fd6" stop-opacity="0.55"/>
+      <stop offset="70%" stop-color="#7a2fb0" stop-opacity="0.22"/>
+      <stop offset="100%" stop-color="#7a2fb0" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <!-- ground shadow -->
+  <ellipse cx="200" cy="366" rx="152" ry="20" fill="#000000" opacity="0.18"/>
+
+  <!-- soft chaos aura behind the whole maze -->
+  <circle cx="200" cy="174" r="182" fill="url(#auraGlow)"/>
+
+  <!-- dirt mound -->
+  <path d="M50,352 Q42,318 88,310 Q76,290 122,282 Q146,258 200,262 Q261,258 285,282 Q327,290 320,310 Q362,318 356,352 Z"
+        fill="#6e4a2c" stroke="#2b1d12" stroke-width="7" stroke-linejoin="round"/>
+  <path d="M68,338 Q118,326 166,336" fill="none" stroke="#4a3018" stroke-width="5" stroke-linecap="round" opacity="0.7"/>
+  <path d="M234,340 Q284,328 326,338" fill="none" stroke="#4a3018" stroke-width="5" stroke-linecap="round" opacity="0.7"/>
+
+  <!-- hoofprint stamped in the mud -->
+  <g transform="translate(120,344) rotate(-8)">
+    <path d="M-14,-6 Q-17,-16 -8,-19 Q-1,-21 -1,-12 Q0,-4 -6,2 Q-13,3 -14,-6 Z" fill="#2b1d12" opacity="0.8"/>
+    <path d="M4,-8 Q2,-18 11,-20 Q19,-21 18,-11 Q17,-3 10,2 Q3,4 4,-8 Z" fill="#2b1d12" opacity="0.8"/>
+  </g>
+
+  <!-- rim shadow under the maze disc -->
+  <ellipse cx="200" cy="300" rx="140" ry="20" fill="#000000" opacity="0.16"/>
+
+  <!-- maze floor disc -->
+  <circle cx="200" cy="174" r="145" fill="url(#floorFill)" stroke="#241b30" stroke-width="8"/>
+  <ellipse cx="200" cy="174" rx="145" ry="145" fill="none" stroke="#5c4d6e" stroke-width="3" opacity="0.35"/>
+
+  <!-- spiral maze wall: shadow pass (right side of coils, away from the light) -->
+  <path d="M272.3,187.3 Q264.8,204.5 259.1,211.7 Q253.4,218.8 246.2,224.1 Q239.1,229.3 231.1,232.5 Q223.1,235.7 214.8,236.6 Q206.4,237.6 198.4,236.4 Q190.3,235.2 183.1,232.1 Q175.8,229.0 169.8,224.2 Q163.8,219.5 159.4,213.6 L154.9,207.6"
+        fill="none" stroke="#4a3f5c" stroke-width="12" stroke-linecap="round" stroke-linejoin="round" opacity="0.4"/>
+  <path d="M224.1,182.5 Q219.5,187.3 216.8,188.9 Q214.2,190.4 211.4,191.1 Q208.7,191.7 206.1,191.6 Q203.6,191.5 201.3,190.7 Q199.1,189.9 197.4,188.6 L195.7,187.3"
+        fill="none" stroke="#4a3f5c" stroke-width="10" stroke-linecap="round" stroke-linejoin="round" opacity="0.4"/>
+
+  <!-- spiral maze wall: bold dark outline pass -->
+  <path d="M200.0,284.0 Q172.5,278.5 160.1,272.4 Q147.7,266.4 137.4,257.5 Q127.2,248.6 119.8,237.6 Q112.3,226.6 107.9,214.3 Q103.6,202.0 102.6,189.2 Q101.6,176.5 103.8,164.2 Q106.0,151.8 111.2,140.7 Q116.5,129.5 124.2,120.2 Q132.0,111.0 141.7,104.2 Q151.3,97.3 162.2,93.3 Q173.1,89.3 184.3,88.2 Q195.6,87.1 206.6,88.9 Q217.5,90.8 227.4,95.2 Q237.3,99.7 245.5,106.4 Q253.7,113.1 259.8,121.5 Q265.8,129.9 269.5,139.3 Q273.1,148.7 274.1,158.5 Q275.2,168.3 273.8,177.8 Q272.3,187.3 268.6,195.9 Q264.8,204.5 259.1,211.7 Q253.4,218.8 246.2,224.1 Q239.1,229.3 231.1,232.5 Q223.1,235.7 214.8,236.6 Q206.4,237.6 198.4,236.4 Q190.3,235.2 183.1,232.1 Q175.8,229.0 169.8,224.2 Q163.8,219.5 159.4,213.6 Q154.9,207.6 152.2,200.9 Q149.6,194.3 148.8,187.4 Q148.0,180.6 149.0,174.0 Q150.0,167.4 152.6,161.5 Q155.1,155.6 158.9,150.8 Q162.8,145.9 167.6,142.4 Q172.4,138.8 177.7,136.8 Q183.0,134.7 188.4,134.1 Q193.9,133.6 199.1,134.4 Q204.2,135.3 208.7,137.4 Q213.2,139.4 216.8,142.4 Q220.5,145.5 223.1,149.2 Q225.6,152.8 227.0,156.9 Q228.4,160.9 228.7,164.9 Q228.9,168.9 228.1,172.6 Q227.3,176.2 225.7,179.3 Q224.1,182.5 221.8,184.9 Q219.5,187.3 216.8,188.9 Q214.2,190.4 211.4,191.1 Q208.7,191.7 206.1,191.6 Q203.6,191.5 201.3,190.7 Q199.1,189.9 197.4,188.6 L195.7,187.3"
+        fill="none" stroke="#241b30" stroke-width="44" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <!-- spiral maze wall: colored fill pass -->
+  <path d="M200.0,284.0 Q172.5,278.5 160.1,272.4 Q147.7,266.4 137.4,257.5 Q127.2,248.6 119.8,237.6 Q112.3,226.6 107.9,214.3 Q103.6,202.0 102.6,189.2 Q101.6,176.5 103.8,164.2 Q106.0,151.8 111.2,140.7 Q116.5,129.5 124.2,120.2 Q132.0,111.0 141.7,104.2 Q151.3,97.3 162.2,93.3 Q173.1,89.3 184.3,88.2 Q195.6,87.1 206.6,88.9 Q217.5,90.8 227.4,95.2 Q237.3,99.7 245.5,106.4 Q253.7,113.1 259.8,121.5 Q265.8,129.9 269.5,139.3 Q273.1,148.7 274.1,158.5 Q275.2,168.3 273.8,177.8 Q272.3,187.3 268.6,195.9 Q264.8,204.5 259.1,211.7 Q253.4,218.8 246.2,224.1 Q239.1,229.3 231.1,232.5 Q223.1,235.7 214.8,236.6 Q206.4,237.6 198.4,236.4 Q190.3,235.2 183.1,232.1 Q175.8,229.0 169.8,224.2 Q163.8,219.5 159.4,213.6 Q154.9,207.6 152.2,200.9 Q149.6,194.3 148.8,187.4 Q148.0,180.6 149.0,174.0 Q150.0,167.4 152.6,161.5 Q155.1,155.6 158.9,150.8 Q162.8,145.9 167.6,142.4 Q172.4,138.8 177.7,136.8 Q183.0,134.7 188.4,134.1 Q193.9,133.6 199.1,134.4 Q204.2,135.3 208.7,137.4 Q213.2,139.4 216.8,142.4 Q220.5,145.5 223.1,149.2 Q225.6,152.8 227.0,156.9 Q228.4,160.9 228.7,164.9 Q228.9,168.9 228.1,172.6 Q227.3,176.2 225.7,179.3 Q224.1,182.5 221.8,184.9 Q219.5,187.3 216.8,188.9 Q214.2,190.4 211.4,191.1 Q208.7,191.7 206.1,191.6 Q203.6,191.5 201.3,190.7 Q199.1,189.9 197.4,188.6 L195.7,187.3"
+        fill="none" stroke="url(#wallFill)" stroke-width="28" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <!-- spiral maze wall: highlight pass (upper-left arc, catching the light) -->
+  <path d="M144.7,262.4 Q124.2,244.6 116.8,233.6 Q109.3,222.6 104.9,210.3 Q100.6,198.0 99.6,185.2 Q98.6,172.5 100.8,160.2 Q103.0,147.8 108.2,136.7 Q113.5,125.5 121.2,116.2 Q129.0,107.0 138.7,100.2 Q148.3,93.3 159.2,89.3 Q170.1,85.3 181.3,84.2 Q192.6,83.1 203.6,84.9 Q214.5,86.8 224.4,91.2 Q234.3,95.7 242.5,102.4 L250.7,109.1"
+        fill="none" stroke="#d9cde5" stroke-width="8.5" stroke-linecap="round" stroke-linejoin="round" opacity="0.5"/>
+
+  <!-- central chamber (minotaur den) -->
+  <circle cx="197" cy="184" r="31" fill="url(#denGlow)" stroke="#241b30" stroke-width="6"/>
+  <ellipse cx="186" cy="184" rx="6.5" ry="9" fill="#ff5a3c"/>
+  <ellipse cx="209" cy="185" rx="6.5" ry="9" fill="#ff5a3c"/>
+  <ellipse cx="186" cy="184" rx="6.5" ry="9" fill="none" stroke="#3a0f08" stroke-width="2.5"/>
+  <ellipse cx="209" cy="185" rx="6.5" ry="9" fill="none" stroke="#3a0f08" stroke-width="2.5"/>
+
+  <!-- entrance archway posts -->
+  <path d="M160,306 Q156,278 172,268 Q184,262 188,272 Q190,290 182,306 Q170,312 160,306 Z"
+        fill="#786a92" stroke="#241b30" stroke-width="7" stroke-linejoin="round"/>
+  <path d="M240,306 Q244,278 228,268 Q216,262 212,272 Q210,290 218,306 Q230,312 240,306 Z"
+        fill="#786a92" stroke="#241b30" stroke-width="7" stroke-linejoin="round"/>
+
+  <!-- entrance lintel bar -->
+  <path d="M156,272 Q200,260 244,272 Q244,286 200,280 Q156,286 156,272 Z"
+        fill="#8f81a4" stroke="#241b30" stroke-width="7" stroke-linejoin="round"/>
+
+  <!-- entrance gate opening (threshold into the maze) -->
+  <path d="M179,308 Q175,286 183,272 Q191,266 200,267 Q209,266 217,272 Q225,286 221,308 Q200,316 179,308 Z"
+        fill="#150a20" stroke="#241b30" stroke-width="6" stroke-linejoin="round"/>
+
+  <!-- bull skull with horns mounted above the entrance -->
+  <g transform="translate(200,242)">
+    <!-- horns -->
+    <path d="M-10,-6 Q-52,-18 -70,-46 Q-76,-58 -66,-58 Q-52,-40 -30,-24 Q-16,-14 -8,-4 Z"
+          fill="#d8c9a8" stroke="#2b1d12" stroke-width="5.5" stroke-linejoin="round"/>
+    <path d="M10,-6 Q52,-18 70,-46 Q76,-58 66,-58 Q52,-40 30,-24 Q16,-14 8,-4 Z"
+          fill="#d8c9a8" stroke="#2b1d12" stroke-width="5.5" stroke-linejoin="round"/>
+    <!-- skull -->
+    <path d="M-24,2 Q-27,-24 0,-26 Q27,-24 24,2 Q23,16 13,20 L13,29 L5,29 L5,19 L-5,19 L-5,29 L-13,29 L-13,20 Q-23,16 -24,2 Z"
+          fill="#e8ddc7" stroke="#2b1d12" stroke-width="6" stroke-linejoin="round"/>
+    <ellipse cx="-10" cy="0" rx="6.5" ry="8.5" fill="#241b30"/>
+    <ellipse cx="10" cy="0" rx="6.5" ry="8.5" fill="#241b30"/>
+    <path d="M-4,12 L0,17 L4,12" fill="none" stroke="#2b1d12" stroke-width="4" stroke-linejoin="round"/>
+  </g>
+
+  <!-- chaos rune, upper right -->
+  <g transform="translate(300,62) rotate(14) scale(0.72)">
+    <path d="M0,-30 L7,-11 L24,-22 L14,-4 L34,-2 L13,7 L26,22 L6,14 L2,32
+             L-8,15 L-24,26 L-15,7 L-33,6 L-13,-5 L-22,-22 L-4,-13 Z"
+          fill="#b24bff" stroke="#3a1050" stroke-width="4.5" stroke-linejoin="round"/>
+    <circle cx="0" cy="0" r="7" fill="#e9c8ff"/>
+  </g>
+
+  <!-- chaos crystal shards, lower right of the disc -->
+  <g transform="translate(316,250) rotate(18)">
+    <path d="M0,20 L-10,-10 L0,-30 L12,-8 Z" fill="#9b4fd1" stroke="#2b1d12" stroke-width="5" stroke-linejoin="round"/>
+    <path d="M0,-30 L-4,-10 L0,4" fill="none" stroke="#d8b3ff" stroke-width="3" opacity="0.7"/>
+  </g>
+  <g transform="translate(294,278) rotate(-10) scale(0.65)">
+    <path d="M0,20 L-10,-10 L0,-30 L12,-8 Z" fill="#7a2fb0" stroke="#2b1d12" stroke-width="5" stroke-linejoin="round"/>
+  </g>
+</svg>
