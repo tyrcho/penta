@@ -197,7 +197,6 @@ private object AssetPaths:
     ) ++ GoblinFrames.values.flatten ++ ElfFrames.values.flatten ++ Flames ++ Wolf ++ ZombieFrames ++
       NecromancerFrames ++ SoulFrames ++ NecromancerSummonFrames ++ TreeFrames.values.flatten
 
-private val CaveTint = 0xff7a45 // warm/fiery recolor for an otherwise cool-gray rock tile
 // Bright purple kill-flash for a PassingGate while Building.flashMs > 0 (see syncBuildings) —
 // the user asked for the flash to show only on an actual nearby death, not continuously like
 // an idle-animation glow would.
@@ -214,7 +213,7 @@ private object BuildingVisuals:
     BuildingKind.Grove -> BuildingVisual(AssetPaths.Grove, GridConfig.cellSize * 0.75, None),
     BuildingKind.Forest -> BuildingVisual(AssetPaths.Forest, GridConfig.cellSize * 0.9, None),
     BuildingKind.Jungle -> BuildingVisual(AssetPaths.Jungle, GridConfig.cellSize * 1.15, None),
-    BuildingKind.Cave -> BuildingVisual(AssetPaths.CaveRock, GridConfig.cellSize * 0.9, Some(CaveTint)),
+    BuildingKind.Cave -> BuildingVisual(AssetPaths.CaveRock, GridConfig.cellSize * 0.9, None),
     BuildingKind.Labyrinth -> BuildingVisual(AssetPaths.LabyrintheIcon, GridConfig.cellSize * 0.9, None),
     BuildingKind.Church -> BuildingVisual(AssetPaths.EgliseIcon, GridConfig.cellSize * 0.9, None),
     BuildingKind.Watchtower -> BuildingVisual(AssetPaths.WatchtowerIcon, GridConfig.cellSize * 0.9, None),
