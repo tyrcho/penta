@@ -1,0 +1,121 @@
+<svg id="art" viewBox="0 0 400 400" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <radialGradient id="fireGlow" cx="50%" cy="55%" r="55%">
+      <stop offset="0%" stop-color="#ffd35c"/>
+      <stop offset="35%" stop-color="#ff9a2e"/>
+      <stop offset="75%" stop-color="#ff6a1a"/>
+      <stop offset="100%" stop-color="#3a1608"/>
+    </radialGradient>
+    <radialGradient id="outerGlow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#ff9a2e" stop-opacity="0.9"/>
+      <stop offset="100%" stop-color="#ff9a2e" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="rockFill" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#9c8d7c"/>
+      <stop offset="100%" stop-color="#7a6c5c"/>
+    </linearGradient>
+  </defs>
+
+  <!-- ground shadow -->
+  <ellipse cx="200" cy="358" rx="150" ry="20" fill="#000000" opacity="0.18"/>
+
+  <!-- dirt mound -->
+  <path d="M50,355 Q45,320 90,315 Q80,300 120,295 Q140,270 200,275 Q260,268 285,295 Q320,298 315,320 Q355,325 350,355 Z"
+        fill="#7a4a26" stroke="#2b1d12" stroke-width="7" stroke-linejoin="round"/>
+  <path d="M70,340 Q120,330 170,338" fill="none" stroke="#5c3719" stroke-width="5" stroke-linecap="round" opacity="0.7"/>
+  <path d="M230,344 Q280,334 320,342" fill="none" stroke="#5c3719" stroke-width="5" stroke-linecap="round" opacity="0.7"/>
+
+  <!-- outer fire glow bleeding onto rock -->
+  <circle cx="200" cy="230" r="130" fill="url(#outerGlow)"/>
+
+  <!-- main rock mass (blobby cartoon boulder cluster) -->
+  <path d="M75,300
+           Q40,290 45,250
+           Q20,230 45,195
+           Q35,155 80,140
+           Q85,100 135,95
+           Q155,60 205,65
+           Q250,55 280,90
+           Q320,90 325,135
+           Q355,150 340,195
+           Q365,220 335,255
+           Q345,290 300,300
+           Q260,320 200,312
+           Q135,325 75,300 Z"
+        fill="url(#rockFill)" stroke="#2b1d12" stroke-width="8" stroke-linejoin="round"/>
+
+  <!-- rock shading (darker patch, right side) -->
+  <path d="M270,110 Q330,130 335,190 Q345,225 315,255 Q330,285 290,298 Q250,310 215,305
+           Q260,270 270,220 Q285,160 270,110 Z"
+        fill="#63564a" opacity="0.55"/>
+
+  <!-- rock highlight (top-left) -->
+  <path d="M95,150 Q110,105 155,90 Q190,75 220,80 Q180,90 150,120 Q120,145 110,175 Q100,165 95,150 Z"
+        fill="#b6a793" opacity="0.6"/>
+
+  <!-- cave mouth glow halo -->
+  <path d="M124,304 Q108,235 145,185 Q170,148 200,148 Q230,148 255,185 Q292,235 276,304
+           Q240,330 200,330 Q160,330 124,304 Z"
+        fill="url(#fireGlow)" opacity="0.9"/>
+
+  <!-- cave mouth (jagged natural arch opening) -->
+  <path d="M148,304
+           L140,270 L152,258 L142,232 L156,222 L148,198
+           Q168,158 200,156
+           Q232,158 252,198
+           L244,222 L258,232 L248,258 L260,270
+           L252,304
+           Q228,322 200,322
+           Q172,322 148,304 Z"
+        fill="#140b06" stroke="#2b1d12" stroke-width="7" stroke-linejoin="round"/>
+
+  <!-- faint goblin-green mist wisps near the depths -->
+  <ellipse cx="168" cy="285" rx="16" ry="9" fill="#4a9e1f" opacity="0.3" transform="rotate(-15 168 285)"/>
+  <ellipse cx="232" cy="288" rx="14" ry="8" fill="#4a9e1f" opacity="0.25" transform="rotate(12 232 288)"/>
+
+  <!-- goblin eyes glowing in the dark -->
+  <ellipse cx="180" cy="248" rx="10" ry="13" fill="#a6ff3c"/>
+  <ellipse cx="222" cy="248" rx="10" ry="13" fill="#a6ff3c"/>
+  <ellipse cx="180" cy="248" rx="10" ry="13" fill="none" stroke="#1c3a05" stroke-width="3"/>
+  <ellipse cx="222" cy="248" rx="10" ry="13" fill="none" stroke="#1c3a05" stroke-width="3"/>
+  <path d="M170,240 L190,240" stroke="#140b06" stroke-width="5" stroke-linecap="round"/>
+  <path d="M212,240 L232,240" stroke="#140b06" stroke-width="5" stroke-linecap="round"/>
+
+  <!-- chaos rune above entrance: asymmetric 8-point chaos star -->
+  <g transform="translate(200,102)">
+    <path d="M0,-30 L7,-11 L24,-22 L14,-4 L34,-2 L13,7 L26,22 L6,14 L2,32
+             L-8,15 L-24,26 L-15,7 L-33,6 L-13,-5 L-22,-22 L-4,-13 Z"
+          fill="#b24bff" stroke="#3a1050" stroke-width="4.5" stroke-linejoin="round"/>
+    <circle cx="0" cy="0" r="7" fill="#e9c8ff"/>
+  </g>
+
+  <!-- goblin totem stake (right of entrance) -->
+  <g transform="translate(305,240) rotate(5)">
+    <rect x="-6" y="-96" width="12" height="166" rx="4" fill="#8a5a2e" stroke="#2b1d12" stroke-width="6"/>
+    <!-- tattered green banner (below crossbones, clear of the skull) -->
+    <path d="M6,10 L48,20 L36,30 L48,40 L6,48 Z" fill="#5fa02a" stroke="#2b1d12" stroke-width="5" stroke-linejoin="round"/>
+    <!-- crossed bones -->
+    <g stroke="#e8ddc7" stroke-width="9" stroke-linecap="round">
+      <path d="M-26,-22 L26,-40"/>
+      <path d="M-26,-40 L26,-22"/>
+    </g>
+    <!-- skull -->
+    <g transform="translate(0,-78)">
+      <path d="M-22,0 Q-24,-26 0,-28 Q24,-26 22,0 Q22,14 12,18 L12,28 L4,28 L4,18 L-4,18 L-4,28 L-12,28 L-12,18 Q-22,14 -22,0 Z"
+            fill="#e8ddc7" stroke="#2b1d12" stroke-width="6" stroke-linejoin="round"/>
+      <ellipse cx="-9" cy="-2" rx="6" ry="8" fill="#2b1d12"/>
+      <ellipse cx="9" cy="-2" rx="6" ry="8" fill="#2b1d12"/>
+      <path d="M-4,10 L0,15 L4,10" fill="none" stroke="#2b1d12" stroke-width="4" stroke-linejoin="round"/>
+    </g>
+  </g>
+
+  <!-- small chaos crystals jutting from rock (left side) -->
+  <g transform="translate(78,265)">
+    <path d="M0,20 L-10,-10 L0,-30 L12,-8 Z" fill="#9b4fd1" stroke="#2b1d12" stroke-width="5" stroke-linejoin="round"/>
+    <path d="M0,-30 L-4,-10 L0,4" fill="none" stroke="#d8b3ff" stroke-width="3" opacity="0.7"/>
+  </g>
+  <g transform="translate(100,290) scale(0.7)">
+    <path d="M0,20 L-10,-10 L0,-30 L12,-8 Z" fill="#7a2fb0" stroke="#2b1d12" stroke-width="5" stroke-linejoin="round"/>
+  </g>
+
+</svg>
