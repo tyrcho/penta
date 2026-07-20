@@ -4,7 +4,7 @@ faction: "[Death](../../Resources/Mort/Mort.md)"
 HP: "40"
 ---
 
-![Necromancer](../../game/assets/necromancer/walk-00.png)
+![Necromancer](../../game/assets/necromancer/walk.gif)
 
 Spawned by [House of Death](House%20of%20Death.md).
 

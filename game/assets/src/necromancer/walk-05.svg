@@ -1,0 +1,58 @@
+<svg id="art" viewBox="0 0 400 400" xmlns="http://www.w3.org/2000/svg">
+  <ellipse cx="200" cy="336" rx="80" ry="14" fill="#000000" opacity="0.22"/>
+  
+  <g transform="translate(0,-4.39)">
+    <path d="M 165,150 Q 141.34,260 149.34,310 Q 200,326 250.66,310
+             Q 258.66,260 235,150 Q 200,128 165,150 Z"
+          fill="#2b2038" stroke="#150f1e" stroke-width="9" stroke-linejoin="round"/>
+    <path d="M 165,150 Q 141.34,260 149.34,310 Q 180,320 190,300 Q 178,230 182,150 Z"
+          fill="#453768" opacity="0.3"/>
+    <path d="M 218,150 Q 222,230 210,300 Q 220,320 250.66,310 Q 258.66,260 235,150 Z"
+          fill="#1a1424" opacity="0.5"/>
+    <!-- tattered hem -->
+    <path d="M 149.34,308 L 159.34,322 L 171.34,306 L 192,324 L 200,306
+             L 208,324 L 228.66,306 L 240.66,322 L 250.66,308"
+          fill="none" stroke="#150f1e" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/>
+    <!-- bone trim across the chest -->
+    <path d="M 178,172 Q 200,182 222,172" fill="none" stroke="#8a6a3a" stroke-width="6" stroke-linecap="round"/>
+    <circle cx="200" cy="180" r="7" fill="#8a6a3a" stroke="#5c471f" stroke-width="2"/>
+  </g>
+  
+  <g transform="translate(164,180) rotate(-2.4)">
+    <path d="M 12,-10 Q 16,20 10,54 L -10,54 Q -16,20 -12,-10 Z"
+          fill="#2b2038" stroke="#150f1e" stroke-width="7" stroke-linejoin="round"/>
+    <path d="M 12,-10 Q 16,20 10,54 L 0,54 Q 4,20 2,-10 Z" fill="#453768" opacity="0.3"/>
+    <circle cx="0" cy="58" r="12" fill="#0c0810" stroke="#150f1e" stroke-width="6"/>
+    <path d="M -8,52 L -14,64 M -1,56 L -3,68 M 6,55 L 10,66" stroke="#ded2b8" stroke-width="4" stroke-linecap="round"/>
+  </g>
+  
+  <g transform="translate(236,180) rotate(4.0)">
+    <path d="M -12,-10 Q -16,20 -10,54 L 10,54 Q 16,20 12,-10 Z"
+          fill="#2b2038" stroke="#150f1e" stroke-width="7" stroke-linejoin="round"/>
+    <path d="M -12,-10 Q -16,20 -10,54 L 0,54 Q -4,20 -2,-10 Z" fill="#1a1424" opacity="0.5"/>
+    <circle cx="0" cy="58" r="12" fill="#0c0810" stroke="#150f1e" stroke-width="6"/>
+    <rect x="-5" y="-40" width="10" height="140" rx="4" fill="#6b4a2e" stroke="#150f1e" stroke-width="6"/>
+    <rect x="-5" y="30" width="10" height="70" fill="#4a3220" opacity="0.4"/>
+    <path d="M -14,-46 Q 0,-64 14,-46 Q 8,-38 0,-42 Q -8,-38 -14,-46 Z"
+          fill="#ded2b8" stroke="#150f1e" stroke-width="5" stroke-linejoin="round"/>
+    <circle cx="0" cy="-50" r="6" fill="#7dffb0" opacity="0.8"/>
+  </g>
+  
+    <g transform="translate(200,110) rotate(-2.6)">
+      <path d="M -46,20 Q -54,-30 0,-46 Q 54,-30 46,20 Q 40,44 0,50 Q -40,44 -46,20 Z"
+            fill="#2b2038" stroke="#150f1e" stroke-width="9" stroke-linejoin="round"/>
+      <path d="M -46,20 Q -54,-30 0,-46 Q -20,-30 -22,4 Q -24,26 -14,40 Q -34,32 -46,20 Z"
+            fill="#453768" opacity="0.25"/>
+      <path d="M 46,20 Q 54,-30 0,-46 Q 20,-30 22,6 Q 24,28 14,42 Q 34,32 46,20 Z"
+            fill="#1a1424" opacity="0.5"/>
+      <!-- hood interior shadow -->
+      <ellipse cx="0" cy="6" rx="30" ry="26" fill="#0c0810"/>
+      <!-- glowing eyes -->
+      <ellipse cx="-12" cy="4" rx="7" ry="5" fill="#7dffb0"/>
+      <ellipse cx="12" cy="4" rx="7" ry="5" fill="#7dffb0"/>
+      <ellipse cx="-12" cy="4" rx="11" ry="8" fill="#a8ffce" opacity="0.35"/>
+      <ellipse cx="12" cy="4" rx="11" ry="8" fill="#a8ffce" opacity="0.35"/>
+      <!-- hood peak -->
+      <path d="M -8,-44 L 0,-56 L 8,-44" fill="none" stroke="#150f1e" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
+    </g>
+</svg>

@@ -1,0 +1,10 @@
+Soul walk-cycle frames (assets/soul/walk-*.png) were cropped from a labeled reference
+sheet (its "Soul: Walk" row) supplied directly by the project owner via chat upload —
+no source page attached, so licensing/provenance isn't known.
+
+Per CLAUDE.md ("Art asset licensing is not a current concern"): used as-is on a
+best-effort basis for this local hobby project. Replace with a properly licensed or
+commissioned asset before using it beyond that.
+
+(Necromancer's walk/summon frames used to share this note — they're now original
+hand-authored art, see game/assets/src/necromancer/, and need no attribution.)

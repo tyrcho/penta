@@ -158,14 +158,15 @@ private object AssetPaths:
   val Flames =
     List("./assets/flame1.png", "./assets/flame2.png", "./assets/flame3.png", "./assets/flame4.png")
   val Wolf = List("./assets/wolf/run-0.png", "./assets/wolf/run-1.png", "./assets/wolf/run-2.png")
-  // Necromancien.md/Ame.md: cropped from a labeled reference sheet supplied directly by
-  // the project owner (see LICENSE-necromancer.txt) — single-facing walk cycles, same
-  // rotate-to-face treatment as Wolf. Necromancer's frames are the sheet's "Idle"
-  // row (per the project owner's instruction), Soul's are its "Soul: Walk" row.
+  // Original hand-authored art (see game/assets/src/necromancer/) — single-facing walk
+  // cycle, same rotate-to-face treatment as Wolf.
   val NecromancerFrames: List[String] = (0 until 6).map(i => f"./assets/necromancer/walk-$i%02d.png").toList
+  // Ame.md: cropped from a labeled reference sheet supplied directly by the project
+  // owner (see LICENSE-soul.txt), its "Soul: Walk" row.
   val SoulFrames: List[String] = (0 until 5).map(i => f"./assets/soul/walk-$i%02d.png").toList
-  // The sheet's "Summon" row — shown instead of NecromancerFrames while
-  // Creature.frozenMs > 0 (Necromancien.md: rooted in place for 1s while it invokes an Ame).
+  // Shown instead of NecromancerFrames while Creature.frozenMs > 0 (Necromancien.md:
+  // rooted in place for 1s while it invokes an Ame) — loops for that ~1s window, see
+  // game/assets/src/necromancer/generate.py's summon keyframes.
   val NecromancerSummonFrames: List[String] = (0 until 8).map(i => f"./assets/necromancer/summon-$i%02d.png").toList
   private val Directions = List("front", "back", "left", "right")
   // 4-direction walk-cycle frame sets, keyed by direction — shared shape for any

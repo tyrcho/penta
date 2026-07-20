@@ -207,7 +207,7 @@ object EntityNames:
       Faction.Mort,
       I18nText("Nécromancien", "Necromancer"),
       I18nText("Necromancien.md", "Necromancer.md"),
-      "necromancer/walk-00.png"
+      "necromancer/walk.gif"
     ),
     UnitKind.Soul -> UnitKindInfo(Faction.Mort, I18nText("Âme", "Soul"), I18nText("Âme.md", "Soul.md"), "soul/walk-00.png")
   )

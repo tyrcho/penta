@@ -4,7 +4,7 @@ faction: "[Mort](Mort.md)"
 PV: "40"
 ---
 
-![Nécromancien](../../game/assets/necromancer/walk-00.png)
+![Nécromancien](../../game/assets/necromancer/walk.gif)
 
 Produit par [Maison de la Mort](Maison%20de%20la%20Mort.md).
 
