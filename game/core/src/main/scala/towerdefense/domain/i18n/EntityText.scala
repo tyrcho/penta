@@ -90,18 +90,18 @@ object EntityText:
     BuildingKind.PassingGate -> passingGateBody,
     BuildingKind.LaboFondamental -> laboFondamentalBody,
     BuildingKind.LaboNaturel ->
-      specificLabBody(faction(BuildingKind.LaboNaturel), Balance.CrystalPerSecPerLaboNaturel, "Recherches naturelles.md"),
+      specificLabBody(faction(BuildingKind.LaboNaturel), Balance.CrystalPerSecPerLaboNaturel, BuildingKind.LaboNaturel),
     BuildingKind.LaboSombre ->
-      specificLabBody(faction(BuildingKind.LaboSombre), Balance.CrystalPerSecPerLaboSombre, "Recherches Sombres.md"),
+      specificLabBody(faction(BuildingKind.LaboSombre), Balance.CrystalPerSecPerLaboSombre, BuildingKind.LaboSombre),
     BuildingKind.LaboDeRecherche -> specificLabBody(
       faction(BuildingKind.LaboDeRecherche),
       Balance.CrystalPerSecPerLaboDeRecherche,
-      "Recherche fondamentale.md"
+      BuildingKind.LaboDeRecherche
     ),
     BuildingKind.LaboDeLaLoi ->
-      specificLabBody(faction(BuildingKind.LaboDeLaLoi), Balance.CrystalPerSecPerLaboDeLaLoi, "Recherches loyales.md"),
+      specificLabBody(faction(BuildingKind.LaboDeLaLoi), Balance.CrystalPerSecPerLaboDeLaLoi, BuildingKind.LaboDeLaLoi),
     BuildingKind.LaboDuChaos ->
-      specificLabBody(faction(BuildingKind.LaboDuChaos), Balance.CrystalPerSecPerLaboDuChaos, "Recherches chaotiques.md")
+      specificLabBody(faction(BuildingKind.LaboDuChaos), Balance.CrystalPerSecPerLaboDuChaos, BuildingKind.LaboDuChaos)
   )
 
   private def stonehengeBody: I18nText =
@@ -199,12 +199,11 @@ object EntityText:
       )
     )
 
-  private def specificLabBody(f: Faction, crystalPerSec: Double, researchFrFile: String): I18nText =
+  private def specificLabBody(f: Faction, crystalPerSec: Double, researchKind: BuildingKind): I18nText =
     val baseLabLinkFr = EntityNames.buildingLink(f, BuildingKind.LaboFondamental, Lang.Fr)
     val baseLabLinkEn = EntityNames.buildingLink(f, BuildingKind.LaboFondamental, Lang.En)
-    val researchName = researchFrFile.stripSuffix(".md")
-    val researchLinkFr = EntityNames.outOfScopeLink(researchName, f, Faction.Science, researchFrFile, Lang.Fr)
-    val researchLinkEn = EntityNames.outOfScopeLink(researchName, f, Faction.Science, researchFrFile, Lang.En)
+    val researchLinkFr = EntityNames.researchLineLink(f, researchKind, Lang.Fr)
+    val researchLinkEn = EntityNames.researchLineLink(f, researchKind, Lang.En)
     val boost = percentPoints(Balance.LaboCrystalBoostPerResearchLevel * 100)
     I18nText(
       fr = s(

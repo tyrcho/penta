@@ -25,8 +25,8 @@ import towerdefense.domain.i18n.*
 // contrast, are entirely numbers Balance/ResearchSpecs already own — a hand-written copy
 // of those numbers is exactly what let every one of them drift to "double" while the code
 // had already moved to tripling (Balance.ResearchCostMultiplierPerLevel), so they're
-// generated too, in place, French only (no EN translation exists for these — an EN
-// building page's link to one still falls back to the FR original, unchanged).
+// generated too, in both languages same as everything else here (EN under its own new
+// EntityNames.researchLineInfo file names — see that type's doc).
 //
 // Run via `make docs` (sbt "sim/runMain towerdefense.docgen.generate" — Scala 3's @main
 // names the generated entry point after the annotated method, not this enclosing object).
@@ -45,9 +45,8 @@ object DocGenerator:
         written += writePage(vaultRoot.resolve(EntityNames.unitPath(kind, lang)), unitPage(kind, lang))
       for res <- Resource.values do
         written += writePage(vaultRoot.resolve(EntityNames.resourcePath(res, lang)), resourcePage(res, lang))
-    val frScienceRoot = repoRoot.resolve(EntityNames.vaultRoot(Lang.Fr)).resolve(EntityNames.factionFolder(Faction.Science, Lang.Fr))
-    for kind <- ResearchSpecs.orderedLabs do
-      written += writePage(frScienceRoot.resolve(researchFileNames(kind)), researchPage(kind))
+      for kind <- ResearchSpecs.orderedLabs do
+        written += writePage(vaultRoot.resolve(EntityNames.researchLinePath(kind, lang)), researchPage(kind, lang))
     Console.err.println(s"DocGenerator: wrote $written pages under $repoRoot")
 
   private def writePage(path: Path, content: String): Int =
@@ -123,55 +122,63 @@ object DocGenerator:
     )
     info.asset.fold(fm)(image => s"$fm\n![${info.name(lang)}](../../game/assets/$image)\n")
 
-  // ── Science research lines (Recherche(s)*.md) ───────────────────────────
-  // French only — no EN translation of these pages exists (an EN building page's link to
-  // one still falls back to the FR original via EntityNames.outOfScopeLink/frFallbackLink,
-  // unchanged). Every number below traces straight back to ResearchSpecs/Balance, closing
-  // the exact gap that once let every one of these pages say "double" while the code had
-  // already moved to tripling (see this file's header doc and Balance.
+  // ── Science research lines (Recherche(s)*.md / *Research.md) ───────────
+  // Every number below traces straight back to ResearchSpecs/Balance, closing the exact
+  // gap that once let every one of these pages say "double" while the code had already
+  // moved to tripling (see this file's header doc and Balance.
   // ResearchCostMultiplierPerLevel's doc).
 
-  private val researchTypeValue = "recherche"
-
-  // The vault's own file-naming convention for these five pages doesn't derive from
-  // BuildingKind's own name (LaboNaturel's line lives in "Recherches naturelles.md", not
-  // anything built from "Labo Naturel") — its own small map rather than folded into
-  // EntityNames' building-name tables, since it's specific to this FR-only doc set.
-  private val researchFileNames: Map[BuildingKind, String] = Map(
-    BuildingKind.LaboNaturel -> "Recherches naturelles.md",
-    BuildingKind.LaboSombre -> "Recherches Sombres.md",
-    BuildingKind.LaboDeLaLoi -> "Recherches loyales.md",
-    BuildingKind.LaboDuChaos -> "Recherches chaotiques.md",
-    BuildingKind.LaboDeRecherche -> "Recherche fondamentale.md"
-  )
+  private val researchTypeValue = I18nText("recherche", "research")
 
   // The one hand-written sentence each page still needs (what the research line actually
   // does) — every number after it is generated below instead.
-  private val researchIntros: Map[BuildingKind, String] = Map(
-    BuildingKind.LaboNaturel -> "Diminue le cout des batiments de",
-    BuildingKind.LaboSombre -> "Augmente les conditions de victoire de l'adversaire de :",
-    BuildingKind.LaboDeLaLoi -> "Augmente les dégats infligés par les batiments de",
-    BuildingKind.LaboDuChaos ->
-      "Augmente l'efficacité du pillage de chaque unite (même celles qui ne pillent pas initialement) dans chaque ressource de :",
-    BuildingKind.LaboDeRecherche -> "Donne la victoire si les 4 autres laboratoires sont au niveau :"
+  private val researchIntros: Map[BuildingKind, I18nText] = Map(
+    BuildingKind.LaboNaturel -> I18nText(
+      fr = "Diminue le cout des batiments de",
+      en = "Reduces the cost of buildings by"
+    ),
+    BuildingKind.LaboSombre -> I18nText(
+      fr = "Augmente les conditions de victoire de l'adversaire de :",
+      en = "Increases the opponent's victory targets by:"
+    ),
+    BuildingKind.LaboDeLaLoi -> I18nText(
+      fr = "Augmente les dégats infligés par les batiments de",
+      en = "Increases damage dealt by buildings by"
+    ),
+    BuildingKind.LaboDuChaos -> I18nText(
+      fr = "Augmente l'efficacité du pillage de chaque unite (même celles qui ne pillent pas initialement) " +
+        "dans chaque ressource de :",
+      en = "Increases every unit's plunder efficiency (even ones that don't normally plunder) in every " +
+        "resource by:"
+    ),
+    BuildingKind.LaboDeRecherche -> I18nText(
+      fr = "Donne la victoire si les 4 autres laboratoires sont au niveau :",
+      en = "Wins the game outright once the 4 other labs are at level:"
+    )
   )
 
   // The per-level numbered list itself — straight off the same Balance lists CombatEngine/
   // VictoryConditions/Placement.effectiveCost read to actually apply each effect, except
   // Fondamentale's (Balance.FondamentaleRequiredOtherLabLevel), whose entries read "N ou
-  // plus" unless N is already the max level (5), where "ou plus" would be meaningless.
-  private def researchEffectLines(kind: BuildingKind): List[String] = kind match
+  // plus"/"N or more" unless N is already the max level (5), where that would be
+  // meaningless.
+  private def researchEffectLines(kind: BuildingKind, lang: Lang): List[String] = kind match
     case BuildingKind.LaboNaturel     => Balance.NaturellesCostReductionByLevel.map(NumberFormat.percent)
     case BuildingKind.LaboSombre      => Balance.SombresOpponentTargetIncreaseByLevel.map(NumberFormat.percent)
     case BuildingKind.LaboDeLaLoi     => Balance.LoyalesBuildingDamageIncreaseByLevel.map(NumberFormat.percent)
     case BuildingKind.LaboDuChaos     => Balance.ChaotiquesPlunderBonusByLevel.map(NumberFormat.decimal)
     case BuildingKind.LaboDeRecherche =>
-      Balance.FondamentaleRequiredOtherLabLevel.map(n => if n >= Balance.MaxResearchLevel then n.toString else s"$n ou plus")
+      Balance.FondamentaleRequiredOtherLabLevel.map { n =>
+        if n >= Balance.MaxResearchLevel then n.toString
+        else if lang == Lang.Fr then s"$n ou plus"
+        else s"$n or more"
+      }
     case other => sys.error(s"$other has no research line — not in ResearchSpecs.all")
 
-  // Spells out Balance.ResearchCostMultiplierPerLevel in French rather than a bare number,
-  // matching every page's existing "Chaque niveau coute le X du precedent" phrasing —
-  // falls back to a plain "xN" for any value the vault's own vocabulary doesn't have a
+  // Spells out Balance.ResearchCostMultiplierPerLevel as a word rather than a bare number,
+  // matching every page's existing "coute le X du precedent"/"costs X the previous one"
+  // phrasing — the Latin-derived words happen to be spelled identically in both languages.
+  // Falls back to a plain "xN" for any value the vault's own vocabulary doesn't have a
   // word for, so a future rebalance can't silently leave stale wrong prose behind the way
   // the hand-written pages once did.
   private def costMultiplierWord(multiplier: Double): String = multiplier match
@@ -181,15 +188,18 @@ object DocGenerator:
     case 5.0    => "quintuple"
     case other  => s"x${NumberFormat.decimal(other)}"
 
-  private def researchPage(kind: BuildingKind): String =
+  private def researchPage(kind: BuildingKind, lang: Lang): String =
     val spec = ResearchSpecs.all(kind)
     val faction = EntityNames.buildingInfo(kind).faction
     val costFields = Resource.values.toList.flatMap(res =>
-      spec.baseCost.get(res).filter(_ > 0.0).map(amount => costKeys(res)(Lang.Fr) -> NumberFormat.decimal(amount))
+      spec.baseCost.get(res).filter(_ > 0.0).map(amount => costKeys(res)(lang) -> NumberFormat.decimal(amount))
     )
     val fm = frontmatter(
-      List("type" -> researchTypeValue, "faction" -> yamlQuoted(EntityNames.factionLink(faction, Lang.Fr))) ++ costFields
+      List("type" -> researchTypeValue(lang), "faction" -> yamlQuoted(EntityNames.factionLink(faction, lang))) ++ costFields
     )
-    val items = researchEffectLines(kind).zipWithIndex.map { case (line, i) => s"${i + 1}. $line" }.mkString("\n")
+    val items = researchEffectLines(kind, lang).zipWithIndex.map { case (line, i) => s"${i + 1}. $line" }.mkString("\n")
     val multiplierWord = costMultiplierWord(Balance.ResearchCostMultiplierPerLevel)
-    s"$fm${researchIntros(kind)}\n$items\n\nChaque niveau coute le $multiplierWord du precedent.\n"
+    val footer =
+      if lang == Lang.Fr then s"Chaque niveau coute le $multiplierWord du precedent."
+      else s"Each level costs $multiplierWord what the previous one cost."
+    s"$fm${researchIntros(kind)(lang)}\n$items\n\n$footer\n"
