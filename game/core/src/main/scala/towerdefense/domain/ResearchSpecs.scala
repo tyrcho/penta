@@ -3,13 +3,14 @@ package towerdefense.domain
 // One research line per Science lab (Recherches naturelles/Sombres/chaotiques/loyales.md,
 // Recherche fondamentale.md) — keyed by the lab's own BuildingKind since it's a 1:1
 // pairing, no separate enum needed. `baseCost` is the level-1 price; level N costs
-// baseCost scaled by 3^(N-1) ("Chaque niveau coute le triple du precedent", every file).
+// baseCost scaled by Balance.ResearchCostMultiplierPerLevel^(N-1) — see that constant's
+// doc for why it's named rather than a literal here.
 // `effectAtLevel` is the magnitude Balance.*ByLevel lists give for level N (1-indexed);
 // Fondamentale has no such magnitude (its "effect" is the victory check itself — see
 // VictoryConditions.hasWonViaFondamentale), so its list is empty.
 case class ResearchSpec(baseCost: Map[Resource, Double], effectByLevel: List[Double]):
   def costAtLevel(level: Int): Map[Resource, Double] =
-    baseCost.view.mapValues(_ * math.pow(3.0, (level - 1).toDouble)).toMap
+    baseCost.view.mapValues(_ * math.pow(Balance.ResearchCostMultiplierPerLevel, (level - 1).toDouble)).toMap
 
   def effectAtLevel(level: Int): Double =
     if level <= 0 then 0.0 else effectByLevel(level - 1)

@@ -4,7 +4,7 @@ faction: "[Science](Science.md)"
 cout en lumiere: 5
 cout en crystal: 10
 ---
-Augmente les dégats infligés par les batiments de 
+Augmente les dégats infligés par les batiments de
 1. 10%
 2. 20%
 3. 40%

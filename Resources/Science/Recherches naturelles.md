@@ -4,7 +4,7 @@ faction: "[Science](Science.md)"
 cout en bois: 5
 cout en crystal: 10
 ---
-Diminue le cout des batiments de 
+Diminue le cout des batiments de
 1. 10%
 2. 20%
 3. 35%

@@ -7,7 +7,7 @@ help:
 	@echo "make sim      — headless AI-vs-AI battles: make sim ARGS='linear balanced 200'"
 	@echo "                add --log <path> for a one-match transcript: ARGS='linear comb 1 --log /tmp/match.log'"
 	@echo "make sim-tune — sweep CompositeStrategy weights: make sim-tune ARGS='linear 50 0.25'"
-	@echo "make docs     — regenerate the vault's building/unit/resource pages (FR in place, EN under ../Resources-en/)"
+	@echo "make docs     — regenerate the vault's building/unit/resource/research pages (FR in place, EN under ../Resources-en/)"
 	@echo "make build    — production JS build → public/"
 	@echo "make clean    — remove build artifacts"
 
@@ -25,6 +25,9 @@ sim:
 
 sim-tune:
 	sbt --batch "sim/runMain towerdefense.sim.tune $(ARGS)"
+
+docs:
+	sbt --batch "sim/runMain towerdefense.docgen.generate"
 
 build:
 	sbt --batch "js/fullLinkJS"

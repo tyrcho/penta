@@ -274,9 +274,15 @@ object Balance:
   val LaboCrystalBoostPerResearchLevel: Double = 0.75
 
   // Leveled research, one line per lab (ResearchSpecs.all pairs these with their
-  // BuildingKind) — 5 levels each, level N costing 3^(N-1) times the level-1 (base) cost
-  // below ("Chaque niveau coute le triple du precedent", every Recherches*.md file).
-  // Requires owning the matching lab — see Placement.tryResearch.
+  // BuildingKind) — 5 levels each, level N costing ResearchCostMultiplierPerLevel^(N-1)
+  // times the level-1 (base) cost below. Requires owning the matching lab — see
+  // Placement.tryResearch. Named (not just a bare literal in ResearchSpec.costAtLevel) so
+  // DocGenerator can spell out "triple"/"double"/etc. in the generated Recherches*.md/
+  // Recherche fondamentale.md pages straight from this one value, instead of that wording
+  // living as separately hand-typed prose that can drift from what the formula actually
+  // does (see DocGenerator.costMultiplierWord) — this is exactly the kind of drift that
+  // once left every vault research page saying "double" while the code already tripled.
+  val ResearchCostMultiplierPerLevel: Double = 3.0
   val RecherchesNaturellesCostWood: Double = 5.0 // Recherches naturelles.md: "cout en bois: 5"
   val RecherchesNaturellesCostCrystal: Double = 10.0 // "cout en crystal: 10"
   // "Diminue le cout des batiments de: 1. 10% 2. 20% 3. 35% 4. 55% 5. 80%" — applied to
