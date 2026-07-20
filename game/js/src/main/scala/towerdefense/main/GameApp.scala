@@ -103,8 +103,9 @@ private class GameSpeed:
 // a single generic sync function replaces what used to be 5 near-identical ones.
 private class MazeSprites:
   val creatures = mutable.Map.empty[Long, Container]
-  // Which of a directional creature's (Goblin, Elf) 4 frame sets is currently applied —
-  // avoids resetting the walk-cycle animation every tick, only when the facing changes.
+  // Which of a directional creature's (Goblin, Elf, Tree, Zombie) 4 frame sets is
+  // currently applied — avoids resetting the walk-cycle animation every tick, only when
+  // the facing changes.
   val directionalFacing = mutable.Map.empty[Long, String]
   // Necromancer ids currently showing the sheet's "Summon" animation (Creature.frozenMs >
   // 0) rather than their normal walk cycle — same "only swap textures on an actual state
@@ -157,13 +158,9 @@ private object AssetPaths:
   val Flames =
     List("./assets/flame1.png", "./assets/flame2.png", "./assets/flame3.png", "./assets/flame4.png")
   val Wolf = List("./assets/wolf/run-0.png", "./assets/wolf/run-1.png", "./assets/wolf/run-2.png")
-  // Single-facing 10-frame walk cycle, original hand-authored art (see
-  // game/assets/src/zombie/) — animated like Wolf, not direction-swapped like
-  // Goblin/Elf's 4 sets.
-  val ZombieFrames: List[String] = (0 until 10).map(i => f"./assets/zombie/walk-$i%02d.png").toList
   // Necromancien.md/Ame.md: cropped from a labeled reference sheet supplied directly by
   // the project owner (see LICENSE-necromancer.txt) — single-facing walk cycles, same
-  // rotate-to-face treatment as Wolf/Zombie. Necromancer's frames are the sheet's "Idle"
+  // rotate-to-face treatment as Wolf. Necromancer's frames are the sheet's "Idle"
   // row (per the project owner's instruction), Soul's are its "Soul: Walk" row.
   val NecromancerFrames: List[String] = (0 until 6).map(i => f"./assets/necromancer/walk-$i%02d.png").toList
   val SoulFrames: List[String] = (0 until 5).map(i => f"./assets/soul/walk-$i%02d.png").toList
@@ -184,13 +181,17 @@ private object AssetPaths:
   // of the same tree-ent (row 1 has a visible face = front, row 2 = back, rows 3/4 = the
   // two side angles), direction-swapped same as Goblin/Elf rather than rotate-to-face.
   val TreeFrames: Map[String, List[String]] = directionalFrames("tree", frameCount = 6)
+  // 4-direction 10-frame walk cycle, original hand-authored art (see
+  // game/assets/src/zombie/) — direction-swapped same as Goblin/Elf/Tree.
+  val ZombieFrames: Map[String, List[String]] = directionalFrames("zombie", frameCount = 10)
   val All: List[String] =
     List(
       Grove, Forest, Jungle, CaveRock, LabyrintheIcon, EgliseIcon, WatchtowerIcon, AngelIcon, Minotaur, Paladin,
       TombIcon, BlackCastleIcon, Vampire, LaboFondamentalIcon, LaboNaturelIcon, LaboSombreIcon,
       LaboDeRechercheIcon, LaboDeLaLoiIcon, LaboDuChaosIcon, DeathHouseIcon, StonehengeIcon, PassingGateIcon
-    ) ++ GoblinFrames.values.flatten ++ ElfFrames.values.flatten ++ Flames ++ Wolf ++ ZombieFrames ++
-      NecromancerFrames ++ SoulFrames ++ NecromancerSummonFrames ++ TreeFrames.values.flatten
+    ) ++ GoblinFrames.values.flatten ++ ElfFrames.values.flatten ++ Flames ++ Wolf ++
+      ZombieFrames.values.flatten ++ NecromancerFrames ++ SoulFrames ++ NecromancerSummonFrames ++
+      TreeFrames.values.flatten
 
 // Bright purple kill-flash for a PassingGate while Building.flashMs > 0 (see syncBuildings) —
 // the user asked for the flash to show only on an actual nearby death, not continuously like
@@ -333,7 +334,6 @@ def onReady(app: Application, textures: js.Dictionary[Texture]): Unit =
 
   val flameFrames = js.Array(AssetPaths.Flames.map(textures(_))*)
   val wolfFrames = js.Array(AssetPaths.Wolf.map(textures(_))*)
-  val zombieFrames = js.Array(AssetPaths.ZombieFrames.map(textures(_))*)
   val necromancerFrames = js.Array(AssetPaths.NecromancerFrames.map(textures(_))*)
   val soulFrames = js.Array(AssetPaths.SoulFrames.map(textures(_))*)
   val necromancerSummonFrames = js.Array(AssetPaths.NecromancerSummonFrames.map(textures(_))*)
@@ -343,6 +343,8 @@ def onReady(app: Application, textures: js.Dictionary[Texture]): Unit =
     AssetPaths.ElfFrames.map { case (dir, paths) => dir -> js.Array(paths.map(textures(_))*) }
   val treeFrames: Map[String, js.Array[Texture]] =
     AssetPaths.TreeFrames.map { case (dir, paths) => dir -> js.Array(paths.map(textures(_))*) }
+  val zombieFrames: Map[String, js.Array[Texture]] =
+    AssetPaths.ZombieFrames.map { case (dir, paths) => dir -> js.Array(paths.map(textures(_))*) }
   // No saved game (first-ever visit, or a cleared one) means there's nothing to resume
   // the player into — default to the attract-mode AI duel instead of an empty player-
   // controlled maze. A saved game always resumes straight into Playing.
@@ -1061,7 +1063,7 @@ private def syncMaze(
     goblinFrames: Map[String, js.Array[Texture]],
     elfFrames: Map[String, js.Array[Texture]],
     wolfFrames: js.Array[Texture],
-    zombieFrames: js.Array[Texture],
+    zombieFrames: Map[String, js.Array[Texture]],
     necromancerFrames: js.Array[Texture],
     soulFrames: js.Array[Texture],
     necromancerSummonFrames: js.Array[Texture],
@@ -1114,7 +1116,7 @@ private def syncCreatures(
     goblinFrames: Map[String, js.Array[Texture]],
     elfFrames: Map[String, js.Array[Texture]],
     wolfFrames: js.Array[Texture],
-    zombieFrames: js.Array[Texture],
+    zombieFrames: Map[String, js.Array[Texture]],
     necromancerFrames: js.Array[Texture],
     soulFrames: js.Array[Texture],
     necromancerSummonFrames: js.Array[Texture],
@@ -1153,7 +1155,7 @@ private def syncCreatures(
       case UnitKind.Necromancer =>
         angle.foreach(a => g.rotation = a)
         applyNecromancerAnimation(sprites, c.id, g, isSummoning = c.frozenMs > 0, necromancerFrames, necromancerSummonFrames)
-      case UnitKind.Minotaur | UnitKind.Paladin | UnitKind.Wolf | UnitKind.Vampire | UnitKind.Zombie | UnitKind.Soul =>
+      case UnitKind.Minotaur | UnitKind.Paladin | UnitKind.Wolf | UnitKind.Vampire | UnitKind.Soul =>
         angle.foreach(a => g.rotation = a)
       case UnitKind.Goblin =>
         applyFacing(sprites, c.id, g, angle, goblinFrames)
@@ -1161,6 +1163,8 @@ private def syncCreatures(
         applyFacing(sprites, c.id, g, angle, elfFrames)
       case UnitKind.Tree =>
         applyFacing(sprites, c.id, g, angle, treeFrames)
+      case UnitKind.Zombie =>
+        applyFacing(sprites, c.id, g, angle, zombieFrames)
   }
 
 // Swaps the Necromancer's AnimatedSprite between its normal walk cycle and the sheet's
@@ -1184,8 +1188,9 @@ private def applyNecromancerAnimation(
 
 // Swaps a directional creature's AnimatedSprite to the frame set matching its current
 // facing, only when the facing actually changes — avoids resetting the walk-cycle
-// animation (and the visible stutter that causes) every tick. Shared by Goblin and Elf,
-// which differ only in their frame set (10 vs 6 frames per direction — see AssetPaths).
+// animation (and the visible stutter that causes) every tick. Shared by Goblin, Elf,
+// Tree, and Zombie, which differ only in their frame set (10/6/6/10 frames per
+// direction — see AssetPaths).
 private def applyFacing(
     sprites: MazeSprites,
     id: Long,
@@ -1209,7 +1214,7 @@ private def newCreatureSprite(
     goblinFrames: Map[String, js.Array[Texture]],
     elfFrames: Map[String, js.Array[Texture]],
     wolfFrames: js.Array[Texture],
-    zombieFrames: js.Array[Texture],
+    zombieFrames: Map[String, js.Array[Texture]],
     necromancerFrames: js.Array[Texture],
     soulFrames: js.Array[Texture],
     treeFrames: Map[String, js.Array[Texture]],
@@ -1247,21 +1252,19 @@ private def newCreatureSprite(
     wireHover(s, target, setHovered)
     addTo(world, s)
   case UnitKind.Zombie =>
-    // Single-facing 10-frame walk cycle (see AssetPaths.ZombieFrames) — same
-    // rotate-to-face treatment as Wolf, not direction-swapped like Goblin/Elf.
-    val s = newAnimatedSprite(zombieFrames, GridConfig.cellSize * 0.8)
+    val s = newAnimatedSprite(zombieFrames("front"), GridConfig.cellSize * 0.8)
     wireHover(s, target, setHovered)
     addTo(world, s)
   case UnitKind.Necromancer =>
     // Single-facing 6-frame walk cycle (see AssetPaths.NecromancerFrames) — same
-    // rotate-to-face treatment as Wolf/Zombie.
+    // rotate-to-face treatment as Wolf.
     val s = newAnimatedSprite(necromancerFrames, GridConfig.cellSize * 0.9)
     wireHover(s, target, setHovered)
     addTo(world, s)
   case UnitKind.Soul =>
     // Single-facing 5-frame walk cycle (see AssetPaths.SoulFrames) — small, floating
     // spectral minion (Ame.md: 10 HP vs the Necromancer's 40), same rotate-to-face
-    // treatment as Wolf/Zombie/Necromancer.
+    // treatment as Wolf/Necromancer.
     val s = newAnimatedSprite(soulFrames, GridConfig.cellSize * 0.55)
     wireHover(s, target, setHovered)
     addTo(world, s)
@@ -1291,7 +1294,7 @@ private def syncBuildings(
     goblinFrames: Map[String, js.Array[Texture]],
     elfFrames: Map[String, js.Array[Texture]],
     wolfFrames: js.Array[Texture],
-    zombieFrames: js.Array[Texture],
+    zombieFrames: Map[String, js.Array[Texture]],
     necromancerFrames: js.Array[Texture],
     soulFrames: js.Array[Texture],
     treeFrames: Map[String, js.Array[Texture]],
@@ -1459,7 +1462,7 @@ private def unitPreviewContainer(
     goblinFrames: Map[String, js.Array[Texture]],
     elfFrames: Map[String, js.Array[Texture]],
     wolfFrames: js.Array[Texture],
-    zombieFrames: js.Array[Texture],
+    zombieFrames: Map[String, js.Array[Texture]],
     necromancerFrames: js.Array[Texture],
     soulFrames: js.Array[Texture],
     treeFrames: Map[String, js.Array[Texture]]
@@ -1470,7 +1473,7 @@ private def unitPreviewContainer(
   case UnitKind.Vampire     => newSprite(textures(AssetPaths.Vampire), GridConfig.cellSize * 1.1)
   case UnitKind.Goblin      => newAnimatedSprite(goblinFrames("front"), GridConfig.cellSize * 0.8)
   case UnitKind.Wolf        => newAnimatedSprite(wolfFrames, GridConfig.cellSize * 1.0)
-  case UnitKind.Zombie      => newAnimatedSprite(zombieFrames, GridConfig.cellSize * 0.8)
+  case UnitKind.Zombie      => newAnimatedSprite(zombieFrames("front"), GridConfig.cellSize * 0.8)
   case UnitKind.Necromancer => newAnimatedSprite(necromancerFrames, GridConfig.cellSize * 0.9)
   case UnitKind.Soul        => newAnimatedSprite(soulFrames, GridConfig.cellSize * 0.55)
   // Always the full-size original — only Stonehenge (a building) ever triggers this
@@ -1485,7 +1488,7 @@ private def spawnUnitPreview(
     goblinFrames: Map[String, js.Array[Texture]],
     elfFrames: Map[String, js.Array[Texture]],
     wolfFrames: js.Array[Texture],
-    zombieFrames: js.Array[Texture],
+    zombieFrames: Map[String, js.Array[Texture]],
     necromancerFrames: js.Array[Texture],
     soulFrames: js.Array[Texture],
     treeFrames: Map[String, js.Array[Texture]]

@@ -210,28 +210,59 @@ frame programmatically, rather than redrawing it per frame:
      recurs.
 3. Render every frame through the usual `render.js` (large size, e.g. 600-800px, for
    clean edges), same as a static icon.
-4. Crop and resize all frames **identically** — do NOT run the static-icon workflow's
-   per-file independent alpha-trim on each frame, since trimming each to its own
-   content box shifts the character around and makes it jitter in place instead of
-   walking smoothly. Compute the union of all frames' bounding boxes once, crop every
-   frame to that same rectangle, then resize all of them by the same factor. See
-   `game/assets/src/zombie/assemble.py`, which also emits a `walk.gif` preview (frames
-   composited onto an opaque background and upscaled — GIF doesn't do partial alpha
-   well) in the same step.
+4. Crop and resize all frames of a given direction **identically** — do NOT run the
+   static-icon workflow's per-file independent alpha-trim on each frame, since
+   trimming each to its own content box shifts the character around and makes it
+   jitter in place instead of walking smoothly. Compute the union of that direction's
+   10 frames' bounding boxes once, crop every one of them to that same rectangle, then
+   resize all of them by the same factor. See `game/assets/src/zombie/assemble.py`.
 5. Sanity-check the loop as an actual animation, not just a contact-sheet grid of
    frames — motion problems (a held/stuttering pose, a limb popping instead of
-   swinging) are often invisible frame-by-frame but obvious once it plays. Send the
-   `walk.gif` to the user with `SendUserFile` so they can actually see it move; a
-   static Read of a GIF only shows one frame.
-6. Match the target size to sibling *animated* units (goblin/wolf/zombie are all
-   64-128px tall), not to the much larger building-icon sizes from step 5 above.
+   swinging) are often invisible frame-by-frame but obvious once it plays. Assemble a
+   `.gif` preview (composite frames onto an opaque background and upscale — GIF
+   doesn't do partial alpha well; `assemble.py` does this) and send it to the user
+   with `SendUserFile` so they can actually see it move — a static Read of a GIF only
+   shows one frame.
+6. Match the target size to sibling *animated* units (goblin/wolf/zombie are all in
+   the 64-128px range), not to the much larger building-icon sizes from step 5 above.
 7. Same cleanup as a static icon: delete a stale `LICENSE-<name>.txt` if the old
    frames were third-party/unknown-provenance, fix any code comments that referenced
    it, and confirm no tint/CSS-filter hack needs removing.
 8. If a lore doc embeds a representative frame (`![Zombie](.../zombie/walk-00.png)`),
-   consider pointing it at the new `walk.gif` instead so the doc shows the actual
+   consider pointing it at a `.gif` preview instead so the doc shows the actual
    motion — but check whether that doc is hand-written or **generated** first (grep
    for the asset path in `game/core/.../i18n/EntityNames.scala` and
    `game/sim/.../docgen/DocGenerator.scala`); if it's generated, edit the source table
    entry, not just the `.md` file, or the next doc-generation run will silently
    revert it.
+
+### Going from one facing to 4 (front/back/left/right)
+
+Some units (Goblin, Elf, Tree, Zombie) swap between 4 direction-keyed frame sets
+instead of rotating one sprite to face its movement — see `directionalFrames` in
+`AssetPaths` and `applyFacing`/`facingDirection` in `GameApp.scala`. Extending a
+single-facing rig to all 4 directions is mostly "reuse the same limb primitives,
+different poses/skins," but two things aren't obvious until they bite you:
+
+- **Every direction's final PNG must be the same square size.** `newAnimatedSprite`
+  sets `sprite.width = size; sprite.height = size` unconditionally — it does not
+  preserve the source texture's aspect ratio. If front's cropped content is wide (e.g.
+  arms spread) and left's is narrow (a side profile), naively cropping each tightly to
+  its own content and resizing to a fixed height (like the single-facing case does)
+  gives each direction a *different* aspect ratio, and PIXI will squash them
+  differently onto the same square — the character visibly changes proportions when
+  it turns. Fix: crop each direction to its own content, then **pad the shorter
+  dimension so the crop is square before the final resize**, using the same final
+  square size (e.g. 96×96, matching Goblin's convention) for all 4 directions. See
+  `assemble.py`'s per-direction square-padding step.
+- **Don't hand-draw `right` — mirror `left`.** A side-profile rig (near/far limb
+  pairs, one visible eye, etc.) is real work; drawing it twice is both double the
+  effort and a symmetry bug waiting to happen (the two profiles drifting out of sync
+  over future edits). Instead wrap the *entire* left frame's SVG body in
+  `<g transform="translate(400,0) scale(-1,1)">...</g>` (assuming a 400-wide viewBox)
+  — this mirrors every nested `rotate()`/`translate()` correctly for free, so `right`
+  is generated, never drawn. front/back can similarly share one rig and differ only
+  in which head/torso "skin" function is called (see `generate.py`'s
+  `frame_frontback`) — a back view rarely needs its own pose, just a faceless
+  head and a different torso decoration (e.g. an exposed spine instead of a front rib
+  wound).
