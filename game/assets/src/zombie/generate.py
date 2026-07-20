@@ -26,10 +26,17 @@ BANDAGE_SHADOW = "#a89c82"
 BONE = "#ded2b8"
 
 
-def leg(hip, angle, scale=1.0, dim=False):
+def leg(hip, angle, scale=1.0, dim=False, lift=0.0):
+    # `lift` (0..1) shortens the leg along its own rotated axis, pulling the foot up
+    # toward the hip like a bent knee — without this, a leg swinging forward and a leg
+    # dragging backward look geometrically identical (same rigid rotation, no vertical
+    # differentiation), which reads as an ambiguous glide/moonwalk rather than a step.
+    # Only the leg currently in its forward-reaching half of the cycle should lift;
+    # the trailing/grounded leg keeps its full length (see `main`'s lift computation).
     o = 0.6 if dim else 1.0
+    y_scale = scale * (1 - lift * 0.4)
     return f'''
-  <g transform="translate({hip[0]},{hip[1]}) rotate({angle}) scale({scale})" opacity="{o}">
+  <g transform="translate({hip[0]},{hip[1]}) rotate({angle}) scale({scale},{y_scale})" opacity="{o}">
     <path d="M -18,0 Q -23,58 -17,104 L -8,112 L -2,100 L 4,112 L 12,100 L 16,110 Q 23,58 18,0 Z"
           fill="{PANTS}" stroke="{OUTLINE}" stroke-width="7" stroke-linejoin="round"/>
     <path d="M -18,0 Q -23,58 -17,104 L -6,108 Q -8,54 -6,0 Z" fill="{PANTS_SHADOW}" opacity="0.6"/>
@@ -180,7 +187,7 @@ def torso_back():
           fill="{SKIN_SHADOW}" stroke="{OUTLINE}" stroke-width="6" stroke-linejoin="round"/>'''
 
 
-def frame_frontback(facing, leg_l_a, leg_r_a, arm_l_a, arm_r_a, bob, tilt):
+def frame_frontback(facing, leg_l_a, leg_r_a, arm_l_a, arm_r_a, bob, tilt, lift_l=0.0, lift_r=0.0):
     hip_l = (178, 248)
     hip_r = (222, 248)
     sh_l = (163, 172)
@@ -190,8 +197,8 @@ def frame_frontback(facing, leg_l_a, leg_r_a, arm_l_a, arm_r_a, bob, tilt):
     return f'''<svg id="art" viewBox="0 0 400 400" xmlns="http://www.w3.org/2000/svg">
   <ellipse cx="200" cy="366" rx="86" ry="14" fill="#000000" opacity="0.22"/>
   <g transform="translate(0,{bob}) rotate({tilt} 200 250)">
-    {leg(hip_l, leg_l_a)}
-    {leg(hip_r, leg_r_a)}
+    {leg(hip_l, leg_l_a, lift=lift_l)}
+    {leg(hip_r, leg_r_a, lift=lift_r)}
     {torso}
     {head}
     {arm(sh_l, arm_l_a)}
@@ -257,7 +264,7 @@ def torso_side():
           fill="{SKIN_SHADOW}" stroke="{OUTLINE}" stroke-width="6" stroke-linejoin="round"/>'''
 
 
-def frame_left(leg_near_a, leg_far_a, arm_near_a, arm_far_a, bob, tilt):
+def frame_left(leg_near_a, leg_far_a, arm_near_a, arm_far_a, bob, tilt, lift_near=0.0, lift_far=0.0):
     hip_near = (203, 250)
     hip_far = (193, 244)
     sh_near = (188, 178)
@@ -265,11 +272,11 @@ def frame_left(leg_near_a, leg_far_a, arm_near_a, arm_far_a, bob, tilt):
     return f'''<svg id="art" viewBox="0 0 400 400" xmlns="http://www.w3.org/2000/svg">
   <ellipse cx="196" cy="366" rx="82" ry="14" fill="#000000" opacity="0.22"/>
   <g transform="translate(0,{bob}) rotate({8 + tilt} 200 260)">
-    {leg(hip_far, leg_far_a, scale=0.88, dim=True)}
+    {leg(hip_far, leg_far_a, scale=0.88, dim=True, lift=lift_far)}
     {arm(sh_far, arm_far_a, scale=0.88, dim=True)}
     {torso_side()}
     {head_side()}
-    {leg(hip_near, leg_near_a)}
+    {leg(hip_near, leg_near_a, lift=lift_near)}
     {arm(sh_near, arm_near_a)}
   </g>
 </svg>'''
@@ -297,13 +304,27 @@ def main():
         # the single-facing version) ---
         leg_l = 30 * math.sin(theta)
         leg_r = 30 * math.sin(theta + math.pi)
+        # Lift whichever leg is currently in the positive-angle (forward-reaching) half
+        # of its own cycle, and only that one — a rigid rotate-only leg looks identical
+        # whether it's swinging forward through the air or dragging backward along the
+        # ground (same silhouette, just mirrored angle), which reads as an ambiguous
+        # glide/moonwalk rather than a step. Shortening the reaching leg toward its hip
+        # (see leg()'s `lift`) while the trailing leg stays full-length/grounded is the
+        # standard cheap fix: it's the difference between "foot in the air, mid-swing"
+        # and "foot planted, pushing off" that a viewer's eye actually reads as forward
+        # locomotion.
+        lift_l = max(0.0, math.sin(theta))
+        lift_r = max(0.0, math.sin(theta + math.pi))
         arm_reach = 62
         arm_l = arm_reach + 8 * math.sin(theta + math.pi)
         arm_r = -(arm_reach + 8 * math.sin(theta))
         bob = 10 - 20 * abs(math.sin(theta))
         tilt = 4 * math.sin(theta)
         for facing in ("front", "back"):
-            svg = frame_frontback(facing, leg_l, leg_r, arm_l, arm_r, round(bob, 2), round(tilt, 2))
+            svg = frame_frontback(
+                facing, leg_l, leg_r, arm_l, arm_r, round(bob, 2), round(tilt, 2),
+                lift_l=round(lift_l, 3), lift_r=round(lift_r, 3),
+            )
             with open(os.path.join(OUT, f"{facing}-walk-{i:02d}.svg"), "w") as f:
                 f.write(svg)
 
@@ -314,11 +335,16 @@ def main():
         side_amp = 34
         leg_near = side_amp * math.sin(theta)
         leg_far = side_amp * math.sin(theta + math.pi)
+        lift_near = max(0.0, math.sin(theta))
+        lift_far = max(0.0, math.sin(theta + math.pi))
         arm_near = -50 + 22 * math.sin(theta + math.pi)
         arm_far = -35 + 18 * math.sin(theta)
         side_bob = 8 - 16 * abs(math.sin(theta))
         side_tilt = 3 * math.sin(theta)
-        left_svg = frame_left(leg_near, leg_far, arm_near, arm_far, round(side_bob, 2), round(side_tilt, 2))
+        left_svg = frame_left(
+            leg_near, leg_far, arm_near, arm_far, round(side_bob, 2), round(side_tilt, 2),
+            lift_near=round(lift_near, 3), lift_far=round(lift_far, 3),
+        )
         with open(os.path.join(OUT, f"left-walk-{i:02d}.svg"), "w") as f:
             f.write(left_svg)
         with open(os.path.join(OUT, f"right-walk-{i:02d}.svg"), "w") as f:

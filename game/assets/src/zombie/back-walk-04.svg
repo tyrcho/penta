@@ -2,7 +2,7 @@
   <ellipse cx="200" cy="366" rx="86" ry="14" fill="#000000" opacity="0.22"/>
   <g transform="translate(0,1.15) rotate(1.77 200 250)">
     
-  <g transform="translate(178,248) rotate(13.273223859902409) scale(1.0)" opacity="1.0">
+  <g transform="translate(178,248) rotate(13.273223859902409) scale(1.0,0.8231999999999999)" opacity="1.0">
     <path d="M -18,0 Q -23,58 -17,104 L -8,112 L -2,100 L 4,112 L 12,100 L 16,110 Q 23,58 18,0 Z"
           fill="#3a3a42" stroke="#0f130d" stroke-width="7" stroke-linejoin="round"/>
     <path d="M -18,0 Q -23,58 -17,104 L -6,108 Q -8,54 -6,0 Z" fill="#232329" opacity="0.6"/>
@@ -12,7 +12,7 @@
     <ellipse cx="0" cy="126" rx="24" ry="6" fill="#3a0c10" opacity="0.55"/>
   </g>
     
-  <g transform="translate(222,248) rotate(-13.273223859902412) scale(1.0)" opacity="1.0">
+  <g transform="translate(222,248) rotate(-13.273223859902412) scale(1.0,1.0)" opacity="1.0">
     <path d="M -18,0 Q -23,58 -17,104 L -8,112 L -2,100 L 4,112 L 12,100 L 16,110 Q 23,58 18,0 Z"
           fill="#3a3a42" stroke="#0f130d" stroke-width="7" stroke-linejoin="round"/>
     <path d="M -18,0 Q -23,58 -17,104 L -6,108 Q -8,54 -6,0 Z" fill="#232329" opacity="0.6"/>
