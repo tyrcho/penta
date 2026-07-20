@@ -509,22 +509,22 @@ class PlacementTest extends munit.FunSuite:
     assertEquals(Placement.tryResearch(poor, BuildingKind.LaboNaturel), Left(PlacementError.InsufficientResources))
   }
 
-  test("researching further from the free level 1 (granted by the upgrade) costs level 2's doubled price") {
+  test("researching further from the free level 1 (granted by the upgrade) costs level 2's tripled price") {
     val withNaturel = withLab(richState, BuildingKind.LaboNaturel, 1, 1)
     val result = Placement.tryResearch(withNaturel, BuildingKind.LaboNaturel).toOption.get
     assertEquals(result.researchLevels(BuildingKind.LaboNaturel), 2)
     val spec = ResearchSpecs.all(BuildingKind.LaboNaturel)
     assertEquals(
       withNaturel.resources(Resource.Wood) - result.resources(Resource.Wood),
-      spec.baseCost(Resource.Wood) * 2.0
+      spec.baseCost(Resource.Wood) * 3.0
     )
     assertEquals(
       withNaturel.resources(Resource.Crystal) - result.resources(Resource.Crystal),
-      spec.baseCost(Resource.Crystal) * 2.0
+      spec.baseCost(Resource.Crystal) * 3.0
     )
   }
 
-  test("each further research level still costs double the previous one") {
+  test("each further research level still costs triple the previous one") {
     val withNaturel = withLab(richState, BuildingKind.LaboNaturel, 1, 1)
     val level2 = Placement.tryResearch(withNaturel, BuildingKind.LaboNaturel).toOption.get
     val level3 = Placement.tryResearch(level2, BuildingKind.LaboNaturel).toOption.get
@@ -532,14 +532,18 @@ class PlacementTest extends munit.FunSuite:
     val spec = ResearchSpecs.all(BuildingKind.LaboNaturel)
     assertEquals(
       level2.resources(Resource.Crystal) - level3.resources(Resource.Crystal),
-      spec.baseCost(Resource.Crystal) * 4.0
+      spec.baseCost(Resource.Crystal) * 9.0
     )
   }
 
   test("rejects researching past the max level") {
-    val withNaturel = withLab(richState, BuildingKind.LaboNaturel, 1, 1)
-    val maxed = (withNaturel.researchLevels(BuildingKind.LaboNaturel) until Balance.MaxResearchLevel)
-      .foldLeft(withNaturel) { (state, _) =>
+    // Tripling per level (levels 2-5 cost 3x/9x/27x/81x the base) needs a deeper stockpile
+    // than richState's 1000 to actually reach the cap, unlike every other test here which
+    // only researches a level or two.
+    val loadedForMaxResearch = withLab(richState, BuildingKind.LaboNaturel, 1, 1)
+      .copy(resources = Map(Resource.Wood -> 100_000.0, Resource.Crystal -> 100_000.0))
+    val maxed = (loadedForMaxResearch.researchLevels(BuildingKind.LaboNaturel) until Balance.MaxResearchLevel)
+      .foldLeft(loadedForMaxResearch) { (state, _) =>
         Placement.tryResearch(state, BuildingKind.LaboNaturel).toOption.get
       }
     assertEquals(maxed.researchLevels(BuildingKind.LaboNaturel), Balance.MaxResearchLevel)

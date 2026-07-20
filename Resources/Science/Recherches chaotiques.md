@@ -11,4 +11,4 @@ Augmente l'efficacité du pillage de chaque unite (même celles qui ne pillent p
 4. 7
 5. 12
 
-Chaque niveau coute le double du precedent.
+Chaque niveau coute le triple du precedent.

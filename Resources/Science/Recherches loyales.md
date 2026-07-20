@@ -11,4 +11,4 @@ Augmente les dégats infligés par les batiments de
 4. 70%
 5. 120%
 
-Chaque niveau coute le double du precedent.
+Chaque niveau coute le triple du precedent.

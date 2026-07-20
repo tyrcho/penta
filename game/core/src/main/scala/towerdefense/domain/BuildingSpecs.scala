@@ -17,7 +17,7 @@ package towerdefense.domain
 // "Il n'est possible de controler qu'un seul laboratoire de chaque type") — every other
 // kind, including LaboFondamental itself, is unlimited (None), see Placement.checkMaxCount.
 //
-// Science's leveled research tree (5 levels/lab, doubling cost per level — Recherches*.md/
+// Science's leveled research tree (5 levels/lab, tripling cost per level — Recherches*.md/
 // Recherche fondamentale.md), its global modifiers (building cost reduction, building
 // damage boost, plunder efficiency boost, opponent victory-target increase), and its own
 // victory condition are all implemented — see Placement.tryResearch, ResearchSpecs, and

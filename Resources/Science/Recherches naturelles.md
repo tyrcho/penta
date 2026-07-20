@@ -11,4 +11,4 @@ Diminue le cout des batiments de
 4. 55%
 5. 80%
 
-Chaque niveau coute le double du precedent.
+Chaque niveau coute le triple du precedent.

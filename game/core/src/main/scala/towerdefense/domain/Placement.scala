@@ -126,7 +126,7 @@ object Placement:
   // Researches the next level of `labKind`'s line (ResearchSpecs.all) — requires actually
   // owning that lab (Recherches*.md: "debloque"/"permet de debloquer", read as "the
   // building unlocks its research", not "researchable from anywhere"), not yet at the max
-  // level, and able to afford that level's doubling cost. Losing the lab afterward doesn't
+  // level, and able to afford that level's tripling cost. Losing the lab afterward doesn't
   // undo an already-reached level (see MazeState.researchLevels' doc) — only reaching a
   // *new* level requires ownership at the moment of research.
   def tryResearch(state: MazeState, labKind: BuildingKind): Either[PlacementError, MazeState] =

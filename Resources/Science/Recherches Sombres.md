@@ -11,4 +11,4 @@ Augmente les conditions de victoire de l'adversaire de :
 4. 75%
 5. 120%
 
-Chaque niveau coute le double du precedent.
+Chaque niveau coute le triple du precedent.

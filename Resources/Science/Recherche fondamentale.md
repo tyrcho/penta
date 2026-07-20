@@ -11,4 +11,4 @@ Donne la victoire si les 4 autres laboratoires sont au niveau :
 4. 2 ou plus
 5. 1 ou plus
 
-Chaque niveau coute le double du precedent.
+Chaque niveau coute le triple du precedent.

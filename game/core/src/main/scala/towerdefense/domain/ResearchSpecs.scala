@@ -3,7 +3,7 @@ package towerdefense.domain
 // One research line per Science lab (Recherches naturelles/Sombres/chaotiques/loyales.md,
 // Recherche fondamentale.md) — keyed by the lab's own BuildingKind since it's a 1:1
 // pairing, no separate enum needed. `baseCost` is the level-1 price; level N costs
-// baseCost scaled by 2^(N-1) ("Chaque niveau coute le double du precedent", every file).
+// baseCost scaled by 3^(N-1) ("Chaque niveau coute le triple du precedent", every file).
 // `effectAtLevel` is the magnitude Balance.*ByLevel lists give for level N (1-indexed);
 // Fondamentale has no such magnitude (its "effect" is the victory check itself — see
 // VictoryConditions.hasWonViaFondamentale), so its list is empty.

@@ -2,12 +2,12 @@ package towerdefense.domain
 
 class ResearchSpecsTest extends munit.FunSuite:
 
-  test("costAtLevel doubles the base cost each level") {
+  test("costAtLevel triples the base cost each level") {
     val spec = ResearchSpecs.all(BuildingKind.LaboNaturel)
     assertEquals(spec.costAtLevel(1), spec.baseCost)
-    assertEquals(spec.costAtLevel(2), spec.baseCost.view.mapValues(_ * 2.0).toMap)
-    assertEquals(spec.costAtLevel(3), spec.baseCost.view.mapValues(_ * 4.0).toMap)
-    assertEquals(spec.costAtLevel(5), spec.baseCost.view.mapValues(_ * 16.0).toMap)
+    assertEquals(spec.costAtLevel(2), spec.baseCost.view.mapValues(_ * 3.0).toMap)
+    assertEquals(spec.costAtLevel(3), spec.baseCost.view.mapValues(_ * 9.0).toMap)
+    assertEquals(spec.costAtLevel(5), spec.baseCost.view.mapValues(_ * 81.0).toMap)
   }
 
   test("effectAtLevel returns 0 before any research, and the right magnitude per level") {

@@ -274,8 +274,8 @@ object Balance:
   val LaboCrystalBoostPerResearchLevel: Double = 0.75
 
   // Leveled research, one line per lab (ResearchSpecs.all pairs these with their
-  // BuildingKind) — 5 levels each, level N costing 2^(N-1) times the level-1 (base) cost
-  // below ("Chaque niveau coute le double du precedent", every Recherches*.md file).
+  // BuildingKind) — 5 levels each, level N costing 3^(N-1) times the level-1 (base) cost
+  // below ("Chaque niveau coute le triple du precedent", every Recherches*.md file).
   // Requires owning the matching lab — see Placement.tryResearch.
   val RecherchesNaturellesCostWood: Double = 5.0 // Recherches naturelles.md: "cout en bois: 5"
   val RecherchesNaturellesCostCrystal: Double = 10.0 // "cout en crystal: 10"
@@ -315,7 +315,7 @@ object Balance:
   val RechercheFondamentaleCostCrystal: Double = 20.0
   // Recherche fondamentale.md's numbered list is per level of fondamentale itself: at level
   // N, the other 4 labs must all be at level (6-N) or higher — level 1 demands every other
-  // lab maxed at 5, level 5 needs them only at 1+, trading fondamentale's own (doubling)
+  // lab maxed at 5, level 5 needs them only at 1+, trading fondamentale's own (tripling)
   // cost against the other labs'. See VictoryConditions.hasWonViaFondamentale.
   val FondamentaleRequiredOtherLabLevel: List[Int] = List(5, 4, 3, 2, 1)
 
