@@ -431,8 +431,11 @@ def onReady(app: Application, textures: js.Dictionary[Texture]): Unit =
   wireResearchButton((col, row) => battle = researchPlayerBuilding(battle, mode, col, row))
 
   app.stage.eventMode = "static"
+  // pointerup rather than pointerdown — a building is placed on click/tap *release*, not
+  // press, so a press-drag-release off the grid (or off a build button) doesn't place
+  // anything.
   app.stage.on(
-    "pointerdown",
+    "pointerup",
     (e: FederatedPointerEvent) => {
       val clickedBuilding =
         cellAt(app, e, mode).flatMap { case (col, row) => buildingAt(battle.player, isPlayer = true, col, row) }
@@ -593,6 +596,10 @@ private def drawGrid(): Graphics =
       GridConfig.cellSize - 1,
       GridConfig.cellSize - 1
     ).fill(color)
+      // The 1px gap between cells otherwise blends into the app's near-identical dark
+      // background, so the grid reads as a solid slab — an explicit lighter outline keeps
+      // every cell boundary visible instead.
+      .stroke(js.Dynamic.literal(width = 1, color = 0x4b5285, alpha = 0.9).asInstanceOf[js.Object])
   g
 
 private def cellColor(col: Int, row: Int): Int =
