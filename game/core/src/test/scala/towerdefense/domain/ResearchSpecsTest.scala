@@ -43,3 +43,20 @@ class ResearchSpecsTest extends munit.FunSuite:
     assertEquals(ResearchSpecs.all.keySet, ResearchSpecs.otherLabKinds + BuildingKind.LaboDeRecherche)
     ResearchSpecs.all.foreach { case (_, spec) => assert(spec.baseCost.contains(Resource.Crystal)) }
   }
+
+  test("magnitudeAtLevel matches effectAtLevel for every lab except Recherche fondamentale") {
+    ResearchSpecs.otherLabKinds.foreach { kind =>
+      (1 to Balance.MaxResearchLevel).foreach { level =>
+        assertEquals(ResearchSpecs.magnitudeAtLevel(kind, level), ResearchSpecs.all(kind).effectAtLevel(level))
+      }
+    }
+  }
+
+  test("magnitudeAtLevel reads Recherche fondamentale's magnitude from FondamentaleRequiredOtherLabLevel instead") {
+    (1 to Balance.MaxResearchLevel).foreach { level =>
+      assertEquals(
+        ResearchSpecs.magnitudeAtLevel(BuildingKind.LaboDeRecherche, level),
+        Balance.FondamentaleRequiredOtherLabLevel(level - 1).toDouble
+      )
+    }
+  }

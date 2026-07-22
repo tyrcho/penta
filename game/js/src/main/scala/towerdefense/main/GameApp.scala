@@ -452,7 +452,6 @@ def onReady(app: Application, textures: js.Dictionary[Texture]): Unit =
   wireAiLevelSelect(aiLevelIndex, index => aiLevelIndex = index)
   wireDestroyButton((col, row) => battle = destroyPlayerBuilding(battle, mode, col, row))
   wireUpgradeButtons((col, row, targetKind) => battle = upgradePlayerBuilding(battle, mode, col, row, targetKind))
-  wireResearchButton((col, row) => battle = researchPlayerBuilding(battle, mode, col, row))
 
   app.stage.eventMode = "static"
   // pointerup rather than pointerdown — a building is placed on click/tap *release*, not
@@ -802,12 +801,12 @@ private def wireButtonTooltip(
     }
   )
 
-// A build button's own tooltip never has a destroy/upgrade/research affordance (those
-// apply to an already-placed building, not a buildable kind) — clears whatever a
-// previously-selected building may have left showing. Fixes a pre-existing bug: this used
-// to reference singular "tooltip-upgrade"/"tooltip-upgrade-preview" ids that no longer
-// exist in index.html (superseded by the indexed tooltip-upgrade-0..4/tooltip-upgrade-
-// preview-0..4 slots — see MaxUpgradeOptions), throwing on every build-button hover.
+// A build button's own tooltip never has a destroy/upgrade affordance (those apply to an
+// already-placed building, not a buildable kind) — clears whatever a previously-selected
+// building may have left showing. Fixes a pre-existing bug: this used to reference
+// singular "tooltip-upgrade"/"tooltip-upgrade-preview" ids that no longer exist in
+// index.html (superseded by the indexed tooltip-upgrade-0..4/tooltip-upgrade-preview-0..4
+// slots — see MaxUpgradeOptions), throwing on every build-button hover.
 private def showButtonTooltip(text: String): Unit =
   document.getElementById("tooltip-text").textContent = text
   document.getElementById("tooltip").classList.add("visible")
@@ -816,7 +815,6 @@ private def showButtonTooltip(text: String): Unit =
     document.getElementById(s"tooltip-upgrade-$i").classList.remove("visible")
     document.getElementById(s"tooltip-upgrade-preview-$i").classList.remove("visible")
   }
-  document.getElementById("tooltip-research").classList.remove("visible")
 
 private def selectBuilding(
     kind: BuildingKind,
@@ -1600,7 +1598,6 @@ private def updateTooltip(
   val destroyBtn = document.getElementById("tooltip-destroy").asInstanceOf[dom.html.Button]
   val upgradeBtns = (0 until MaxUpgradeOptions).map(i => document.getElementById(s"tooltip-upgrade-$i").asInstanceOf[dom.html.Button])
   val upgradePreviews = (0 until MaxUpgradeOptions).map(i => document.getElementById(s"tooltip-upgrade-preview-$i"))
-  val researchBtn = document.getElementById("tooltip-research").asInstanceOf[dom.html.Button]
   def hideAllUpgradeSlots(): Unit =
     upgradeBtns.foreach(_.classList.remove("visible"))
     upgradePreviews.foreach(_.classList.remove("visible"))
@@ -1610,9 +1607,9 @@ private def updateTooltip(
       tooltip.classList.add("visible")
       val maze = if target.isPlayer then battle.player else battle.ai
       // Both mazes are AI-driven while Spectating (see CLAUDE.md's symmetry rule — the
-      // destroy/upgrade/research affordance is a player action, not a game rule, so it's
-      // withheld here rather than in destroyInfo/upgradeOptionsInfo/researchInfo
-      // themselves) — hovering still shows read-only stats, it just can't act on them.
+      // destroy/upgrade affordance is a player action, not a game rule, so it's withheld
+      // here rather than in destroyInfo/upgradeOptionsInfo themselves) — hovering still
+      // shows read-only stats, it just can't act on them.
       (if mode == Mode.Playing then destroyInfo(target, maze) else None) match
         case Some((col, row, label)) =>
           destroyBtn.textContent = label
@@ -1638,20 +1635,11 @@ private def updateTooltip(
             upgradePreviews(i).classList.remove("visible")
           }
         case None => hideAllUpgradeSlots()
-      (if mode == Mode.Playing then researchInfo(target, maze) else None) match
-        case Some((col, row, label, affordable)) =>
-          researchBtn.textContent = label
-          researchBtn.setAttribute("data-col", col.toString)
-          researchBtn.setAttribute("data-row", row.toString)
-          researchBtn.classList.add("visible")
-          if affordable then researchBtn.classList.remove("disabled") else researchBtn.classList.add("disabled")
-        case None => researchBtn.classList.remove("visible")
     case None =>
       if !buttonTooltipActive then
         tooltip.classList.remove("visible")
         destroyBtn.classList.remove("visible")
         hideAllUpgradeSlots()
-        researchBtn.classList.remove("visible")
 
 // Only the player's own buildings are destroyable from the UI (the AI destroying its own
 // is driven by AiStrategy.maybeDestroy instead, not this hover affordance) — see
@@ -1700,16 +1688,17 @@ private def destroyPlayerBuilding(battle: BattleState, mode: Mode, col: Int, row
 private val MaxUpgradeOptions = 5
 
 // Only the player's own buildings can be upgraded from the UI (the AI upgrades via
-// AiStrategy.maybeUpgrade instead) — mirrors destroyInfo's shape/wiring exactly. One entry
-// per option in BuildingSpecs.upgradeOptions (Grove/Forest's single-option chain — just
-// index 0 — or LaboFondamental's 5 specific labs). The affordable flag drives each button's
-// disabled look (see updateTooltip) — Placement.tryUpgradeBuilding already rejects an
-// unaffordable/already-claimed upgrade server-side regardless, this is purely the same
-// visual affordance the build-<slug> buttons get from canAfford. Each preview string is
-// that option's own hover text (see buildingHoverText) computed against a synthetic
-// just-upgraded Building, so players see what they're buying before they click — reusing
-// Placement.upgradeBuilding's own countdown-reset rule (spec.spawns.map(_._2).getOrElse(0.0))
-// so "next Elf in Xs" previews the real value.
+// AiStrategy.maybeUpgrade/maybeResearch instead) — mirrors destroyInfo's shape/wiring
+// exactly. One entry per tier-upgrade option in BuildingSpecs.upgradeOptions (Grove/
+// Forest's single-option chain — just index 0 — or LaboFondamental's 5 specific labs),
+// PLUS, for a building that's already one of the 5 specific labs, one more entry for
+// leveling it up further in place (levelUpOptionFor) — the same button/tooltip slot
+// mechanism either way, since to a player both are just "pay to make this building
+// better": there's no separate "Research" affordance any more (see levelUpOptionFor's own
+// doc). The affordable flag drives each button's disabled look (see updateTooltip) —
+// Placement.tryUpgradeBuilding/tryResearch already reject an unaffordable/already-claimed
+// upgrade server-side regardless, this is purely the same visual affordance the
+// build-<slug> buttons get from canAfford.
 private def upgradeOptionsInfo(
     target: HoverTarget,
     maze: MazeState
@@ -1721,50 +1710,70 @@ private def upgradeOptionsInfo(
       // b.kind, not the pattern-matched kind — see destroyInfo's comment on the same issue.
       case HoverKind.BuildingH(_) =>
         maze.buildings.find(_.id == target.id).flatMap { b =>
-          val options = BuildingSpecs.upgradeOptions.getOrElse(b.kind, Nil)
-          if options.isEmpty then None
-          else
-            Some(
-              (
-                b.col,
-                b.row,
-                options.map { nextKind =>
-                  val nextSpec = BuildingSpecs.all(nextKind)
-                  val costText = nextSpec.cost.toList
-                    .sortBy(_._1.ordinal)
-                    .map { case (res, amount) => s"${formatDecimal(amount)} ${resourceName(res)}" }
-                    .mkString(", ")
-                  val previewCountdown = nextSpec.spawns.map(_._2).getOrElse(0.0)
-                  // Upgrading always grants at least research level 1 for free (see
-                  // Placement.upgradeBuilding's doc) — the preview reflects that immediately,
-                  // rather than showing "no bonus yet" for a lab the click is about to unlock.
-                  val previewMaze =
-                    if ResearchSpecs.all.contains(nextKind) then
-                      maze.copy(researchLevels =
-                        maze.researchLevels.updated(nextKind, math.max(maze.researchLevels.getOrElse(nextKind, 0), 1))
-                      )
-                    else maze
-                  val preview = buildingHoverText(
-                    nextKind,
-                    b.copy(kind = nextKind, spawnCountdownMs = previewCountdown),
-                    previewMaze
-                  )
-                  // A kind already claimed by another building of this maze (Note sur les
-                  // laboratoires.md: one of each specific kind at a time) greys the button
-                  // out here too, not just an unaffordable cost — Placement.tryUpgradeBuilding
-                  // would reject it either way (MaxCountReached), so this keeps the button's
-                  // disabled look an accurate preview of whether clicking would do anything.
-                  val slotAvailable = nextSpec.maxPerMaze.forall(max => maze.buildings.count(_.kind == nextKind) < max)
-                  (
-                    nextKind,
-                    TooltipText.upgradeLabel(nextKind, costText, currentLang),
-                    slotAvailable && Placement.canAfford(maze.resources, nextSpec.cost),
-                    preview
-                  )
-                }
-              )
-            )
+          val options =
+            BuildingSpecs.upgradeOptions.getOrElse(b.kind, Nil).map(specializeOption(b, _, maze)) ++ levelUpOptionFor(b, maze)
+          if options.isEmpty then None else Some((b.col, b.row, options))
         }
+
+// A tier-upgrade option (Grove -> Forest, or Labo Fondamental -> one specific lab) — the
+// resulting building becomes a genuinely different BuildingKind. Each preview string is
+// that option's own hover text (see buildingHoverText) computed against a synthetic
+// just-upgraded Building, so players see what they're buying before they click — reusing
+// Placement.upgradeBuilding's own countdown-reset rule (spec.spawns.map(_._2).getOrElse(0.0))
+// so "next Elf in Xs" previews the real value.
+private def specializeOption(b: Building, nextKind: BuildingKind, maze: MazeState): (BuildingKind, String, Boolean, String) =
+  val nextSpec = BuildingSpecs.all(nextKind)
+  val costText = nextSpec.cost.toList
+    .sortBy(_._1.ordinal)
+    .map { case (res, amount) => s"${formatDecimal(amount)} ${resourceName(res)}" }
+    .mkString(", ")
+  val previewCountdown = nextSpec.spawns.map(_._2).getOrElse(0.0)
+  // Upgrading always grants at least level 1 for free (see Placement.upgradeBuilding's
+  // doc) — the preview reflects that immediately, rather than showing "no bonus yet" for a
+  // lab the click is about to unlock.
+  val previewMaze =
+    if ResearchSpecs.all.contains(nextKind) then
+      maze.copy(researchLevels = maze.researchLevels.updated(nextKind, math.max(maze.researchLevels.getOrElse(nextKind, 0), 1)))
+    else maze
+  val preview = buildingHoverText(nextKind, b.copy(kind = nextKind, spawnCountdownMs = previewCountdown), previewMaze)
+  // A kind already claimed by another building of this maze (Note sur les laboratoires.md:
+  // one of each specific kind at a time) greys the button out here too, not just an
+  // unaffordable cost — Placement.tryUpgradeBuilding would reject it either way
+  // (MaxCountReached), so this keeps the button's disabled look an accurate preview of
+  // whether clicking would do anything.
+  val slotAvailable = nextSpec.maxPerMaze.forall(max => maze.buildings.count(_.kind == nextKind) < max)
+  (nextKind, TooltipText.upgradeLabel(nextKind, costText, currentLang), slotAvailable && Placement.canAfford(maze.resources, nextSpec.cost), preview)
+
+// A specialized lab (already one of the 5 specific kinds, not yet at Balance.MaxResearchLevel)
+// offers ONE further upgrade option: leveling itself up in place — same kind, same cell,
+// just a higher researchLevels entry (Placement.tryResearch). Folded into the same
+// upgrade-button/tooltip slot as a tier-upgrade rather than a separate "Research" button —
+// see upgradePlayerBuilding, which reads `nextKind == b.kind` (impossible for a
+// specializeOption, whose target is always a *different* kind) to route the click here
+// instead of to tryUpgradeBuilding. None once maxed, same as a tier-upgrade's None once
+// there's no further tier.
+private def levelUpOptionFor(b: Building, maze: MazeState): Option[(BuildingKind, String, Boolean, String)] =
+  ResearchSpecs.all.get(b.kind).flatMap { spec =>
+    val currentLevel = maze.researchLevels.getOrElse(b.kind, 0)
+    if currentLevel >= Balance.MaxResearchLevel then None
+    else
+      val nextLevel = currentLevel + 1
+      val cost = spec.costAtLevel(nextLevel)
+      val costText = cost.toList
+        .sortBy(_._1.ordinal)
+        .map { case (res, amount) => s"${formatDecimal(amount)} ${resourceName(res)}" }
+        .mkString(", ")
+      val previewMaze = maze.copy(researchLevels = maze.researchLevels.updated(b.kind, nextLevel))
+      val preview = buildingHoverText(b.kind, b, previewMaze)
+      Some(
+        (
+          b.kind,
+          TooltipText.levelUpLabel(nextLevel, Balance.MaxResearchLevel, costText, labLevelEffectSummary(b.kind, nextLevel), currentLang),
+          Placement.canAfford(maze.resources, cost),
+          preview
+        )
+      )
+  }
 
 private def wireUpgradeButtons(onUpgrade: (Int, Int, BuildingKind) => Unit): Unit =
   (0 until MaxUpgradeOptions).foreach { slot =>
@@ -1781,90 +1790,34 @@ private def wireUpgradeButtons(onUpgrade: (Int, Int, BuildingKind) => Unit): Uni
     )
   }
 
+// A click on an upgrade-button slot whose target kind is the SAME as the building already
+// sitting there (only possible for levelUpOptionFor's own option, never a specializeOption
+// — see upgradeOptionsInfo) means "level this lab up further in place", routed to
+// Placement.tryResearch instead of Placement.tryUpgradeBuilding: the latter's checkMaxCount
+// would otherwise reject it (this maze already has one building of that kind — itself).
 private def upgradePlayerBuilding(battle: BattleState, mode: Mode, col: Int, row: Int, targetKind: BuildingKind): BattleState =
   if mode != Mode.Playing || battle.outcome.isDefined then battle
   else
-    Placement.tryUpgradeBuilding(battle.player, col, row, Some(targetKind)).map(p => battle.copy(player = p)).getOrElse(battle)
+    battle.player.buildings.find(b => b.col == col && b.row == row) match
+      case Some(b) if b.kind == targetKind =>
+        Placement.tryResearch(battle.player, targetKind).map(p => battle.copy(player = p)).getOrElse(battle)
+      case _ =>
+        Placement.tryUpgradeBuilding(battle.player, col, row, Some(targetKind)).map(p => battle.copy(player = p)).getOrElse(battle)
 
-// The concrete magnitude a lab's research level actually gives — same numbers
-// VictoryConditions/CombatEngine/Placement.effectiveCost themselves read (Balance.*ByLevel
-// via ResearchSpecs.effectAtLevel), so this can't silently drift from what leveling up
-// really does. Recherche fondamentale has no numeric effectByLevel (its own doc: "the
-// victory check itself") — described instead via Balance.FondamentaleRequiredOtherLabLevel,
-// the same list VictoryConditions.hasWonViaFondamentale compares against.
-// The concrete magnitude a lab's research level actually gives — same numbers
-// VictoryConditions/CombatEngine/Placement.effectiveCost themselves read (Balance.*ByLevel
-// via ResearchSpecs.effectAtLevel), passed to core's TooltipText.researchEffectSummary for
-// the actual (localized) phrasing, so this can't silently drift from what leveling up
-// really does.
-private def researchEffectSummary(labKind: BuildingKind, level: Int): String =
-  val magnitude = labKind match
-    case BuildingKind.LaboDeRecherche => Balance.FondamentaleRequiredOtherLabLevel(level - 1).toDouble
-    case other                        => ResearchSpecs.all(other).effectAtLevel(level)
-  TooltipText.researchEffectSummary(labKind, magnitude, currentLang)
+// The concrete magnitude a lab's level actually gives — same number VictoryConditions/
+// CombatEngine/Placement.effectiveCost themselves read (ResearchSpecs.magnitudeAtLevel),
+// passed to core's TooltipText.researchEffectSummary for the actual (localized) phrasing,
+// so this can't silently drift from what leveling up really does.
+private def labLevelEffectSummary(labKind: BuildingKind, level: Int): String =
+  TooltipText.researchEffectSummary(labKind, ResearchSpecs.magnitudeAtLevel(labKind, level), currentLang)
 
 // A specific lab's own live hover text (perKindHoverText) — current level plus what it's
-// actually buying, or an explicit "no bonus yet" at level 0 rather than researchEffectSummary's
+// actually buying, or an explicit "no bonus yet" at level 0 rather than labLevelEffectSummary's
 // level-0 numbers (which read oddly, e.g. "-0% building cost").
-private def researchLevelText(maze: MazeState, kind: BuildingKind): String =
+private def labLevelText(maze: MazeState, kind: BuildingKind): String =
   val level = maze.researchLevels.getOrElse(kind, 0)
-  val effect = if level > 0 then Some(researchEffectSummary(kind, level)) else None
-  TooltipText.researchLevelText(level, Balance.MaxResearchLevel, effect, currentLang)
-
-// Only the player's own Science lab can be researched from the UI (the AI researches via
-// AiStrategy.maybeResearch instead) — mirrors upgradeInfo's shape/wiring, but keyed by
-// BuildingKind rather than cell/id: ResearchSpecs.all has no entry for non-lab kinds, and
-// Placement.tryResearch itself operates on "the maze's one building of this kind" (labs
-// are capped at 1 — see BuildingSpecs' maxPerMaze), not a specific building instance.
-// None once maxed (Balance.MaxResearchLevel), same as upgradeInfo's None once there's no
-// further tier.
-private def researchInfo(target: HoverTarget, maze: MazeState): Option[(Int, Int, String, Boolean)] =
-  if !target.isPlayer then None
-  else
-    target.kind match
-      case HoverKind.EnemyH => None
-      // b.kind, not the pattern-matched kind — see destroyInfo's comment on the same issue.
-      case HoverKind.BuildingH(_) =>
-        maze.buildings.find(_.id == target.id).flatMap { b =>
-          ResearchSpecs.all.get(b.kind).flatMap { spec =>
-            val currentLevel = maze.researchLevels.getOrElse(b.kind, 0)
-            if currentLevel >= Balance.MaxResearchLevel then None
-            else
-              val nextLevel = currentLevel + 1
-              val cost = spec.costAtLevel(nextLevel)
-              val costText = cost.toList
-                .sortBy(_._1.ordinal)
-                .map { case (res, amount) => s"${formatDecimal(amount)} ${resourceName(res)}" }
-                .mkString(", ")
-              Some(
-                (
-                  b.col,
-                  b.row,
-                  TooltipText.researchLabel(nextLevel, Balance.MaxResearchLevel, costText, researchEffectSummary(b.kind, nextLevel), currentLang),
-                  Placement.canAfford(maze.resources, cost)
-                )
-              )
-          }
-        }
-
-private def wireResearchButton(onResearch: (Int, Int) => Unit): Unit =
-  val btn = document.getElementById("tooltip-research").asInstanceOf[dom.html.Button]
-  btn.addEventListener(
-    "click",
-    (_: dom.Event) => {
-      val col = btn.getAttribute("data-col")
-      val row = btn.getAttribute("data-row")
-      if col != null && row != null && !btn.classList.contains("disabled") then onResearch(col.toInt, row.toInt)
-    }
-  )
-
-private def researchPlayerBuilding(battle: BattleState, mode: Mode, col: Int, row: Int): BattleState =
-  if mode != Mode.Playing || battle.outcome.isDefined then battle
-  else
-    battle.player.buildings.find(b => b.col == col && b.row == row) match
-      case None => battle
-      case Some(b) =>
-        Placement.tryResearch(battle.player, b.kind).map(p => battle.copy(player = p)).getOrElse(battle)
+  val effect = if level > 0 then Some(labLevelEffectSummary(kind, level)) else None
+  TooltipText.levelText(level, Balance.MaxResearchLevel, effect, currentLang)
 
 private def hoverText(target: HoverTarget, battle: BattleState): Option[String] =
   val maze = if target.isPlayer then battle.player else battle.ai
@@ -1935,7 +1888,7 @@ private def laboHoverRenderer(kind: BuildingKind): (Building, MazeState) => Stri
   (_, maze) =>
     val name = EntityNames.buildingName(kind, currentLang)
     val rate = TooltipText.rate(Resource.Crystal, effectiveRate(maze, kind, Resource.Crystal), currentLang)
-    s"$name — $rate, ${researchLevelText(maze, kind)}"
+    s"$name — $rate, ${labLevelText(maze, kind)}"
 
 private val perKindHoverRenderers: Map[BuildingKind, (Building, MazeState) => String] = Map(
   BuildingKind.Grove -> { (b, maze) =>
@@ -1998,7 +1951,7 @@ private val perKindHoverRenderers: Map[BuildingKind, (Building, MazeState) => St
     val name = EntityNames.buildingName(BuildingKind.LaboFondamental, currentLang)
     val rate =
       TooltipText.rate(Resource.Crystal, effectiveRate(maze, BuildingKind.LaboFondamental, Resource.Crystal), currentLang)
-    s"$name — $rate, ${TooltipText.noResearchBonusYet(currentLang)}"
+    s"$name — $rate, ${TooltipText.noBonusYet(currentLang)}"
   },
   BuildingKind.LaboNaturel -> laboHoverRenderer(BuildingKind.LaboNaturel),
   BuildingKind.LaboSombre -> laboHoverRenderer(BuildingKind.LaboSombre),

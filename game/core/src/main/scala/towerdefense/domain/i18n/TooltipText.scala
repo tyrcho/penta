@@ -20,7 +20,10 @@ import towerdefense.domain.*
 object TooltipText:
   import NumberFormat.decimal
 
-  private def costText(cost: Map[Resource, Double], lang: Lang): String =
+  // Not private: EntityText's per-lab wiki page reuses this exact formatting for its
+  // per-level cost table, so a cost string never reads differently in the wiki than in
+  // the in-game tooltip.
+  def costText(cost: Map[Resource, Double], lang: Lang): String =
     cost.toList
       .sortBy(_._1.ordinal)
       .map { case (res, amount) => s"${decimal(amount)} ${EntityNames.resourceName(res, lang)}" }
@@ -125,14 +128,18 @@ object TooltipText:
     val name = EntityNames.buildingName(kind, lang)
     if lang == Lang.Fr then s"Améliorer en $name ($costText)" else s"Upgrade to $name ($costText)"
 
-  def researchLabel(nextLevel: Int, maxLevel: Int, costText: String, effect: String, lang: Lang): String =
-    val word = if lang == Lang.Fr then "Recherche niveau" else "Research level"
-    s"$word $nextLevel/$maxLevel ($costText) → $effect"
+  // A specific lab's further-leveling-up option — folded into the same upgrade-button
+  // tooltip machinery as an ordinary tier-upgrade (Grove -> Forest, Labo Fondamental -> a
+  // specific lab), not a separate "Research" affordance — see GameApp's
+  // upgradeOptionsInfo/levelUpOptionFor.
+  def levelUpLabel(nextLevel: Int, maxLevel: Int, costText: String, effect: String, lang: Lang): String =
+    val word = if lang == Lang.Fr then "Améliorer (niveau" else "Upgrade (level"
+    s"$word $nextLevel/$maxLevel) ($costText) → $effect"
 
-  def researchLevelText(level: Int, maxLevel: Int, effect: Option[String], lang: Lang): String =
-    if level <= 0 then (if lang == Lang.Fr then s"recherche niveau 0/$maxLevel (aucun bonus)" else s"research level 0/$maxLevel (no bonus yet)")
+  def levelText(level: Int, maxLevel: Int, effect: Option[String], lang: Lang): String =
+    if level <= 0 then (if lang == Lang.Fr then s"niveau 0/$maxLevel (aucun bonus)" else s"level 0/$maxLevel (no bonus yet)")
     else
-      val word = if lang == Lang.Fr then "recherche niveau" else "research level"
+      val word = if lang == Lang.Fr then "niveau" else "level"
       effect match
         case Some(e) => s"$word $level/$maxLevel ($e)"
         case None    => s"$word $level/$maxLevel"
@@ -205,9 +212,9 @@ object TooltipText:
       s"${decimal(dmgPerSec)} dmg/s to enemies on its 4 adjacent cells, harvests ${decimal(harvestPercent)}% " +
         "of your own total resources as shadow on every nearby death"
 
-  def noResearchBonusYet(lang: Lang): String =
-    if lang == Lang.Fr then "aucun bonus de recherche — améliorez-le en un labo spécifique ci-dessous"
-    else "no research bonus — upgrade it into a specific lab below"
+  def noBonusYet(lang: Lang): String =
+    if lang == Lang.Fr then "aucun bonus propre — améliorez-le en un labo spécifique ci-dessous"
+    else "no bonus of its own — upgrade it into a specific lab below"
 
   def noSpawnLabel(lang: Lang): String = if lang == Lang.Fr then "n'envoie aucune ressource" else "spawns no resource"
 
@@ -254,10 +261,10 @@ object TooltipText:
     )
 
   private val laboFondamentalOwnAbility: I18nText = I18nText(
-    fr = " sans bonus de recherche propre. Améliorez-le en un labo spécifique pour débloquer sa ligne de " +
-      "recherche (niveau 1 gratuit) — un seul labo de chaque type spécifique par maze à la fois",
-    en = " with no research bonus of its own. Upgrade it into a specific lab to unlock that lab's own " +
-      "research line (starting at a free level 1) — only one lab of each specific kind per maze at a time"
+    fr = " sans bonus propre. Améliorez-le en un labo spécifique pour débloquer ses niveaux (niveau 1 gratuit, " +
+      "puis d'autres améliorations sur place) — un seul labo de chaque type spécifique par maze à la fois",
+    en = " with no bonus of its own. Upgrade it into a specific lab to unlock its levels (starting at a free " +
+      "level 1, then further upgrades in place) — only one lab of each specific kind per maze at a time"
   )
 
   // The extra sentence a building's own tooltip needs beyond cost/production/spawn —

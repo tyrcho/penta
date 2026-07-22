@@ -89,19 +89,11 @@ object EntityText:
     ),
     BuildingKind.PassingGate -> passingGateBody,
     BuildingKind.LaboFondamental -> laboFondamentalBody,
-    BuildingKind.LaboNaturel ->
-      specificLabBody(faction(BuildingKind.LaboNaturel), Balance.CrystalPerSecPerLaboNaturel, BuildingKind.LaboNaturel),
-    BuildingKind.LaboSombre ->
-      specificLabBody(faction(BuildingKind.LaboSombre), Balance.CrystalPerSecPerLaboSombre, BuildingKind.LaboSombre),
-    BuildingKind.LaboDeRecherche -> specificLabBody(
-      faction(BuildingKind.LaboDeRecherche),
-      Balance.CrystalPerSecPerLaboDeRecherche,
-      BuildingKind.LaboDeRecherche
-    ),
-    BuildingKind.LaboDeLaLoi ->
-      specificLabBody(faction(BuildingKind.LaboDeLaLoi), Balance.CrystalPerSecPerLaboDeLaLoi, BuildingKind.LaboDeLaLoi),
-    BuildingKind.LaboDuChaos ->
-      specificLabBody(faction(BuildingKind.LaboDuChaos), Balance.CrystalPerSecPerLaboDuChaos, BuildingKind.LaboDuChaos)
+    BuildingKind.LaboNaturel -> specificLabBody(BuildingKind.LaboNaturel, Balance.CrystalPerSecPerLaboNaturel),
+    BuildingKind.LaboSombre -> specificLabBody(BuildingKind.LaboSombre, Balance.CrystalPerSecPerLaboSombre),
+    BuildingKind.LaboDeRecherche -> specificLabBody(BuildingKind.LaboDeRecherche, Balance.CrystalPerSecPerLaboDeRecherche),
+    BuildingKind.LaboDeLaLoi -> specificLabBody(BuildingKind.LaboDeLaLoi, Balance.CrystalPerSecPerLaboDeLaLoi),
+    BuildingKind.LaboDuChaos -> specificLabBody(BuildingKind.LaboDuChaos, Balance.CrystalPerSecPerLaboDuChaos)
   )
 
   private def stonehengeBody: I18nText =
@@ -177,46 +169,71 @@ object EntityText:
     val growthAtMax = percentPoints(Balance.LaboSizeGrowthPerResearchLevel * Balance.MaxResearchLevel * 100)
     I18nText(
       fr = s(
-        "Le seul bâtiment de Science constructible directement — un laboratoire générique, sans ligne de " +
-          "recherche propre.",
-        s"Produit ${decimal(Balance.CrystalPerSecPerLaboFondamental)} $crystalLinkFr par seconde, sans aucun " +
-          "bonus de recherche.",
+        "Le seul bâtiment de Science constructible directement — un laboratoire générique, sans bonus propre.",
+        s"Produit ${decimal(Balance.CrystalPerSecPerLaboFondamental)} $crystalLinkFr par seconde, sans aucun bonus.",
         s"Peut ensuite être amélioré vers l'un des cinq laboratoires spécifiques ($labLinksFr), " +
           s"au coût habituel de ce laboratoire — voir $notePageFr. Cette mise à niveau donne immédiatement le " +
-          "niveau 1 (gratuit) de la recherche associée.",
-        s"Un bâtiment amélioré grandit de $growthPerLevel par niveau de recherche (jusqu'à $growthAtMax " +
+          "niveau 1 (gratuit) ; chaque laboratoire spécifique peut ensuite continuer de s'améliorer sur place, " +
+          s"jusqu'au niveau ${Balance.MaxResearchLevel} — voir sa propre page pour le coût et l'effet de chaque niveau.",
+        s"Un bâtiment amélioré grandit de $growthPerLevel par niveau (jusqu'à $growthAtMax " +
           s"de plus au niveau ${Balance.MaxResearchLevel}) — le Labo Fondamental lui-même reste toujours à sa taille de base."
       ),
       en = s(
-        "The only Science building buildable directly — a generic lab with no research line of its own.",
-        s"Produces ${decimal(Balance.CrystalPerSecPerLaboFondamental)} $crystalLinkEn per second, with no " +
-          "research bonus.",
+        "The only Science building buildable directly — a generic lab with no bonus of its own.",
+        s"Produces ${decimal(Balance.CrystalPerSecPerLaboFondamental)} $crystalLinkEn per second, with no bonus.",
         s"Can then be upgraded into one of the five specific labs ($labLinksEn), at that " +
-          s"lab's usual cost — see $notePageEn. This upgrade immediately grants a free level 1 of the " +
-          "matching research line.",
-        s"An upgraded building grows $growthPerLevel per research level (up to $growthAtMax " +
+          s"lab's usual cost — see $notePageEn. This upgrade immediately grants a free level 1; each specific " +
+          s"lab can then keep upgrading further in place, up to level ${Balance.MaxResearchLevel} — see its own " +
+          "page for each level's cost and effect.",
+        s"An upgraded building grows $growthPerLevel per level (up to $growthAtMax " +
           s"larger at level ${Balance.MaxResearchLevel}) — the Base Lab itself always stays its base size."
       )
     )
 
-  private def specificLabBody(f: Faction, crystalPerSec: Double, researchKind: BuildingKind): I18nText =
+  // Each of the five specific labs keeps upgrading itself in place after its free level 1 —
+  // same mechanism as Bosquet → Forêt → Jungle (Placement.tryUpgradeBuilding/tryResearch),
+  // just without changing BuildingKind since there's no further tier to become. The table
+  // below is generated straight off ResearchSpecs/Balance (via ResearchSpecs.magnitudeAtLevel/
+  // TooltipText.researchEffectSummary, the same numbers the in-game tooltip shows), so a
+  // level's cost/effect can never drift from what leveling up actually does — the exact
+  // failure mode that once left this page linking out to a separate "research" page whose
+  // hand-written numbers had gone stale (see DocGenerator's doc).
+  private def specificLabBody(kind: BuildingKind, crystalPerSec: Double): I18nText =
+    val f = faction(kind)
     val baseLabLinkFr = EntityNames.buildingLink(f, BuildingKind.LaboFondamental, Lang.Fr)
     val baseLabLinkEn = EntityNames.buildingLink(f, BuildingKind.LaboFondamental, Lang.En)
-    val researchLinkFr = EntityNames.researchLineLink(f, researchKind, Lang.Fr)
-    val researchLinkEn = EntityNames.researchLineLink(f, researchKind, Lang.En)
     val boost = percentPoints(Balance.LaboCrystalBoostPerResearchLevel * 100)
+    val spec = ResearchSpecs.all(kind)
+    def costCell(level: Int, lang: Lang): String =
+      if level == 1 then
+        if lang == Lang.Fr then "Gratuit (obtenu en améliorant le Labo Fondamental)"
+        else "Free (granted when upgrading from the Base Lab)"
+      else TooltipText.costText(spec.costAtLevel(level), lang)
+    def row(level: Int, lang: Lang): String =
+      val effect = TooltipText.researchEffectSummary(kind, ResearchSpecs.magnitudeAtLevel(kind, level), lang)
+      s"| $level | ${costCell(level, lang)} | $effect |"
+    val tableFr =
+      ("| Niveau | Coût | Effet |" :: "| --- | --- | --- |" :: (1 to Balance.MaxResearchLevel).map(row(_, Lang.Fr)).toList)
+        .mkString("\n")
+    val tableEn =
+      ("| Level | Cost | Effect |" :: "| --- | --- | --- |" :: (1 to Balance.MaxResearchLevel).map(row(_, Lang.En)).toList)
+        .mkString("\n")
     I18nText(
       fr = s(
         s"Amélioration du $baseLabLinkFr — pas constructible directement.",
         s"Produit ${decimal(crystalPerSec)} ${EntityNames.resourceLink(f, Resource.Crystal, Lang.Fr)} par seconde, " +
-          s"augmenté de $boost par niveau de recherche.",
-        s"Débloque $researchLinkFr, au niveau 1 dès la mise à niveau (gratuit)."
+          s"augmenté de $boost par niveau.",
+        s"S'améliore ensuite sur place jusqu'au niveau ${Balance.MaxResearchLevel}, comme n'importe quel autre " +
+          "bâtiment (même mécanisme que Bosquet → Forêt → Jungle) :",
+        tableFr
       ),
       en = s(
         s"Upgrade of the $baseLabLinkEn — not directly buildable.",
         s"Produces ${decimal(crystalPerSec)} ${EntityNames.resourceLink(f, Resource.Crystal, Lang.En)} per second, " +
-          s"boosted by $boost per research level.",
-        s"Unlocks $researchLinkEn, at level 1 as soon as it's upgraded (free)."
+          s"boosted by $boost per level.",
+        s"Then keeps upgrading further in place up to level ${Balance.MaxResearchLevel}, the same way any other " +
+          "building does (same mechanism as Grove → Forest → Jungle):",
+        tableEn
       )
     )
 

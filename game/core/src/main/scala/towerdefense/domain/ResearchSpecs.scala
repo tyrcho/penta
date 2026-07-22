@@ -44,6 +44,18 @@ object ResearchSpecs:
   val otherLabKinds: Set[BuildingKind] =
     all.keySet - BuildingKind.LaboDeRecherche
 
+  // The magnitude a lab's level actually gives at `level`, for any of the 5 labs — reads
+  // straight off `effectAtLevel` for four of them, but Recherche fondamentale's own
+  // ResearchSpec has no effectByLevel (empty list, see the doc above), so its "magnitude"
+  // is instead the other-lab level it demands at that level, from Balance.
+  // FondamentaleRequiredOtherLabLevel — the same list VictoryConditions.hasWonViaFondamentale
+  // compares against. Centralized here (rather than duplicated per reader — the in-game
+  // tooltip and the generated wiki page's per-level table both need this exact number) so
+  // neither can special-case Fondamentale differently from the other.
+  def magnitudeAtLevel(kind: BuildingKind, level: Int): Double = kind match
+    case BuildingKind.LaboDeRecherche => Balance.FondamentaleRequiredOtherLabLevel(level - 1).toDouble
+    case other                        => all(other).effectAtLevel(level)
+
   // Explicit, stable iteration order for AiStrategy.researchAnyAffordable — `all.keys`
   // alone isn't guaranteed deterministic across runs, and a strategy's research choice
   // (when several are simultaneously affordable) needs to be reproducible the same way

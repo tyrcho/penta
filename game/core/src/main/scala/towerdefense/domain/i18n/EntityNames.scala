@@ -33,13 +33,6 @@ final case class UnitKindInfo(faction: Faction, name: I18nText, fileName: I18nTe
 // and there's no ombre-reference.png in game/assets/ to give it one.
 final case class ResourceKindInfo(faction: Faction, name: I18nText, fileName: I18nText, asset: Option[String])
 
-// One of Science's 5 leveled research lines (ResearchSpecs.all's keys) — the lab building
-// itself already has a BuildingKindInfo entry above; this is the separate vault page for
-// its *research line* (Recherches naturelles.md etc.), which DocGenerator now generates
-// in both languages the same way (see DocGenerator.researchPage) rather than leaving it
-// hand-written FR-only prose that could drift from Balance/ResearchSpecs unnoticed.
-final case class ResearchLineInfo(faction: Faction, name: I18nText, fileName: I18nText)
-
 // Display names, vault doc paths, and representative images for every Faction/Resource/
 // BuildingKind/UnitKind, in both languages — the single naming source shared by
 // DocGenerator (which needs a cross-link-safe file path and an asset per kind) and the
@@ -247,41 +240,6 @@ object EntityNames:
     )
   )
 
-  // Keyed by the *lab's* BuildingKind (same as ResearchSpecs.all/DocGenerator's
-  // researchEffectLines), not a separate enum — a 1:1 pairing, same reasoning as
-  // ResearchSpec itself. File names don't derive from the lab building's own name
-  // (LaboNaturel's line lives in "Recherches naturelles.md"/"Nature Research.md", not
-  // anything built from "Labo Naturel"/"Nature Lab") — the vault's existing FR naming
-  // predates this generator, and the EN names are this generator's own choice, same
-  // "mirrors the FR tree" convention as buildingInfo's EN file names.
-  val researchLineInfo: Map[BuildingKind, ResearchLineInfo] = Map(
-    BuildingKind.LaboNaturel -> ResearchLineInfo(
-      Faction.Science,
-      I18nText("Recherches naturelles", "Nature Research"),
-      I18nText("Recherches naturelles.md", "Nature Research.md")
-    ),
-    BuildingKind.LaboSombre -> ResearchLineInfo(
-      Faction.Science,
-      I18nText("Recherches Sombres", "Shadow Research"),
-      I18nText("Recherches Sombres.md", "Shadow Research.md")
-    ),
-    BuildingKind.LaboDeLaLoi -> ResearchLineInfo(
-      Faction.Science,
-      I18nText("Recherches loyales", "Law Research"),
-      I18nText("Recherches loyales.md", "Law Research.md")
-    ),
-    BuildingKind.LaboDuChaos -> ResearchLineInfo(
-      Faction.Science,
-      I18nText("Recherches chaotiques", "Chaos Research"),
-      I18nText("Recherches chaotiques.md", "Chaos Research.md")
-    ),
-    BuildingKind.LaboDeRecherche -> ResearchLineInfo(
-      Faction.Science,
-      I18nText("Recherche fondamentale", "Fundamental Research"),
-      I18nText("Recherche fondamentale.md", "Fundamental Research.md")
-    )
-  )
-
   def factionName(f: Faction, lang: Lang): String = factionInfo(f).name(lang)
 
   // The vault folder name per language is the same string as the display name in every
@@ -323,10 +281,6 @@ object EntityNames:
     val info = resourceInfo(r)
     s"${factionFolder(info.faction, lang)}/${info.fileName(lang)}"
 
-  def researchLinePath(k: BuildingKind, lang: Lang): String =
-    val info = researchLineInfo(k)
-    s"${factionFolder(info.faction, lang)}/${info.fileName(lang)}"
-
   // ── Cross-links between generated pages ─────────────────────────────────
   // Every generated page lives in its own faction subfolder (Resources/<Faction>/ or
   // Resources-en/<Faction>/) — a same-faction cross-link is just the bare file name, an
@@ -354,10 +308,6 @@ object EntityNames:
     val info = resourceInfo(r)
     mdLink(info.name(lang), relativeTo(from, info.faction, info.fileName(lang), lang))
 
-  def researchLineLink(from: Faction, k: BuildingKind, lang: Lang): String =
-    val info = researchLineInfo(k)
-    mdLink(info.name(lang), relativeTo(from, info.faction, info.fileName(lang), lang))
-
   // A link from an EN page to an FR-only page (Corruption.md, the faction overview pages)
   // that this generator doesn't produce an English version of (out of scope — see
   // factionFrOverviewFile's doc) — crosses from Resources-en/<Faction>/ back into the FR
@@ -366,8 +316,7 @@ object EntityNames:
     mdLink(text, s"../../Resources/${factionFolder(faction, Lang.Fr)}/$frFileName")
 
   // A link to a vault page this generator doesn't itself produce (Corruption.md, Science's
-  // Note sur les laboratoires.md — the Recherche*/Recherches*.md pages have their own
-  // researchLineLink now, see its doc) — an FR page links straight to the existing FR file
+  // Note sur les laboratoires.md) — an FR page links straight to the existing FR file
   // (possibly in another faction's folder, same as any other cross-link — see
   // `relativeTo`); an EN page, which has no translated version of that page, falls back
   // to the same FR file across trees (see frFallbackLink).
