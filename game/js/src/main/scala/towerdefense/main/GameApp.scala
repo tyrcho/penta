@@ -2030,10 +2030,22 @@ private def updateMazePanel(prefix: String, maze: MazeState, opponent: MazeState
   updateProgressBar(s"$prefix-fondamentale-bar", fondamentaleReady, fondamentaleTotal)
 
 // Visual companion to the "current/target" text above — lets you compare at a glance
-// how close each maze is to winning via the same (opponent-relative) condition.
+// how close each maze is to winning via the same (opponent-relative) condition. Escalates
+// through a warm/hot/critical color ramp (index.html's .progress-bar-fill/.stat.progress
+// rules) as `pct` climbs, instead of staying the same quiet blue right up until the
+// instant a win actually triggers — see VictoryConditions.evaluate, checked every tick
+// with zero lead-up otherwise. `id` is always a "...-bar" id (see call sites below);
+// stripping that suffix reaches the sibling "...-stat" span (the live current/target
+// number, index.html) that gets the same tier class so the text escalates too, not just
+// the bar.
 private def updateProgressBar(id: String, current: Double, target: Double): Unit =
   val pct = if target <= 0 then 100.0 else math.min(100.0, current / target * 100.0)
-  document.getElementById(id).asInstanceOf[dom.html.Element].style.width = s"$pct%"
+  val tier = if pct >= 95 then "critical" else if pct >= 80 then "hot" else if pct >= 50 then "warm" else ""
+  val fill = document.getElementById(id).asInstanceOf[dom.html.Element]
+  fill.style.width = s"$pct%"
+  fill.className = s"progress-bar-fill $tier".trim
+  val statEl = document.getElementById(s"${id.stripSuffix("-bar")}-stat").asInstanceOf[dom.html.Element]
+  statEl.className = s"stat progress $tier".trim
 
 // One WON/LOST banner per maze half (not a single "You win!"/"AI wins!" overlay) —
 // each stays confined to pointer-events: none (see index.html's .game-over-side), so
