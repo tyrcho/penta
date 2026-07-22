@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="description" content="Tower defense POC — ScalaJS + PixiJS v8.">
   <title>tower-defense-poc</title>
   <script src="https://cdn.jsdelivr.net/npm/pixi.js@8.6.0/dist/pixi.min.js"
@@ -26,7 +26,7 @@
       --color-lost:    #f87171;
     }
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-    html, body { height: 100%; overflow: hidden; touch-action: none; }
+    html, body { height: 100%; overflow: hidden; touch-action: pinch-zoom; }
     body {
       font-family: system-ui, -apple-system, sans-serif;
       background: var(--color-bg);
@@ -170,7 +170,10 @@
     }
     #game-container canvas {
       display: block;
-      touch-action: none;
+      /* pinch-zoom (not none) — a single-finger tap/drag still stays fully custom (no
+         native pan), but a pinch gesture is no longer swallowed, so mobile players can
+         zoom in on the maze same as everywhere else on the page. */
+      touch-action: pinch-zoom;
     }
     /* One banner per maze half, each dimming only its own side, so the loser's half
        doesn't visually claim the winner's. left/top/width/height are set inline by

@@ -286,12 +286,36 @@ private def aiScaleFor(mode: Mode): Double = mode match
 // difference). aiScale (aiScaleFor's doc) shrinks only the AI's contribution to the
 // overall bounding box — at aiScale = 1.0 this reduces to the original always-equal
 // formula exactly (2x a side, or width+width), so Spectating's layout is unchanged.
-private case class Layout(portrait: Boolean, battleWidth: Double, battleHeight: Double)
+// `gap` is exposed (not just baked into battleWidth/battleHeight) so applyViewTransform's
+// aiWorld positioning can place the AI maze flush after the *same* gap this layout
+// actually reserved for it — see mazeGap's doc for why that gap isn't always MazeGapPx.
+private case class Layout(portrait: Boolean, battleWidth: Double, battleHeight: Double, gap: Double)
+
+// The gap between the two mazes along the axis they stack on (horizontal in landscape,
+// vertical in portrait) — grows past the base MazeGapPx to soak up whatever space is left
+// over once `scale` is pinned by the *other* axis, instead of leaving that space as dead
+// margin around a comparatively tiny-looking board (the original complaint on a very
+// wide/short monitor: cell size was already capped by the available height, and all the
+// leftover width just sat unused on both outer edges). Splits that leftover in half:
+// half becomes extra gap (spreading the two mazes further apart to actually use the
+// space), the other half stays as centered outer margin — `scale` itself never changes
+// either way, so cell size/tap targets are identical to the old fixed-gap layout.
+private def mazeGap(screenW: Double, screenH: Double, portrait: Boolean, aiScale: Double): Double =
+  val minBattleWidth = if portrait then GridConfig.width else GridConfig.width * (1.0 + aiScale) + MazeGapPx
+  val minBattleHeight = if portrait then GridConfig.height * (1.0 + aiScale) + MazeGapPx else GridConfig.height
+  val scale = math.min(screenW / minBattleWidth, screenH / minBattleHeight)
+  val leftoverScreen =
+    if portrait then math.max(0.0, screenH - minBattleHeight * scale)
+    else math.max(0.0, screenW - minBattleWidth * scale)
+  MazeGapPx + (leftoverScreen / scale) / 2.0
 
 private def currentLayout(screenW: Double, screenH: Double, aiScale: Double): Layout =
   if screenH > screenW then
-    Layout(portrait = true, GridConfig.width, GridConfig.height * (1.0 + aiScale) + MazeGapPx)
-  else Layout(portrait = false, GridConfig.width * (1.0 + aiScale) + MazeGapPx, GridConfig.height)
+    val gap = mazeGap(screenW, screenH, portrait = true, aiScale)
+    Layout(portrait = true, GridConfig.width, GridConfig.height * (1.0 + aiScale) + gap, gap)
+  else
+    val gap = mazeGap(screenW, screenH, portrait = false, aiScale)
+    Layout(portrait = false, GridConfig.width * (1.0 + aiScale) + gap, GridConfig.height, gap)
 
 @main def main(): Unit =
   if document.readyState == "loading" then
@@ -1019,18 +1043,24 @@ private def computeViewTransform(screenW: Double, screenH: Double, layout: Layou
 // aiWorld gets its own local scale on top of battleWorld's shared one (playerWorld
 // always renders at exactly battleWorld's scale — it's never given a local scale of its
 // own), so the two mazes can end up different apparent sizes on screen even though every
-// sprite inside each is still laid out in the same GridConfig coordinate space. Centered
-// within whatever strip currentLayout allotted it (its box is <= that strip whenever
-// aiScale < 1.0), for a deliberate "mini-map" look rather than a stray corner.
+// sprite inside each is still laid out in the same GridConfig coordinate space. On the
+// stacking axis (x in landscape, y in portrait) it sits flush after layout.gap — the same
+// gap currentLayout's battleWidth/battleHeight already accounted for, so the combined
+// bounding box computeViewTransform centers always matches where the AI maze actually
+// ends, at any aiScale. On the *other*, non-stacking axis, it's centered within a full
+// GridConfig.width/height slot for a deliberate "mini-map" look (its box is <= that slot
+// whenever aiScale < 1.0) — that axis is unaffected by aiScale in battleWidth/battleHeight
+// (see currentLayout), so a real slot with real slack to center within actually exists
+// there, unlike the stacking axis.
 private def applyViewTransform(app: Application, battleWorld: Container, aiWorld: Container, mode: Mode): Unit =
   val aiScale = aiScaleFor(mode)
   val layout = currentLayout(app.screen.width, app.screen.height, aiScale)
   aiWorld.scale.set(aiScale)
   if layout.portrait then
     aiWorld.x = GridConfig.width * (1.0 - aiScale) / 2.0
-    aiWorld.y = GridConfig.height + MazeGapPx
+    aiWorld.y = GridConfig.height + layout.gap
   else
-    aiWorld.x = GridConfig.width + MazeGapPx + GridConfig.width * (1.0 - aiScale) / 2.0
+    aiWorld.x = GridConfig.width + layout.gap
     aiWorld.y = GridConfig.height * (1.0 - aiScale) / 2.0
   val vt = computeViewTransform(app.screen.width, app.screen.height, layout)
   battleWorld.scale.set(vt.scale)
