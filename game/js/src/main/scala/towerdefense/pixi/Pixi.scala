@@ -15,6 +15,16 @@ class Application extends js.Object:
   val stage: Container = js.native
   val ticker: Ticker = js.native
   val screen: Rectangle = js.native
+  // Re-measures the `resizeTo` target's *current* clientWidth/clientHeight and resizes the
+  // renderer/screen to match — the same check Pixi's own `resizeTo` option otherwise only
+  // runs on an actual `window` 'resize' event. A purely content-driven change to that
+  // target's box (e.g. GameApp's own body.mode-spectating class hiding the build-button
+  // rows shortly after init, shrinking the header and growing #game-container — see
+  // GameApp's ticker call site) never fires a window resize on its own, so without calling
+  // this explicitly `app.screen` would otherwise stay stuck at its stale initial reading
+  // (reproduced: canvas locked at the pre-mode-switch size until the window was actually
+  // resized by so much as 1px).
+  def resize(): Unit = js.native
 
 @js.native
 trait Rectangle extends js.Object:

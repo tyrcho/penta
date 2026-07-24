@@ -22,11 +22,39 @@ object TooltipText:
 
   // Not private: EntityText's per-lab wiki page reuses this exact formatting for its
   // per-level cost table, so a cost string never reads differently in the wiki than in
-  // the in-game tooltip.
+  // the in-game tooltip. Deliberately name-based (not resourceIcon below) — a wiki page's
+  // resource names are meant to stay plain, linkable text (`[Wood](Wood.md)`-adjacent
+  // prose), not an emoji only the game's own UI has a legend for.
   def costText(cost: Map[Resource, Double], lang: Lang): String =
     cost.toList
       .sortBy(_._1.ordinal)
       .map { case (res, amount) => s"${decimal(amount)} ${EntityNames.resourceName(res, lang)}" }
+      .mkString(" + ")
+
+  // Same per-resource glyph index.html's own stat rows already use (🪵/🔥/💡/🌑/💎) —
+  // the single source every in-game tooltip function below reads, so an icon can never be
+  // picked differently by costIcons than by rate. Language-independent (an icon doesn't
+  // need translating), unlike costText/EntityNames.resourceName above.
+  private val resourceIcon: Map[Resource, String] = Map(
+    Resource.Wood -> "🪵",
+    Resource.Fire -> "🔥",
+    Resource.Light -> "💡",
+    Resource.Shadow -> "🌑",
+    Resource.Crystal -> "💎"
+  )
+
+  // Public accessor for call sites that need a single icon rather than a whole cost-map
+  // string (e.g. GameApp's Destroy-button tooltip, which prefixes each amount with its own
+  // "+" for "refunded", not costIcons' plain "amount + amount" shape).
+  def icon(resource: Resource): String = resourceIcon(resource)
+
+  // Icon-based counterpart to costText, for the in-game #tooltip div only (see
+  // resourceIcon's doc for why the wiki keeps costText's plain names instead) — same
+  // "amount + amount" shape, just a glyph instead of a written-out name per resource.
+  def costIcons(cost: Map[Resource, Double]): String =
+    cost.toList
+      .sortBy(_._1.ordinal)
+      .map { case (res, amount) => s"${decimal(amount)} ${resourceIcon(res)}" }
       .mkString(" + ")
 
   // The static build-button tooltip, shown before anything is placed — cost plus, for a
@@ -34,11 +62,11 @@ object TooltipText:
   // caller via unitAbilitySummary, same split GameApp already made (spawnAbilitySuffix).
   def buildingButtonTooltip(kind: BuildingKind, cost: Map[Resource, Double], produces: Map[Resource, Double], lang: Lang): String =
     val name = EntityNames.buildingName(kind, lang)
-    val cText = costText(cost, lang)
+    val cText = costIcons(cost)
     val rates = produces.toList.sortBy(_._1.ordinal)
     val rateText =
       if rates.isEmpty then ""
-      else " " + rates.map { case (res, rate) => s"+${decimal(rate)} ${EntityNames.resourceName(res, lang)}/s" }.mkString(", ") + "."
+      else " " + rates.map { case (res, rate) => s"+${decimal(rate)} ${resourceIcon(res)}/s" }.mkString(", ") + "."
     val costWord = if lang == Lang.Fr then "coût" else "cost"
     s"$name — $costWord $cText.$rateText"
 
@@ -195,8 +223,11 @@ object TooltipText:
   // kind needs (rate? aura? a spawn countdown? a research level?) varies too much for a
   // single shape (see BuildingSpecs' doc on why combat abilities stay kind-based).
 
+  // `lang` kept (unused) for call-site consistency with every other per-kind hover
+  // fragment here — an icon doesn't need translating, unlike the resourceName-based
+  // costText/EntityText's wiki tables.
   def rate(resource: Resource, amountPerSec: Double, lang: Lang): String =
-    s"+${decimal(amountPerSec)} ${EntityNames.resourceName(resource, lang)}/s"
+    s"+${decimal(amountPerSec)} ${resourceIcon(resource)}/s"
 
   def nextSpawnIn(unitKind: UnitKind, seconds: Int, lang: Lang): String =
     val name = EntityNames.unitName(unitKind, lang)

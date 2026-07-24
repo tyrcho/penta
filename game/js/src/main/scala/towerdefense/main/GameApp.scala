@@ -284,8 +284,6 @@ private def displayName(kind: BuildingKind): String = EntityNames.buildingName(k
 private def buildableKinds: List[BuildingKind] =
   BuildingKind.values.toList.filter(BuildingSpecs.all(_).buildableDirectly)
 
-private def resourceName(res: Resource): String = EntityNames.resourceName(res, currentLang)
-
 private val MazeGapPx = GridConfig.cellSize
 
 // While actually Playing (a human controls one side), the AI's maze is purely something
@@ -597,6 +595,11 @@ def onReady(app: Application, textures: js.Dictionary[Texture]): Unit =
       isPlayer = false,
       h => hovered = h
     )
+    // See Pixi.Application.resize's own doc: `resizeTo` alone misses purely content-driven
+    // size changes of #game-container (no window 'resize' event fires), so this re-checks
+    // every tick before the transform math below reads app.screen — cheap (Pixi itself
+    // no-ops if the size hasn't actually changed since last call).
+    app.resize()
     applyViewTransform(app, battleWorld, aiWorld, mode)
     updateModeUi(mode)
     updateAuraOverlay(auraOverlay, battle.player, selectedTarget, selectedBuilding, hoveredCell, mode)
@@ -1712,7 +1715,7 @@ private def destroyInfo(target: HoverTarget, maze: MazeState): Option[(Int, Int,
           val refundText = cost.toList
             .sortBy(_._1.ordinal)
             .map { case (res, amount) =>
-              s"+${formatDecimal(amount * Balance.DemolishRefundFraction)} ${resourceName(res)}"
+              s"+${formatDecimal(amount * Balance.DemolishRefundFraction)} ${TooltipText.icon(res)}"
             }
             .mkString(", ")
           (b.col, b.row, TooltipText.destroyLabel(refundText, currentLang))
@@ -1774,10 +1777,7 @@ private def upgradeOptionsInfo(
 // so "next Elf in Xs" previews the real value.
 private def specializeOption(b: Building, nextKind: BuildingKind, maze: MazeState): (BuildingKind, String, Boolean, String) =
   val nextSpec = BuildingSpecs.all(nextKind)
-  val costText = nextSpec.cost.toList
-    .sortBy(_._1.ordinal)
-    .map { case (res, amount) => s"${formatDecimal(amount)} ${resourceName(res)}" }
-    .mkString(", ")
+  val costText = TooltipText.costIcons(nextSpec.cost)
   val previewCountdown = nextSpec.spawns.map(_._2).getOrElse(0.0)
   // Upgrading always grants at least level 1 for free (see Placement.upgradeBuilding's
   // doc) — the preview reflects that immediately, rather than showing "no bonus yet" for a
@@ -1810,10 +1810,7 @@ private def levelUpOptionFor(b: Building, maze: MazeState): Option[(BuildingKind
     else
       val nextLevel = currentLevel + 1
       val cost = spec.costAtLevel(nextLevel)
-      val costText = cost.toList
-        .sortBy(_._1.ordinal)
-        .map { case (res, amount) => s"${formatDecimal(amount)} ${resourceName(res)}" }
-        .mkString(", ")
+      val costText = TooltipText.costIcons(cost)
       val previewMaze = maze.copy(researchLevels = maze.researchLevels.updated(b.kind, nextLevel))
       val preview = buildingHoverText(b.kind, b, previewMaze)
       Some(
