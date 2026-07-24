@@ -125,29 +125,37 @@ object BattleEngine:
       val researched = strategy.maybeResearch(upgraded, opponent)
       (strategy.maybeBuild(researched, opponent), strategy.buildCooldownMs)
 
-  // Resources a Goblin plundered from the opponent land in the attacker's own economy
-  // (Chaos.md: "arracher ses ressources"), and count toward the Chaos victory tally.
+  // What a Goblin/Minotaur plundered from the opponent (Chaos.md: "arracher ses
+  // ressources") lands in the attacker's own economy as Gold instead of whatever specific
+  // resource was actually stolen — added at the project owner's explicit request alongside
+  // the new Gold resource ("chaos units get gold instead of resources"). The victim's own
+  // loss is unaffected (CombatEngine.moveCreatures still drains their real Wood/Fire/etc.,
+  // capped at what they have) — only the attacker's payout currency changes here. The
+  // Chaos victory tally (resourcesPlundered) is still the plain sum of value stolen,
+  // currency-agnostic either way.
   private def creditPlunder(state: MazeState, stolen: Map[Resource, Double]): MazeState =
-    val credited = stolen.foldLeft(state.resources) { case (acc, (res, amount)) =>
-      acc.updated(res, acc.getOrElse(res, 0.0) + amount)
-    }
+    val goldGained = stolen.values.sum
     state.copy(
-      resources = credited,
-      resourcesPlundered = state.resourcesPlundered + stolen.values.sum
+      resources = state.resources.updated(Resource.Gold, state.resources.getOrElse(Resource.Gold, 0.0) + goldGained),
+      resourcesPlundered = state.resourcesPlundered + goldGained
     )
 
   // A corrupted-to-death building's full cost (Corruption.md) lands in the corrupting
   // creature's owner's economy — the same "attacker's own state gets credited" shape as
   // creditPlunder, plus one point per building toward this side's own Mort victory tally
-  // (buildingsCorrupted, symmetric to resourcesPlundered).
+  // (buildingsCorrupted, symmetric to resourcesPlundered), plus (project owner's explicit
+  // request) a flat Gold bonus per building on top of that existing refund — Balance.
+  // CorruptionGoldReward's own doc.
   private def creditCorruption(state: MazeState, corrupted: List[Corrosion]): MazeState =
     if corrupted.isEmpty then state
     else
-      val credited = corrupted.foldLeft(state.resources) { case (acc, corrosion) =>
+      val creditedCost = corrupted.foldLeft(state.resources) { case (acc, corrosion) =>
         corrosion.cost.foldLeft(acc) { case (acc2, (res, amount)) =>
           acc2.updated(res, acc2.getOrElse(res, 0.0) + amount)
         }
       }
+      val goldBonus = corrupted.size * Balance.CorruptionGoldReward
+      val credited = creditedCost.updated(Resource.Gold, creditedCost.getOrElse(Resource.Gold, 0.0) + goldBonus)
       state.copy(resources = credited, buildingsCorrupted = state.buildingsCorrupted + corrupted.size)
 
   private def deliverUnits(state: MazeState, spawned: Map[UnitKind, Int]): MazeState =

@@ -40,7 +40,8 @@ object TooltipText:
     Resource.Fire -> "🔥",
     Resource.Light -> "💡",
     Resource.Shadow -> "🌑",
-    Resource.Crystal -> "💎"
+    Resource.Crystal -> "💎",
+    Resource.Gold -> "🪙"
   )
 
   // Public accessor for call sites that need a single icon rather than a whole cost-map

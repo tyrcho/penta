@@ -135,6 +135,14 @@ object Balance:
   // CombatEngine.effectiveSpeedPerMs), stacking multiplicatively with Wolf's speed boost.
   val AngelSlowFraction: Double = 0.25
 
+  // Gold reward for a kill a Loi-faction building (Watchtower or Angel) itself dealt the
+  // damage for — not the vault's own number (Victoire.md/Tour de guet.md/Ange.md say
+  // nothing about Gold), added at the project owner's explicit request alongside the new
+  // Gold resource. Doubled for a "large" unit (Minotaur is the only one today — see
+  // CombatEngine.applyDamageSources' isLargeKill).
+  val LoyalesKillGoldReward: Double = 1.0
+  val LoyalesLargeKillGoldReward: Double = 2.0
+
   // ── Mort (Death) ─────────────────────────────────────────────────────────
   val TombCostWood: Double = 5.0 // Tombe.md: "cout en bois: 5"
   val TombCostShadow: Double = 10.0 // Tombe.md: "cout en ombre: 10"
@@ -218,6 +226,11 @@ object Balance:
   val SoulHealPerSecPerBuilding: Double = 1.0
 
   val CorruptionMaxPercent: Double = 100.0 // Corruption.md: "corrompu a 100% il disparait"
+
+  // Flat Gold bonus (project owner's explicit request, alongside the new Gold resource) a
+  // corrupting creature's owner earns when a corruption finishes destroying a building —
+  // on top of, not instead of, the existing full-cost refund (BattleEngine.creditCorruption).
+  val CorruptionGoldReward: Double = 5.0
 
   // Victoire.md leaves Mort's "B: Corrompre ou detruire XX unites/batiments ennemis" as an
   // unfilled "XX" — POC default, deliberately small: each point requires fully corrupting
@@ -353,35 +366,30 @@ object Balance:
 
   // ── Shared / meta ────────────────────────────────────────────────────────
 
-  // POC default, not required to match each other — both mazes still get the identical
-  // pair (see CLAUDE.md: symmetry is about player vs AI having the same rules, not
-  // about every number being equal to every other number).
-  val StartingWood: Double = 50.0
-  val StartingFire: Double = 30.0
+  // Every maze now starts with NONE of the 5 named resources — only Gold (below), spent
+  // as a universal joker (Placement.canAfford/debit) to bootstrap the very first building
+  // of whatever kind is chosen first. This replaces the old per-resource starting
+  // stockpiles (each sized to cover that resource's own cheapest producer-building, e.g.
+  // "enough Light for the first Eglise") — Gold covers all of that uniformly now, so a
+  // maze isn't locked into building in resource-availability order, only cost-total order.
+  val StartingWood: Double = 0.0
+  val StartingFire: Double = 0.0
+  val StartingLight: Double = 0.0
+  val StartingShadow: Double = 0.0
+  val StartingCrystal: Double = 0.0
 
-  // Light has no producer besides the Eglise itself, so without a starting amount at
-  // least EgliseCostLight, the very first Eglise could never be built. Raised to 50
-  // (project owner's explicit request) so the first Angel (cost 50 Light) is also
-  // immediately affordable, same relationship as StartingFire to CaveCostFire.
-  val StartingLight: Double = 50.0
-
-  // Same reasoning as StartingLight: Shadow has no producer besides Tomb itself, which
-  // also costs Shadow, so the very first Tomb needs a starting stock — just enough for one.
-  val StartingShadow: Double = 20.0
-
-  // Same reasoning again: every Science lab costs Crystal and only labs produce it, so
-  // bootstrapping needs at least the cheapest lab's cost up front — the four 10-crystal
-  // labs (Naturel/Sombre/de la Loi/du Chaos), not the pricier 15-crystal Labo de Recherche,
-  // mirroring how Cave (cheaper) is buildable from StartingFire while Labyrinth (pricier)
-  // isn't yet.
-  val StartingCrystal: Double = 40.0
+  // The joker currency's own starting stock — sized well above any single early building's
+  // total cost, so the opening move is never gated by which specific resource happens to
+  // be scarce (see Resource.Gold's own doc).
+  val StartingGold: Double = 100.0
 
   val StartingResources: Map[Resource, Double] = Map(
     Resource.Wood -> StartingWood,
     Resource.Fire -> StartingFire,
     Resource.Light -> StartingLight,
     Resource.Shadow -> StartingShadow,
-    Resource.Crystal -> StartingCrystal
+    Resource.Crystal -> StartingCrystal,
+    Resource.Gold -> StartingGold
   )
 
   // POC default: wood/fire production compounds with building count, so without a pace

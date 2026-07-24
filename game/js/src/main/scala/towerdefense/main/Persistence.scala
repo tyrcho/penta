@@ -77,7 +77,8 @@ private object Persistence:
       fire = r.getOrElse(Resource.Fire, 0.0),
       light = r.getOrElse(Resource.Light, 0.0),
       shadow = r.getOrElse(Resource.Shadow, 0.0),
-      crystal = r.getOrElse(Resource.Crystal, 0.0)
+      crystal = r.getOrElse(Resource.Crystal, 0.0),
+      gold = r.getOrElse(Resource.Gold, 0.0)
     )
 
   private def encodeCreature(c: Creature): js.Dynamic =
@@ -190,7 +191,11 @@ private object Persistence:
         Resource.Fire -> asDouble(r.fire),
         Resource.Light -> asDouble(r.light),
         Resource.Shadow -> (if js.isUndefined(r.shadow) then 0.0 else asDouble(r.shadow)),
-        Resource.Crystal -> (if js.isUndefined(r.crystal) then 0.0 else asDouble(r.crystal))
+        Resource.Crystal -> (if js.isUndefined(r.crystal) then 0.0 else asDouble(r.crystal)),
+        // Pre-Gold saves have no gold field at all — 0.0, not StartingGold: a resumed
+        // in-progress game just never had any (one-time migration quirk, same shape as
+        // Shadow/Crystal's own fallback above when THEY were added).
+        Resource.Gold -> (if js.isUndefined(r.gold) then 0.0 else asDouble(r.gold))
       )
 
   // Pre-refactor saves have 5 separate building arrays (forests/caves/labyrinths/eglises/

@@ -16,7 +16,7 @@
       --color-surface: #16213e;
       --color-text:    #e8e8e8;
       --color-border:  #2a2a4a;
-      --color-gold:    #eab308;
+      --color-wood:    #eab308;
       --color-fire:     #fb923c;
       --color-light:    #fde68a;
       --color-shadow:   #c4b5fd;
@@ -24,6 +24,11 @@
       --color-progress: #38bdf8;
       --color-ai:      #a78bfa;
       --color-lost:    #f87171;
+      /* The actual coin-currency resource — deliberately NOT the same var Wood used to
+         squat on (renamed above): a metallic, more muted/brownish gold than Wood's own
+         bright amber-yellow, so the two read as different resources at a glance even
+         though both are technically warm/yellow. */
+      --color-gold:    #d4af37;
     }
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     html, body { height: 100%; overflow: hidden; touch-action: pinch-zoom; }
@@ -147,11 +152,12 @@
       font-size: 0.9rem;
     }
     .stat { display: inline-flex; align-items: center; gap: 0.15rem; font-size: 0.85rem; font-weight: 600; white-space: nowrap; }
-    .stat.wood { color: var(--color-gold); }
+    .stat.wood { color: var(--color-wood); }
     .stat.fire { color: var(--color-fire); }
     .stat.light { color: var(--color-light); }
     .stat.shadow { color: var(--color-shadow); }
     .stat.crystal { color: var(--color-crystal); }
+    .stat.gold { color: var(--color-gold); }
     .stat.progress { color: var(--color-progress); }
     .stat.unknown { color: var(--color-border); font-style: italic; font-weight: 500; }
     .stat .rate { font-size: 0.7rem; font-weight: 500; opacity: 0.75; }
@@ -341,6 +347,22 @@
     </div>
   </header>
   <div id="concept-rows">
+    <!-- Gold: a faction-less wildcard currency (Resource.Gold's own doc) — no victory
+         progress, no buildings of its own, so this row is just the two live amounts,
+         centered where a progress-pair would otherwise go, for the same left/right
+         symmetry every other row has. -->
+    <div class="concept-row">
+      <div class="stat-line">
+        <span class="concept-name" data-i18n="gold" title="Gold">🪙</span>
+        <div class="concept-side player-side">
+          <span class="stat gold" data-i18n="gold" title="Gold">🪙<span id="player-gold">0</span><span class="rate" id="player-gold-rate"></span></span>
+        </div>
+        <div class="progress-pair"></div>
+        <div class="concept-side ai-side">
+          <span class="stat gold" data-i18n="gold" title="Gold">🪙<span id="ai-gold">0</span><span class="rate" id="ai-gold-rate"></span></span>
+        </div>
+      </div>
+    </div>
     <div class="concept-row">
       <div class="stat-line">
         <span class="concept-name" data-i18n="nature" title="Nature">🌳</span>

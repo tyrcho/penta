@@ -31,7 +31,12 @@ final case class UnitKindInfo(faction: Faction, name: I18nText, fileName: I18nTe
 
 // asset: None for Shadow — Resources/Mort/Ombre.md has always shipped without an image,
 // and there's no ombre-reference.png in game/assets/ to give it one.
-final case class ResourceKindInfo(faction: Faction, name: I18nText, fileName: I18nText, asset: Option[String])
+// faction: None only for Gold — a faction-less wildcard currency (Resource.Gold's own
+// doc), which doesn't fit any of the vault's 5 per-faction pages and so gets no dedicated
+// wiki page at all (DocGenerator.generate skips any resource with no faction). resourcePath/
+// resourceLink below are therefore never called with Gold — both still assume `.faction`
+// resolves to a real Faction, which only holds for the other 5.
+final case class ResourceKindInfo(faction: Option[Faction], name: I18nText, fileName: I18nText, asset: Option[String])
 
 // Display names, vault doc paths, and representative images for every Faction/Resource/
 // BuildingKind/UnitKind, in both languages — the single naming source shared by
@@ -214,30 +219,32 @@ object EntityNames:
 
   val resourceInfo: Map[Resource, ResourceKindInfo] = Map(
     Resource.Wood -> ResourceKindInfo(
-      Faction.Nature,
+      Some(Faction.Nature),
       I18nText("Bois", "Wood"),
       I18nText("Bois.md", "Wood.md"),
       Some("bois-reference.png")
     ),
     Resource.Fire -> ResourceKindInfo(
-      Faction.Chaos,
+      Some(Faction.Chaos),
       I18nText("Feu", "Fire"),
       I18nText("Feu.md", "Fire.md"),
       Some("feu-reference.png")
     ),
     Resource.Light -> ResourceKindInfo(
-      Faction.Loi,
+      Some(Faction.Loi),
       I18nText("Lumière", "Light"),
       I18nText("Lumière.md", "Light.md"),
       Some("lumiere-reference.png")
     ),
-    Resource.Shadow -> ResourceKindInfo(Faction.Mort, I18nText("Ombre", "Shadow"), I18nText("Ombre.md", "Shadow.md"), None),
+    Resource.Shadow -> ResourceKindInfo(Some(Faction.Mort), I18nText("Ombre", "Shadow"), I18nText("Ombre.md", "Shadow.md"), None),
     Resource.Crystal -> ResourceKindInfo(
-      Faction.Science,
+      Some(Faction.Science),
       I18nText("Crystal", "Crystal"),
       I18nText("Crystal.md", "Crystal.md"),
       Some("crystal-reference.png")
-    )
+    ),
+    // No faction, no wiki page — see ResourceKindInfo's own doc.
+    Resource.Gold -> ResourceKindInfo(None, I18nText("Or", "Gold"), I18nText("Or.md", "Gold.md"), None)
   )
 
   def factionName(f: Faction, lang: Lang): String = factionInfo(f).name(lang)
@@ -277,9 +284,12 @@ object EntityNames:
     val info = unitInfo(k)
     s"${factionFolder(info.faction, lang)}/${info.fileName(lang)}"
 
+  // .get: only ever called for a resource that actually has a wiki page — DocGenerator's
+  // per-resource loop filters out any faction = None (Gold) before reaching this (see
+  // ResourceKindInfo's own doc), so this never actually sees a None in practice.
   def resourcePath(r: Resource, lang: Lang): String =
     val info = resourceInfo(r)
-    s"${factionFolder(info.faction, lang)}/${info.fileName(lang)}"
+    s"${factionFolder(info.faction.get, lang)}/${info.fileName(lang)}"
 
   // ── Cross-links between generated pages ─────────────────────────────────
   // Every generated page lives in its own faction subfolder (Resources/<Faction>/ or
@@ -304,9 +314,11 @@ object EntityNames:
     val info = unitInfo(k)
     mdLink(info.name(lang), relativeTo(from, info.faction, info.fileName(lang), lang))
 
+  // .get: same precondition as resourcePath's own doc — never called with Gold, since no
+  // building/unit page links to it (out of scope for this pass, see ResourceKindInfo).
   def resourceLink(from: Faction, r: Resource, lang: Lang): String =
     val info = resourceInfo(r)
-    mdLink(info.name(lang), relativeTo(from, info.faction, info.fileName(lang), lang))
+    mdLink(info.name(lang), relativeTo(from, info.faction.get, info.fileName(lang), lang))
 
   // A link from an EN page to an FR-only page (Corruption.md, the faction overview pages)
   // that this generator doesn't produce an English version of (out of scope — see

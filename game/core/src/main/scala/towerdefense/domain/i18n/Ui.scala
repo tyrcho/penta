@@ -42,6 +42,7 @@ object Ui:
   def light(lang: Lang): String = EntityNames.resourceName(towerdefense.domain.Resource.Light, lang)
   def shadow(lang: Lang): String = EntityNames.resourceName(towerdefense.domain.Resource.Shadow, lang)
   def crystal(lang: Lang): String = EntityNames.resourceName(towerdefense.domain.Resource.Crystal, lang)
+  def gold(lang: Lang): String = EntityNames.resourceName(towerdefense.domain.Resource.Gold, lang)
 
   def natureTitle(lang: Lang): String = lang match
     case Lang.Fr => "Nature"

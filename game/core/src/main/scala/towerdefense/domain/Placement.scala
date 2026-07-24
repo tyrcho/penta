@@ -148,8 +148,19 @@ object Placement:
       researchLevels = state.researchLevels.updated(labKind, currentLevel + 1)
     )
 
+  // Resource.Gold is a universal joker: it covers whatever's still missing after spending
+  // as much of the SPECIFIC resource on hand as a cost calls for, 1-for-1, on top of (not
+  // instead of) the real resources actually held. Summing every resource's own shortfall
+  // and comparing that single total against the Gold stockpile (rather than checking each
+  // resource against Gold independently) means Gold is shared across the whole cost, not
+  // re-spent per resource — e.g. a cost of 5 Wood + 5 Fire with 0 of either and 10 Gold is
+  // affordable, but wouldn't be if each resource had to independently claim its own 10.
+  // No BuildingSpec/ResearchSpec cost is ever supposed to list Gold itself as a cost (it's
+  // a payment method, not a price ingredient) — this still behaves sanely even if one did
+  // (Gold's own "shortfall" would just draw further Gold), but nothing enforces that today.
   def canAfford(resources: Map[Resource, Double], cost: Map[Resource, Double]): Boolean =
-    cost.forall { case (res, amount) => resources.getOrElse(res, 0.0) >= amount }
+    val shortfall = cost.map { case (res, amount) => math.max(0.0, amount - resources.getOrElse(res, 0.0)) }.sum
+    shortfall <= resources.getOrElse(Resource.Gold, 0.0)
 
   // Bounds/spawn-goal/occupied only — the expensive wouldBlockPath BFS is checked
   // separately, last, in tryPlaceBuilding (see its doc).
@@ -232,7 +243,16 @@ object Placement:
       researchLevels = researchLevels
     )
 
+  // Mirrors canAfford's own joker math per resource: spend as much of the named resource
+  // as is on hand first, then draw any remaining shortfall from Gold — never negative on
+  // the named resource itself (canAfford already guaranteed enough combined Wood+Gold, so
+  // Gold's own balance can't go negative here either, assuming the caller checked first).
   private def debit(resources: Map[Resource, Double], cost: Map[Resource, Double]): Map[Resource, Double] =
     cost.foldLeft(resources) { case (acc, (res, amount)) =>
-      acc.updated(res, acc.getOrElse(res, 0.0) - amount)
+      val have = acc.getOrElse(res, 0.0)
+      val direct = math.min(have, amount)
+      val shortfall = amount - direct
+      val afterDirect = acc.updated(res, have - direct)
+      if shortfall <= 0.0 then afterDirect
+      else afterDirect.updated(Resource.Gold, afterDirect.getOrElse(Resource.Gold, 0.0) - shortfall)
     }

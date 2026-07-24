@@ -990,6 +990,7 @@ private def applyStaticLabels(): Unit =
     "light" -> Ui.light(currentLang),
     "shadow" -> Ui.shadow(currentLang),
     "crystal" -> Ui.crystal(currentLang),
+    "gold" -> Ui.gold(currentLang),
     "forests" -> Ui.forestsLabel(currentLang),
     "plundered" -> Ui.plunderedLabel(currentLang),
     "corrupted" -> Ui.corruptedLabel(currentLang),
@@ -2065,6 +2066,9 @@ private def updateMazePanel(prefix: String, maze: MazeState, opponent: MazeState
     maze.resources.getOrElse(Resource.Shadow, 0.0).toInt.toString
   document.getElementById(s"$prefix-crystal").textContent =
     maze.resources.getOrElse(Resource.Crystal, 0.0).toInt.toString
+  // No faction row of its own (Resource.Gold's own doc) — shown in its own standalone
+  // panel instead (index.html's #gold-row), same live amount as every other resource.
+  document.getElementById(s"$prefix-gold").textContent = maze.resources.getOrElse(Resource.Gold, 0.0).toInt.toString
   // Same CombatEngine function that actually applies production each tick — see its
   // doc for why (a hand-rolled `count * rate` here could silently drift out of sync).
   // Blank (not "+0/s") at a zero rate — one more word of clutter this row doesn't need
@@ -2079,6 +2083,12 @@ private def updateMazePanel(prefix: String, maze: MazeState, opponent: MazeState
     rateText(CombatEngine.productionPerSec(maze, Resource.Shadow))
   document.getElementById(s"$prefix-crystal-rate").textContent =
     rateText(CombatEngine.productionPerSec(maze, Resource.Crystal))
+  // Gold has no passive producer at all (only combat side-effects credit it — Chaos
+  // plunder, Loi kills, Mort's corruption bonus), so this is always blank in practice;
+  // kept for structural symmetry with every other resource's row, and in case a future
+  // building ever does produce it directly.
+  document.getElementById(s"$prefix-gold-rate").textContent =
+    rateText(CombatEngine.productionPerSec(maze, Resource.Gold))
   // Same number VictoryConditions.evaluate itself compares against (real Forest/Jungle
   // buildings plus any of this maze's own Trees currently raiding `opponent` — see its doc).
   val forestCount = VictoryConditions.forestCount(maze, opponent)

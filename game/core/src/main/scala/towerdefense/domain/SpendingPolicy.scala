@@ -25,6 +25,18 @@ object SpendingPolicy:
   // fraction of the current stock this spend consumes) grows toward 1.0 as the spend
   // approaches the entire stock, and is 0 when the spend is negligible relative to what's
   // on hand.
+  // A large-but-finite floor for "this resource's stock is exactly 0 and the cost isn't" —
+  // every maze's own starting stock now IS exactly 0 for every named resource (Balance.
+  // StartingResources), so this used to be a rare late-game edge case and is now the
+  // literal opening position. The true (available - amount) / available limit as
+  // available -> 0 is -Infinity, but an actual Infinity here is just as poisonous as the
+  // 0.0/0.0 = NaN case right below guards against: ComposedStrategy multiplies this by
+  // spendingWeight (its own doc), and a weight-grid search (Simulator.searchWeights/
+  // tournamentStandings) tries spendingWeight = 0.0 too, where 0.0 * -Infinity = NaN,
+  // silently emptying the "tied" candidate set (NaN == NaN is false) and crashing
+  // random.nextInt(0). Comfortably below any real (finite) margin this formula produces.
+  private val UnaffordableMarginFloor: Double = -1_000_000.0
+
   private def marginFor(state: MazeState, res: Resource, amount: Double): Double =
     // A zero-cost entry (e.g. Balance.CaveCostWood = 0.0) never penalizes the margin,
     // regardless of how depleted that resource's stock is — this also sidesteps a
@@ -32,9 +44,11 @@ object SpendingPolicy:
     if amount == 0.0 then 1.0
     else
       val available = state.resources.getOrElse(res, 0.0)
-      val plainMargin = (available - amount) / available
-      val rate = CombatEngine.productionPerSec(state, res)
-      if rate > 0.0 then plainMargin else plainMargin - amount / available
+      if available <= 0.0 then UnaffordableMarginFloor
+      else
+        val plainMargin = (available - amount) / available
+        val rate = CombatEngine.productionPerSec(state, res)
+        if rate > 0.0 then plainMargin else plainMargin - amount / available
 
   // rawMargin's penalty alone isn't enough to avoid a lockout: it discourages *spending*
   // a no-production resource, but a kind that costs that same resource without producing

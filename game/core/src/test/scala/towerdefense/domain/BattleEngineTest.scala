@@ -160,7 +160,7 @@ class BattleEngineTest extends munit.FunSuite:
     assertEquals(buildingCount(thirdTick.ai), 2)
   }
 
-  test("a goblin pillaging the player credits the stolen resources and tally to the AI") {
+  test("a goblin pillaging the player drains the player's real resources but credits the AI in Gold") {
     val goalPos = GridConfig.cellCenter(GridConfig.goalCell._1, GridConfig.goalCell._2)
     val incomingGoblin =
       Creature(1, goalPos, Balance.GoblinMaxHp, Balance.GoblinMaxHp, speedPerMs = 0.0, UnitKind.Goblin)
@@ -169,14 +169,19 @@ class BattleEngineTest extends munit.FunSuite:
       ai = withResources() // isolates the plunder-credit effect from production
     )
     val result = BattleEngine.tick(battle, deltaMs = 1.0)
+    // The victim's own loss is unaffected by the Gold change — still drained of the real
+    // resource a Goblin actually plunders (Chaos.md), same as before.
     assertEquals(result.player.resources(Resource.Wood), 5.0 - Balance.PlunderPerUnit)
     assertEquals(result.player.resources(Resource.Fire), 5.0 - Balance.PlunderPerUnit)
-    assertEquals(result.ai.resources(Resource.Wood), Balance.PlunderPerUnit)
-    assertEquals(result.ai.resources(Resource.Fire), Balance.PlunderPerUnit)
+    // The attacker's payout is Gold instead of Wood/Fire ("chaos units get gold instead of
+    // resources") — the tally (resourcesPlundered) is still the same currency-agnostic sum.
+    assertEquals(result.ai.resources(Resource.Wood), 0.0)
+    assertEquals(result.ai.resources(Resource.Fire), 0.0)
+    assertEquals(result.ai.resources(Resource.Gold), 2 * Balance.PlunderPerUnit)
     assertEquals(result.ai.resourcesPlundered, 2 * Balance.PlunderPerUnit)
   }
 
-  test("a minotaur pillaging the player credits the stolen resources and tally to the AI") {
+  test("a minotaur pillaging the player drains the player's real resources but credits the AI in Gold") {
     val goalPos = GridConfig.cellCenter(GridConfig.goalCell._1, GridConfig.goalCell._2)
     val incomingMinotaur = Creature(
       1,
@@ -193,12 +198,13 @@ class BattleEngineTest extends munit.FunSuite:
     val result = BattleEngine.tick(battle, deltaMs = 1.0)
     assertEquals(result.player.resources(Resource.Wood), 50.0 - Balance.MinotaurPlunderPerUnit)
     assertEquals(result.player.resources(Resource.Fire), 50.0 - Balance.MinotaurPlunderPerUnit)
-    assertEquals(result.ai.resources(Resource.Wood), Balance.MinotaurPlunderPerUnit)
-    assertEquals(result.ai.resources(Resource.Fire), Balance.MinotaurPlunderPerUnit)
+    assertEquals(result.ai.resources(Resource.Wood), 0.0)
+    assertEquals(result.ai.resources(Resource.Fire), 0.0)
+    assertEquals(result.ai.resources(Resource.Gold), 2 * Balance.MinotaurPlunderPerUnit)
     assertEquals(result.ai.resourcesPlundered, 2 * Balance.MinotaurPlunderPerUnit)
   }
 
-  test("a zombie corrupting a building to destruction credits the full cost and tally to the AI") {
+  test("a zombie corrupting a building to destruction credits the full cost and tally to the AI, plus a Gold bonus") {
     val almostCorrupted = Building(
       1,
       col = 5,
@@ -217,6 +223,7 @@ class BattleEngineTest extends munit.FunSuite:
     assertEquals(result.player.buildings, Nil)
     assertEquals(result.player.buildingsCorrupted, 0.0) // this side lost the building, didn't corrupt one
     assertEquals(result.ai.resources(Resource.Wood), Balance.GroveCostWood)
+    assertEquals(result.ai.resources(Resource.Gold), Balance.CorruptionGoldReward)
     assertEquals(result.ai.buildingsCorrupted, 1.0)
   }
 

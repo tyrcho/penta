@@ -1450,6 +1450,64 @@ class CombatEngineTest extends munit.FunSuite:
     assertEquals(stillWithinSameInterval.state.creatures.head.hp, afterFirstHit.state.creatures.head.hp)
   }
 
+  // ── Loi buildings earn Gold for their own kills (project owner's explicit request,
+  // alongside the new Gold resource — not a vault mechanic) ──────────────────
+
+  test("a watchtower kill earns its own maze 1 Gold") {
+    val watchtower = Building(100, col = 5, row = 5, BuildingKind.Watchtower, 0.0)
+    val target = Creature(1, GridConfig.cellCenter(6, 5), hp = 1.0, maxHp = 1.0, speedPerMs = 0.0, UnitKind.Elf)
+    val state = withResources().copy(creatures = List(target), buildings = List(watchtower))
+    val result = CombatEngine.tick(state, deltaMs = 1000.0)
+    assertEquals(result.state.creatures, Nil) // confirms the kill actually happened
+    assertEquals(result.state.resources.getOrElse(Resource.Gold, 0.0), Balance.LoyalesKillGoldReward)
+  }
+
+  test("an Angel kill earns its own maze 1 Gold too, not just Watchtower") {
+    val angel = Building(100, col = 5, row = 5, BuildingKind.Angel, 0.0)
+    val target = Creature(1, GridConfig.cellCenter(6, 5), hp = 1.0, maxHp = 1.0, speedPerMs = 0.0, UnitKind.Elf)
+    val state = withResources().copy(creatures = List(target), buildings = List(angel))
+    val result = CombatEngine.tick(state, deltaMs = 1000.0)
+    assertEquals(result.state.creatures, Nil)
+    assertEquals(result.state.resources.getOrElse(Resource.Gold, 0.0), Balance.LoyalesKillGoldReward)
+  }
+
+  test("a watchtower kill on a Minotaur (a large unit) earns double Gold") {
+    val watchtower = Building(100, col = 5, row = 5, BuildingKind.Watchtower, 0.0)
+    val target =
+      Creature(1, GridConfig.cellCenter(6, 5), hp = 1.0, maxHp = Balance.MinotaurMaxHp, speedPerMs = 0.0, UnitKind.Minotaur)
+    val state = withResources().copy(creatures = List(target), buildings = List(watchtower))
+    val result = CombatEngine.tick(state, deltaMs = 1000.0)
+    assertEquals(result.state.creatures, Nil)
+    assertEquals(result.state.resources.getOrElse(Resource.Gold, 0.0), Balance.LoyalesLargeKillGoldReward)
+  }
+
+  test("a kill from a Nature/Mort aura (Forest/PassingGate) earns no Gold — Loi buildings only") {
+    val forest = Building(100, col = 5, row = 5, BuildingKind.Forest, Balance.ElfSpawnIntervalMs)
+    val target = Creature(1, GridConfig.cellCenter(6, 5), hp = 1.0, maxHp = 1.0, speedPerMs = 0.0, UnitKind.Elf)
+    val state = withResources().copy(creatures = List(target), buildings = List(forest))
+    val result = CombatEngine.tick(state, deltaMs = 1000.0)
+    assertEquals(result.state.creatures, Nil)
+    assertEquals(result.state.resources.getOrElse(Resource.Gold, 0.0), 0.0)
+  }
+
+  test("a creature that survives the tick earns no Gold, even standing next to a Loi building") {
+    val watchtower = Building(100, col = 5, row = 5, BuildingKind.Watchtower, 0.0)
+    val target = Creature(1, GridConfig.cellCenter(6, 5), hp = 1000.0, maxHp = 1000.0, speedPerMs = 0.0, UnitKind.Elf)
+    val state = withResources().copy(creatures = List(target), buildings = List(watchtower))
+    val result = CombatEngine.tick(state, deltaMs = 1000.0)
+    assertEquals(result.state.creatures.size, 1) // still alive
+    assertEquals(result.state.resources.getOrElse(Resource.Gold, 0.0), 0.0)
+  }
+
+  // ── Regression: Gold must never crash CombatEngine.tick (engendreBoost's own doc) ──
+
+  test("ticking a maze that produces only Wood never crashes, and Gold's own production stays exactly 0") {
+    val grove = Building(1, 5, 5, BuildingKind.Grove, Balance.ElfSpawnIntervalMs)
+    val state = withResources().copy(buildings = List(grove))
+    val result = CombatEngine.tick(state, deltaMs = 1000.0) // must not throw
+    assertEquals(CombatEngine.productionPerSec(result.state, Resource.Gold), 0.0)
+  }
+
   // ── Recherches chaotiques: reduces THIS maze's OWN Chaos buildings' unit-spawn time ──
   // (not plunder any more — see Balance.ChaotiquesSpawnTimeReductionByLevel's doc.)
 

@@ -111,6 +111,21 @@ class SpendingPolicyTest extends munit.FunSuite:
     assert(!score.isNaN, s"resourceScore must never be NaN, got $score")
   }
 
+  test("rawMargin is a finite (not infinite) number when a NONZERO-cost resource's stock is exactly zero") {
+    // Every maze now starts with 0 of the 5 named resources (only Gold — see
+    // Balance.StartingResources), so this is no longer a rare edge case but the literal
+    // starting state. Grove costs Wood > 0; with Wood at 0.0, the naive
+    // (available - amount) / available formula divides a negative number by 0.0, giving
+    // -Infinity, not NaN — but that's just as poisonous one level up: ComposedStrategy
+    // multiplies this by spendingWeight (its own doc), and searchWeights/tournamentStandings
+    // both grid-search down to spendingWeight = 0.0, where 0.0 * -Infinity = NaN, silently
+    // emptying the "tied" candidate set the same way the sibling test above describes.
+    val empty = withResources(wood = 0.0, fire = 0.0, light = 0.0)
+    val margin = SpendingPolicy.rawMargin(empty, BuildingKind.Grove)
+    assert(margin.isFinite, s"rawMargin must never be infinite, got $margin")
+    assertEquals(0.0 * margin, 0.0, s"a zero weight must still zero out a finite margin, not produce NaN")
+  }
+
   // ── counterScore ───────────────────────────────────────────────────────
 
   test("counterScore mirrors the opponent's dominant faction") {

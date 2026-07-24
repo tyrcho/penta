@@ -41,7 +41,10 @@ object DocGenerator:
         written += writePage(vaultRoot.resolve(EntityNames.buildingPath(kind, lang)), buildingPage(kind, lang))
       for kind <- UnitKind.values do
         written += writePage(vaultRoot.resolve(EntityNames.unitPath(kind, lang)), unitPage(kind, lang))
-      for res <- Resource.values do
+      // Gold (ResourceKindInfo.faction = None) gets no dedicated wiki page — a faction-less
+      // wildcard currency doesn't fit the vault's per-faction structure any of the other 5
+      // resources live in (see ResourceKindInfo's own doc).
+      for res <- Resource.values if EntityNames.resourceInfo(res).faction.isDefined do
         written += writePage(vaultRoot.resolve(EntityNames.resourcePath(res, lang)), resourcePage(res, lang))
     Console.err.println(s"DocGenerator: wrote $written pages under $repoRoot")
 
@@ -111,9 +114,11 @@ object DocGenerator:
   // produces/costs it already links back here). Shadow has no image at all (see
   // ResourceKindInfo's doc) — Ombre.md has always shipped without one.
 
+  // .get: only ever called for a resource the `generate` loop's own faction.isDefined
+  // filter already let through (i.e. never Gold — see ResourceKindInfo's own doc).
   private def resourcePage(res: Resource, lang: Lang): String =
     val info = EntityNames.resourceInfo(res)
     val fm = frontmatter(
-      List("type" -> resourceTypeValue(lang), "faction" -> yamlQuoted(EntityNames.factionLink(info.faction, lang)))
+      List("type" -> resourceTypeValue(lang), "faction" -> yamlQuoted(EntityNames.factionLink(info.faction.get, lang)))
     )
     info.asset.fold(fm)(image => s"$fm\n![${info.name(lang)}](../../game/assets/$image)\n")

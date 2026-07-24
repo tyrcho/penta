@@ -11,7 +11,8 @@ class PlacementTest extends munit.FunSuite:
       fire: Double = 0.0,
       light: Double = 0.0,
       shadow: Double = 0.0,
-      crystal: Double = 0.0
+      crystal: Double = 0.0,
+      gold: Double = 0.0
   ): MazeState =
     MazeState.initial.copy(
       resources = Map(
@@ -19,7 +20,8 @@ class PlacementTest extends munit.FunSuite:
         Resource.Fire -> fire,
         Resource.Light -> light,
         Resource.Shadow -> shadow,
-        Resource.Crystal -> crystal
+        Resource.Crystal -> crystal,
+        Resource.Gold -> gold
       )
     )
 
@@ -676,4 +678,45 @@ class PlacementTest extends munit.FunSuite:
       totalCost * Balance.ConstructionMsPerCostUnit,
       1e-9
     )
+  }
+
+  // ── Gold: a universal joker, 1-for-1 for whatever's missing ──────────────
+
+  test("Gold alone covers a cost with none of the named resources on hand") {
+    val state = withResources(gold = 100.0)
+    val totalCost = Balance.CaveCostWood + Balance.CaveCostFire
+    assert(Placement.canAfford(state.resources, BuildingSpecs.all(BuildingKind.Cave).cost))
+    val result = Placement.tryPlaceBuilding(state, BuildingKind.Cave, 5, 5).toOption.get
+    assertEqualsDouble(result.resources(Resource.Wood), 0.0, 1e-9) // never had any Wood to spend
+    assertEqualsDouble(result.resources(Resource.Fire), 0.0, 1e-9) // never had any Fire to spend
+    assertEqualsDouble(result.resources(Resource.Gold), 100.0 - totalCost, 1e-9)
+  }
+
+  test("Gold only covers the SHORTFALL, split across resources, when some of the named cost is already on hand") {
+    // Cave costs Wood (0) + Fire (10, per Balance.CaveCostFire) — half the Fire is already
+    // on hand, so only the remaining half should come out of Gold, not the whole price.
+    val half = Balance.CaveCostFire / 2.0
+    val state = withResources(fire = half, gold = 100.0)
+    val result = Placement.tryPlaceBuilding(state, BuildingKind.Cave, 5, 5).toOption.get
+    assertEqualsDouble(result.resources(Resource.Fire), 0.0, 1e-9) // the real Fire on hand was spent first
+    assertEqualsDouble(result.resources(Resource.Gold), 100.0 - half, 1e-9) // only the shortfall came from Gold
+  }
+
+  test("Gold is untouched when the named resources alone already cover the whole cost") {
+    val state = withResources(wood = 1_000.0, fire = 1_000.0, gold = 100.0)
+    val result = Placement.tryPlaceBuilding(state, BuildingKind.Cave, 5, 5).toOption.get
+    assertEqualsDouble(result.resources(Resource.Gold), 100.0, 1e-9)
+  }
+
+  test("without enough Gold to cover the shortfall, the placement is rejected the same as any other shortfall") {
+    val state = withResources(gold = 1.0) // far short of Cave's real total cost
+    assertEquals(Placement.tryPlaceBuilding(state, BuildingKind.Cave, 5, 5), Left(PlacementError.InsufficientResources))
+  }
+
+  test("canAfford pools Gold across every resource a cost touches, not per-resource independently") {
+    // 5 Wood + 5 Fire short, only 10 Gold total — affordable only because the shortfall is
+    // summed across both resources rather than each independently demanding its own 10.
+    val cost = Map(Resource.Wood -> 5.0, Resource.Fire -> 5.0)
+    assert(Placement.canAfford(withResources(gold = 10.0).resources, cost))
+    assert(!Placement.canAfford(withResources(gold = 9.0).resources, cost))
   }

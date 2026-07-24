@@ -2,9 +2,12 @@ package towerdefense.domain
 
 import towerdefense.domain.geometry.Vec2
 
-// All 5 resources across the vault's factions.
+// The 5 resources across the vault's factions, plus Gold — a special, faction-less
+// wildcard currency (see Placement.canAfford/debit): it substitutes 1-for-1 for any
+// shortfall in the other 5 when paying a cost, so it never appears as a listed cost
+// itself in any BuildingSpec/ResearchSpec.
 enum Resource derives CanEqual:
-  case Wood, Fire, Light, Shadow, Crystal
+  case Wood, Fire, Light, Shadow, Crystal, Gold
 
 // Zombie/Vampire/Necromancer/Soul (Mort) have no plunder ability — see CreatureSpecs and
 // CombatEngine's corruption mechanic. Science (Recherches*.md) has no unit at all in the

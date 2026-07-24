@@ -212,6 +212,14 @@ object CombatEngine:
     val fromTowers = towersTicked.foldLeft(Map.empty[Long, Double]) { case (acc, (w, fires)) =>
       if fires then accumulateWatchtowerHit(w, state.creatures, Balance.WatchtowerDamagePerSec, acc) else acc
     }
+    // Angel-only subset of forestsTicked's own aura sources — fromForests above mixes
+    // Nature (Forest/Jungle), Loi (Angel), and Mort (PassingGate) damage together for the
+    // actual damage total, which doesn't say which building contributed to a given kill.
+    // This is purely for the Gold-reward attribution below, not damage math (unaffected).
+    val fromLoiAura = forestsTicked.foldLeft(Map.empty[Long, Double]) { case (acc, (f, fires)) =>
+      if fires && f.kind == BuildingKind.Angel then accumulateAuraHits(f, state.creatures, auraDamagePerSecFor(f.kind), acc)
+      else acc
+    }
     val tickedById = (forestsTicked ++ towersTicked).map { case (b, _) => b.id -> b }.toMap
     val buildingsAfterCooldowns = state.buildings.map(b => tickedById.getOrElse(b.id, b))
 
@@ -234,8 +242,31 @@ object CombatEngine:
     }
     val dead = damaged.filter(_.hp <= 0)
     val deaths = dead.map(c => Death(c.id, c.kind, deathCause(c.id, fromForests, fromTowers)))
-    val withoutDead = state.copy(buildings = buildingsAfterCooldowns, creatures = damaged.filter(_.hp > 0))
+    // Recherches loyales.md has nothing to say about this (added at the project owner's
+    // explicit request alongside the new Gold resource): a kill any of THIS maze's own Loi
+    // buildings (Watchtower and/or Angel) contributed damage to this tick earns `state`
+    // itself Gold — same "any contribution counts" attribution DeathCause.AuraAndWatchtower
+    // already uses for reporting, not "whichever hit was the literal final one." Purely
+    // local to `state`: these are its own buildings rewarding it for its own kills, no
+    // BattleEngine-level crediting needed (contrast Chaos/Mort's gold, which cross to the
+    // *attacker* — see BattleEngine.creditPlunder/creditCorruption).
+    val goldFromKills = dead
+      .filter(c => fromTowers.contains(c.id) || fromLoiAura.contains(c.id))
+      .map(c => if isLargeKill(c.kind) then Balance.LoyalesLargeKillGoldReward else Balance.LoyalesKillGoldReward)
+      .sum
+    val withoutDead = state.copy(
+      buildings = buildingsAfterCooldowns,
+      creatures = damaged.filter(_.hp > 0),
+      resources =
+        if goldFromKills <= 0.0 then state.resources
+        else state.resources.updated(Resource.Gold, state.resources.getOrElse(Resource.Gold, 0.0) + goldFromKills)
+    )
     (applyPassingGateHarvest(withoutDead, dead, deltaMs), deaths)
+
+  // Minotaur is the only "large" unit today (Vampire/Tree are bigger in some other sense —
+  // HP, size — but the vault never calls them out as a size class the way Minotaur.md
+  // itself does); easy to extend if a future unit earns the same label.
+  private def isLargeKill(kind: UnitKind): Boolean = kind == UnitKind.Minotaur
 
   // Decrements a damage-dealing building's cooldown by deltaMs and reports whether it
   // fires its one discrete full-rate hit this tick (Balance.DamageTickIntervalMs's doc).
@@ -260,15 +291,19 @@ object CombatEngine:
   // this tick — regardless of what actually killed it (its own aura, a Watchtower, even a
   // Forest/Angel aura elsewhere reaching the same cell) — earns the owning maze a Shadow
   // reward equal to PassingGateDeathShadowFraction of `state`'s OWN current total resource
-  // stockpile (summed across all 5 Resource kinds, snapshotted once before any reward is
-  // added, so multiple qualifying deaths this tick don't compound off each other's reward).
+  // stockpile (summed across the vault's original 5 Resource kinds — deliberately NOT
+  // Gold, whose stock now swings on unrelated mechanics of its own — plunder, Loi kills,
+  // Mort's own corruption bonus — that Portail.md was never balanced against; folding it
+  // in here would inflate this reward by whatever those happen to add up to. Snapshotted
+  // once before any reward is added, so multiple qualifying deaths this tick don't
+  // compound off each other's reward).
   // Two gates both adjacent to the same death each independently harvest it, and each also
   // sets its own flashMs (Building.flashMs's doc) to the UI's kill-flash duration; a gate
   // with no qualifying death nearby this tick just counts flashMs down toward 0 instead,
   // same shape as spawnCountdownMs/frozenMs elsewhere in the domain.
   private def applyPassingGateHarvest(state: MazeState, dead: List[Creature], deltaMs: Double): MazeState =
     val deadCells = dead.map(c => GridConfig.cellOf(c.pos))
-    val totalResourcesSnapshot = state.resources.values.sum
+    val totalResourcesSnapshot = state.resources.collect { case (res, amount) if res != Resource.Gold => amount }.sum
     val (buildings, shadowReward) =
       state.buildings.foldLeft((List.empty[Building], 0.0)) { case ((acc, reward), b) =>
         // Still under construction: no harvest ability yet (Building.constructionRemainingMs's
@@ -541,7 +576,9 @@ object CombatEngine:
   // producer-buildings boost `resource`'s own production rate (see Balance.
   // EngendreBoostPerBuilding's doc): Wood's boost comes from Light producers, Fire's from
   // Wood producers, Shadow's from Fire producers, Crystal's from Shadow producers, Light's
-  // from Crystal producers — the same 5-cycle Engendre.md itself describes.
+  // from Crystal producers — the same 5-cycle Engendre.md itself describes. Deliberately
+  // has no Gold entry — Gold isn't part of this cycle at all (see engendreBoost's own
+  // None-handling), only the vault's original 5 resources are.
   private val engendreSource: Map[Resource, Resource] = Map(
     Resource.Fire -> Resource.Wood,
     Resource.Shadow -> Resource.Fire,
@@ -554,11 +591,17 @@ object CombatEngine:
   // hover tooltip, which shows *this building's* effective rate, not the maze-wide total
   // productionPerSec already reports — computes the exact same multiplier, instead of
   // re-deriving "which resource sources this one" and risking it drift.
+  // `.get` (not `.apply`) on engendreSource: produceResources calls this for every
+  // Resource.values entry including Gold, which has no entry there at all (see its doc) —
+  // an unconditional `Map.apply` would throw NoSuchElementException the instant a maze's
+  // resources are ticked, every single tick, since Gold was added to the enum.
   def engendreBoost(state: MazeState, resource: Resource): Double =
-    val source = engendreSource(resource)
-    val sourceBuildingCount =
-      state.buildings.count(b => BuildingSpecs.all(b.kind).produces.getOrElse(source, 0.0) > 0.0)
-    Balance.EngendreBoostPerBuilding * sourceBuildingCount
+    engendreSource.get(resource) match
+      case None => 0.0
+      case Some(source) =>
+        val sourceBuildingCount =
+          state.buildings.count(b => BuildingSpecs.all(b.kind).produces.getOrElse(source, 0.0) > 0.0)
+        Balance.EngendreBoostPerBuilding * sourceBuildingCount
 
   // Balance.ConstructionMsPerCostUnit's doc — counts every building's construction timer
   // down toward 0.0, floored there rather than going negative. Runs first in `tick`, ahead
