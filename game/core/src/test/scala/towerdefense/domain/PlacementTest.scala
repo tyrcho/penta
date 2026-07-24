@@ -220,6 +220,13 @@ class PlacementTest extends munit.FunSuite:
     assertEqualsDouble(cave.constructionRemainingMs, totalCost * Balance.ConstructionMsPerCostUnit, 1e-9)
   }
 
+  test("a freshly placed building also records its total construction time, for the UI's progress wipe") {
+    val (col, row) = emptyCell
+    val result = Placement.tryPlaceBuilding(richState, BuildingKind.Cave, col, row).toOption.get
+    val cave = result.buildings.head
+    assertEqualsDouble(cave.constructionTotalMs, cave.constructionRemainingMs, 1e-9)
+  }
+
   test("a freshly placed building's first spawn lands at half the usual interval, not a full one") {
     val (col, row) = emptyCell
     val result = Placement.tryPlaceBuilding(richState, BuildingKind.Grove, col, row).toOption.get
@@ -231,6 +238,16 @@ class PlacementTest extends munit.FunSuite:
     val result = Placement.tryUpgradeBuilding(withGrove, 5, 5).toOption.get
     assertEqualsDouble(
       result.buildings.head.constructionRemainingMs,
+      Balance.ForestUpgradeCostWood * Balance.ConstructionMsPerCostUnit,
+      1e-9
+    )
+  }
+
+  test("upgrading a building also refreshes its recorded total construction time") {
+    val withGrove = Placement.tryPlaceBuilding(richState, BuildingKind.Grove, 5, 5).toOption.get
+    val result = Placement.tryUpgradeBuilding(withGrove, 5, 5).toOption.get
+    assertEqualsDouble(
+      result.buildings.head.constructionTotalMs,
       Balance.ForestUpgradeCostWood * Balance.ConstructionMsPerCostUnit,
       1e-9
     )

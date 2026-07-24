@@ -356,6 +356,21 @@ class CombatEngineTest extends munit.FunSuite:
     assertEquals(afterFull.state.buildings.head.constructionRemainingMs, 0.0)
   }
 
+  test("constructionTotalMs is untouched by ticking — only constructionRemainingMs counts down") {
+    val cave = Building(
+      100,
+      col = 5,
+      row = 5,
+      kind = BuildingKind.Cave,
+      spawnCountdownMs = Balance.GoblinSpawnIntervalMs,
+      constructionRemainingMs = 1_500.0,
+      constructionTotalMs = 1_500.0
+    )
+    val state = withResources().copy(buildings = List(cave))
+    val afterPartial = CombatEngine.tick(state, deltaMs = 1000.0)
+    assertEqualsDouble(afterPartial.state.buildings.head.constructionTotalMs, 1_500.0, 1e-9)
+  }
+
   test("a building resumes producing once its construction timer has fully counted down") {
     val grove = Building(1, 5, 5, BuildingKind.Grove, Balance.ElfSpawnIntervalMs, constructionRemainingMs = 0.0)
     val state = withResources().copy(buildings = List(grove))

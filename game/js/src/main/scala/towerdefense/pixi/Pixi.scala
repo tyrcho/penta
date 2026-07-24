@@ -45,6 +45,11 @@ trait ScaleObj extends js.Object:
 class Graphics extends Container:
   def rect(x: Double, y: Double, w: Double, h: Double): Graphics = js.native
   def circle(x: Double, y: Double, radius: Double): Graphics = js.native
+  // Canvas2D-style path methods, for a partial ring/arc (e.g. a construction-progress
+  // wipe) that `circle`/`rect` alone can't express. `arc`'s angles are radians, 0 along
+  // the positive x-axis, increasing clockwise (Pixi's y axis points down).
+  def moveTo(x: Double, y: Double): Graphics = js.native
+  def arc(x: Double, y: Double, radius: Double, startAngle: Double, endAngle: Double): Graphics = js.native
   def fill(color: Int): Graphics = js.native
   def stroke(options: js.Object): Graphics = js.native
   def clear(): Graphics = js.native

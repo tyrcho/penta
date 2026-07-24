@@ -119,7 +119,8 @@ private object Persistence:
       corruptionPercent = b.corruptionPercent,
       flashMs = b.flashMs,
       damageCooldownMs = b.damageCooldownMs,
-      constructionRemainingMs = b.constructionRemainingMs
+      constructionRemainingMs = b.constructionRemainingMs,
+      constructionTotalMs = b.constructionTotalMs
     )
 
   private def encodeOutcome(m: MatchResult): js.Dynamic = m match
@@ -290,7 +291,12 @@ private object Persistence:
       // 0.0 (already built), same fallback shape as flashMs above: a building saved before
       // this mechanic existed was always instantly functional, so it stays that way on load.
       constructionRemainingMs =
-        if js.isUndefined(d.constructionRemainingMs) then 0.0 else asDouble(d.constructionRemainingMs)
+        if js.isUndefined(d.constructionRemainingMs) then 0.0 else asDouble(d.constructionRemainingMs),
+      // Same fallback as constructionRemainingMs above — a pre-existing save has no total
+      // to report either, so the UI's progress wipe just has nothing to draw for it (see
+      // Building.constructionTotalMs's doc on treating <= 0.0 as "no progress to draw").
+      constructionTotalMs =
+        if js.isUndefined(d.constructionTotalMs) then 0.0 else asDouble(d.constructionTotalMs)
     )
 
   private def decodeOutcome(d: js.Dynamic): Option[MatchResult] =

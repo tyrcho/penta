@@ -181,7 +181,8 @@ object Placement:
       // partially compensates for the wait the new construction delay below adds before
       // the building can do anything at all.
       spawnCountdownMs = spec.spawns.map(_._2 / 2.0).getOrElse(0.0),
-      constructionRemainingMs = constructionMs(cost)
+      constructionRemainingMs = constructionMs(cost),
+      constructionTotalMs = constructionMs(cost)
     )
     state.copy(
       buildings = building :: state.buildings,
@@ -212,7 +213,8 @@ object Placement:
     val upgraded = building.copy(
       kind = nextKind,
       spawnCountdownMs = spawnCountdownMs,
-      constructionRemainingMs = constructionMs(cost)
+      constructionRemainingMs = constructionMs(cost),
+      constructionTotalMs = constructionMs(cost)
     )
     val researchLevels =
       if ResearchSpecs.all.contains(nextKind) then

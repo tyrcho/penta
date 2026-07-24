@@ -120,6 +120,10 @@ private class MazeSprites:
   // notices a Grove just became a Forest and needs to re-skin the existing sprite,
   // instead of only ever skinning it once at creation (see syncBuildings).
   val buildingKinds = mutable.Map.empty[Long, BuildingKind]
+  // One ring-wipe Graphics per building currently under construction (see
+  // updateConstructionFx) — absent for any building that's already finished (or was never
+  // placed through Placement, so it has no constructionTotalMs to measure progress against).
+  val buildingConstructionFx = mutable.Map.empty[Long, Graphics]
 
 private object AssetPaths:
   // One distinct icon per Nature tier — see Bosquet.md/Foret.md/Jungle.md (Grove/Forest
@@ -203,6 +207,17 @@ private val PassingGateFlashTint = 0xd9a3ff
 // (no production/spawn/damage), so its sprite is faded to visibly distinguish it from an
 // already-functioning one, restored to full opacity the instant construction finishes.
 private val UnderConstructionAlpha = 0.5
+
+// A thin ring around a still-building sprite (see updateConstructionFx), stroked clockwise
+// from noon as Building.constructionRemainingMs/constructionTotalMs completes — the alpha
+// fade above says "not ready yet" but gives no sense of *how much longer*; this does.
+private val ConstructionFxColor = 0xffffff
+private val ConstructionFxAlpha = 0.9
+private val ConstructionFxStrokeWidth = 3.0
+// Just outside the building's own icon so the ring reads as a halo around it, not a slice
+// through it — `size` here is syncBuildings' effectiveSize, so a bigger (upgraded/grown)
+// building gets a proportionally bigger ring, no separate per-kind tuning needed.
+private val ConstructionFxRadiusScale = 0.62
 
 // Per-BuildingKind rendering data — the JS-side mirror of BuildingSpecs, driving the one
 // generic syncBuildings instead of what used to be 5 near-identical sync functions.
@@ -992,12 +1007,14 @@ private def fullscreenElement(): Option[dom.Element] =
   if js.isUndefined(el) || el == null then None else Some(el.asInstanceOf[dom.Element])
 
 private def clearSprites(world: Container, sprites: MazeSprites): Unit =
-  (sprites.creatures.values ++ sprites.buildings.values).foreach(world.removeChild)
+  (sprites.creatures.values ++ sprites.buildings.values ++ sprites.buildingConstructionFx.values)
+    .foreach(world.removeChild)
   sprites.creatures.clear()
   sprites.directionalFacing.clear()
   sprites.buildings.clear()
   sprites.buildingTimers.clear()
   sprites.buildingKinds.clear()
+  sprites.buildingConstructionFx.clear()
 
 // The player's maze occupies local x/y in [0, GridConfig.width)/[0, GridConfig.height) —
 // see currentLayout/computeViewTransform. None outside that (including clicks on the
@@ -1347,6 +1364,10 @@ private def syncBuildings(
   removeStaleWithEffect(world, sprites.buildings, liveIds, flames)
   sprites.buildingTimers.filterInPlace((id, _) => liveIds.contains(id))
   sprites.buildingKinds.filterInPlace((id, _) => liveIds.contains(id))
+  sprites.buildingConstructionFx.keySet.diff(liveIds).foreach { id =>
+    world.removeChild(sprites.buildingConstructionFx(id))
+    sprites.buildingConstructionFx.remove(id)
+  }
   maze.buildings.foreach { b =>
     val visual = BuildingVisuals.all(b.kind)
     val g = sprites.buildings.getOrElseUpdate(
@@ -1377,6 +1398,7 @@ private def syncBuildings(
     g.height = effectiveSize
     setPos(g, GridConfig.cellCenter(b.col, b.row))
     g.alpha = if b.constructionRemainingMs > 0.0 then UnderConstructionAlpha else 1.0
+    updateConstructionFx(world, sprites, b, effectiveSize)
     // Only a PassingGate ever has a nonzero flashMs (Building.flashMs's doc) — tint it while
     // a nearby death is still being "harvested", and fall back to its normal (untinted)
     // look the rest of the time, instead of a continuous idle glow.
@@ -1428,6 +1450,29 @@ private def wireHover(
 // True the tick a building's spawn countdown wraps around (i.e. it just launched a unit).
 // Pure query (CQS) — the caller is responsible for recording the new value (see call sites).
 private def hasWrapped(previous: Double, current: Double): Boolean = current > previous
+
+// Draws (or clears) the clockwise construction-progress ring for a single building —
+// see the sprites.buildingConstructionFx doc for the map this reads/writes. `iconSize` is
+// syncBuildings' own effectiveSize, already grown for research level where relevant.
+private def updateConstructionFx(world: Container, sprites: MazeSprites, b: Building, iconSize: Double): Unit =
+  if b.constructionRemainingMs <= 0.0 || b.constructionTotalMs <= 0.0 then
+    sprites.buildingConstructionFx.remove(b.id).foreach(world.removeChild)
+  else
+    val progress = (1.0 - b.constructionRemainingMs / b.constructionTotalMs).max(0.0).min(1.0)
+    val g = sprites.buildingConstructionFx.getOrElseUpdate(b.id, addTo(world, new Graphics()))
+    g.clear()
+    if progress > 0.0 then
+      val center = GridConfig.cellCenter(b.col, b.row)
+      val radius = iconSize * ConstructionFxRadiusScale
+      // Noon (-90°), sweeping clockwise (increasing angle, since Pixi's y axis points down).
+      val startAngle = -math.Pi / 2
+      val endAngle = startAngle + 2 * math.Pi * progress
+      g.arc(center.x, center.y, radius, startAngle, endAngle)
+        .stroke(
+          js.Dynamic
+            .literal(width = ConstructionFxStrokeWidth, color = ConstructionFxColor, alpha = ConstructionFxAlpha)
+            .asInstanceOf[js.Object]
+        )
 
 private def removeStaleWithEffect[T <: Container](
     world: Container,

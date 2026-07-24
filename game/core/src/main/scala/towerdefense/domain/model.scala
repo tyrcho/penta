@@ -103,6 +103,13 @@ case class Creature(
 // through Placement, same "inert field, cheap to carry" default as spawnCountdownMs
 // elsewhere in this file. Placement halves spawnCountdownMs's usual first-interval wait
 // (see its own doc) to partially compensate for this added delay.
+// constructionTotalMs: the construction time this building's current timer started at
+// (set once, alongside constructionRemainingMs, by Placement's placeBuilding/upgradeBuilding
+// — never itself decremented). Only read by the UI (GameApp's radial construction-progress
+// wipe) to turn the remaining/total pair into a 0..1 fraction; the domain layer only ever
+// needs the remaining half. Defaults to 0.0, same as constructionRemainingMs, for any
+// direct (non-Placement) Building construction — the UI treats total <= 0.0 as "no
+// progress to draw" rather than dividing by zero.
 case class Building(
     id: Long,
     col: Int,
@@ -112,7 +119,8 @@ case class Building(
     corruptionPercent: Double = 0.0,
     flashMs: Double = 0.0,
     damageCooldownMs: Double = Balance.DamageTickIntervalMs,
-    constructionRemainingMs: Double = 0.0
+    constructionRemainingMs: Double = 0.0,
+    constructionTotalMs: Double = 0.0
 )
 
 // One player's maze: grid, economy and units currently walking it. A battle is two of these.
