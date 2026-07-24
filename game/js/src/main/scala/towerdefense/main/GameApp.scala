@@ -68,6 +68,42 @@ private object LangPersistence:
     try dom.window.localStorage.setItem(StorageKey, lang.code)
     catch case _: Throwable => ()
 
+// Saves/restores the two user-draggable splits (controls-panel height, maze aiScale
+// override) across page refreshes — same tiny standalone localStorage-key shape as
+// LangPersistence, since these are UI layout preferences, not part of the saved battle.
+private object ResizePersistence:
+  private val ControlsHeightKey = "towerdefense-controls-height"
+  private val AiScaleKey = "towerdefense-ai-scale"
+
+  def loadControlsHeight(): Option[Double] =
+    try Option(dom.window.localStorage.getItem(ControlsHeightKey)).map(_.toDouble)
+    catch case _: Throwable => None
+
+  def saveControlsHeight(px: Double): Unit =
+    try dom.window.localStorage.setItem(ControlsHeightKey, px.toString)
+    catch case _: Throwable => ()
+
+  def loadAiScale(): Option[Double] =
+    try Option(dom.window.localStorage.getItem(AiScaleKey)).map(_.toDouble)
+    catch case _: Throwable => None
+
+  def saveAiScale(scale: Double): Unit =
+    try dom.window.localStorage.setItem(AiScaleKey, scale.toString)
+    catch case _: Throwable => ()
+
+// User-drag override for the AI maze's scale (wireMazeResizeHandle) — None means "let
+// aiScaleFor's automatic fit-to-screen logic decide", same as before this feature existed.
+// Once set, it takes precedence in every mode (Playing and Spectating alike): dragging is
+// an explicit choice that should stick until the user drags again, not get silently
+// overridden by whichever mode happens to be active.
+private var aiScaleOverride: Option[Double] = None
+
+// Bounds for aiScaleOverride — 1.0 matches the AI maze's normal full size (never let a
+// drag grow it past what Spectating already shows), MinAiScaleOverride keeps it from
+// being dragged down to something no longer usably visible/tappable as a mini-map.
+private val MinAiScaleOverride = 0.25
+private val MaxAiScaleOverride = 1.0
+
 private def randomLadderIndex(): Int = Random.nextInt(AiStrategy.ladder.length)
 
 // Picks a random ladder index different from `exclude` (when the ladder has more than one
@@ -312,7 +348,12 @@ private def fitScale(screenW: Double, screenH: Double, aiScale: Double): Double 
 // only fall back to AiMazeScaleWhenPlaying once going full-size would genuinely cost the
 // player's own maze some cell size (the original complaint: a small phone screen where
 // every pixel toward the player's own tap targets counts).
-private def aiScaleFor(screenW: Double, screenH: Double, mode: Mode): Double = mode match
+// aiScaleOverride (set by dragging #maze-resizer) wins over the automatic computation
+// below whenever it's set — see its own doc for why that holds in every mode.
+private def aiScaleFor(screenW: Double, screenH: Double, mode: Mode): Double =
+  aiScaleOverride.getOrElse(autoAiScaleFor(screenW, screenH, mode))
+
+private def autoAiScaleFor(screenW: Double, screenH: Double, mode: Mode): Double = mode match
   case Mode.Playing =>
     if fitScale(screenW, screenH, 1.0) >= fitScale(screenW, screenH, AiMazeScaleWhenPlaying) then 1.0
     else AiMazeScaleWhenPlaying
@@ -438,6 +479,12 @@ def onReady(app: Application, textures: js.Dictionary[Texture]): Unit =
   val playerSprites = new MazeSprites
   val aiSprites = new MazeSprites
   currentLang = LangPersistence.load()
+  aiScaleOverride = ResizePersistence.loadAiScale()
+  ResizePersistence.loadControlsHeight().foreach { h =>
+    document.getElementById("concept-rows").asInstanceOf[dom.html.Element].style.height = s"${h}px"
+  }
+  wireControlsResizeHandle()
+  wireMazeResizeHandle(app, () => mode)
 
   // Re-renders every bit of static UI text that isn't already refreshed every animation
   // frame by the ticker (mode/overlay/tooltip text all read currentLang live on every
@@ -1111,6 +1158,7 @@ private def applyViewTransform(app: Application, battleWorld: Container, aiWorld
   battleWorld.x = vt.offsetX
   battleWorld.y = vt.offsetY
   updateGameOverBoxes(vt, aiWorld, aiScale)
+  updateMazeResizer(vt, layout)
 
 // The WON/LOST banners (index.html's .game-over-side) used to be positioned by static
 // 50/50 CSS percentages, which only happened to be correct because both mazes were
@@ -1134,6 +1182,131 @@ private def setBoxStyle(id: String, x: Double, y: Double, w: Double, h: Double):
   style.top = s"${y}px"
   style.width = s"${w}px"
   style.height = s"${h}px"
+
+// Thickness (screen px, independent of vt.scale) of the #maze-resizer drag strip — wide
+// enough to grab on a phone without eating so much of the gap that it visually merges the
+// two mazes together.
+private val MazeResizerThicknessPx = 14.0
+
+// Keeps #maze-resizer's DOM box glued to the live boundary between the two mazes (the
+// center of layout.gap, the same quantity aiWorld's own position is derived from — see
+// applyViewTransform) — same "compute from vt/layout every tick" approach
+// updateGameOverBoxes already uses for the WON/LOST banners, since that boundary moves
+// with aiScale and can't be expressed as a static CSS split.
+private def updateMazeResizer(vt: ViewTransform, layout: Layout): Unit =
+  val handle = document.getElementById("maze-resizer").asInstanceOf[dom.html.Element]
+  if layout.portrait then
+    val gapCenterY = vt.offsetY + (GridConfig.height + layout.gap / 2.0) * vt.scale
+    handle.style.left = "0px"
+    handle.style.width = "100%"
+    handle.style.top = s"${gapCenterY - MazeResizerThicknessPx / 2.0}px"
+    handle.style.height = s"${MazeResizerThicknessPx}px"
+    handle.classList.add("portrait")
+    handle.classList.remove("landscape")
+  else
+    val gapCenterX = vt.offsetX + (GridConfig.width + layout.gap / 2.0) * vt.scale
+    handle.style.top = "0px"
+    handle.style.height = "100%"
+    handle.style.left = s"${gapCenterX - MazeResizerThicknessPx / 2.0}px"
+    handle.style.width = s"${MazeResizerThicknessPx}px"
+    handle.classList.add("landscape")
+    handle.classList.remove("portrait")
+
+// Dragging #maze-resizer adjusts aiScaleOverride relative to where the drag started,
+// rather than trying to solve for an exact aiScale from the cursor's absolute position:
+// currentLayout's gap/scale both shift as aiScale itself changes (see mazeGap's doc), so
+// there's no closed-form inverse — a proportional nudge re-evaluated every tick converges
+// to a stable, usable drag feel without that inverse. Standard split-pane sign convention:
+// dragging the handle further from the player's (fixed-size) maze shrinks the AI's, same
+// as dragging a pane divider toward one side shrinks that side.
+//
+// pointermove/pointerup are wired on `document`, not the (14px-wide) handle itself: a fast
+// drag routinely moves the pointer off the handle before the browser fires the next event,
+// and scalajs-dom 2.8.0 doesn't facade setPointerCapture to keep those events targeted at
+// it, so tracking the drag globally (guarded by `dragging`) is what actually keeps working
+// once the cursor leaves the strip.
+private def wireMazeResizeHandle(app: Application, currentMode: () => Mode): Unit =
+  val handle = document.getElementById("maze-resizer").asInstanceOf[dom.html.Element]
+  var dragging = false
+  var dragStartPos = 0.0
+  var dragStartAiScale = 0.0
+  var dragPortrait = false
+  var dragPxPerUnit = 1.0
+
+  def clampScale(scale: Double): Double = math.max(MinAiScaleOverride, math.min(MaxAiScaleOverride, scale))
+
+  handle.addEventListener(
+    "pointerdown",
+    (e: dom.Event) => {
+      val p = e.asInstanceOf[dom.PointerEvent]
+      val startAiScale = aiScaleFor(app.screen.width, app.screen.height, currentMode())
+      val layout = currentLayout(app.screen.width, app.screen.height, startAiScale)
+      val vt = computeViewTransform(app.screen.width, app.screen.height, layout)
+      dragging = true
+      dragPortrait = layout.portrait
+      dragStartAiScale = startAiScale
+      dragStartPos = if dragPortrait then p.clientY else p.clientX
+      dragPxPerUnit = (if dragPortrait then GridConfig.height else GridConfig.width) * vt.scale
+      handle.classList.add("dragging")
+    }
+  )
+  document.addEventListener(
+    "pointermove",
+    (e: dom.Event) => {
+      if dragging then
+        val p = e.asInstanceOf[dom.PointerEvent]
+        val pos = if dragPortrait then p.clientY else p.clientX
+        val delta = pos - dragStartPos
+        val newScale = clampScale(dragStartAiScale - delta / dragPxPerUnit)
+        aiScaleOverride = Some(newScale)
+        ResizePersistence.saveAiScale(newScale)
+    }
+  )
+  def endDrag(): Unit =
+    dragging = false
+    handle.classList.remove("dragging")
+  document.addEventListener("pointerup", (_: dom.Event) => if dragging then endDrag())
+  document.addEventListener("pointercancel", (_: dom.Event) => if dragging then endDrag())
+
+// Same drag-to-adjust-a-persisted-override shape as wireMazeResizeHandle above, but
+// simpler: #concept-rows' height is a plain CSS value, not something derived from the
+// Pixi view transform, so the drag can just set it directly (clamped) with no per-tick
+// recomputation needed.
+private val MinControlsHeightPx = 40.0
+
+private def wireControlsResizeHandle(): Unit =
+  val handle = document.getElementById("controls-resizer").asInstanceOf[dom.html.Element]
+  val panel = document.getElementById("concept-rows").asInstanceOf[dom.html.Element]
+  var dragging = false
+  var dragStartClientY = 0.0
+  var dragStartHeight = 0.0
+
+  handle.addEventListener(
+    "pointerdown",
+    (e: dom.Event) => {
+      val p = e.asInstanceOf[dom.PointerEvent]
+      dragging = true
+      dragStartClientY = p.clientY
+      dragStartHeight = panel.getBoundingClientRect().height
+      handle.classList.add("dragging")
+    }
+  )
+  document.addEventListener(
+    "pointermove",
+    (e: dom.Event) => {
+      if dragging then
+        val p = e.asInstanceOf[dom.PointerEvent]
+        val maxHeight = dom.window.innerHeight.toDouble * 0.7
+        val newHeight = math.max(MinControlsHeightPx, math.min(maxHeight, dragStartHeight + (p.clientY - dragStartClientY)))
+        panel.style.height = s"${newHeight}px"
+        ResizePersistence.saveControlsHeight(newHeight)
+    }
+  )
+  def endDrag(): Unit =
+    dragging = false
+    handle.classList.remove("dragging")
+  document.addEventListener("pointerup", (_: dom.Event) => if dragging then endDrag())
+  document.addEventListener("pointercancel", (_: dom.Event) => if dragging then endDrag())
 
 // ── Sprite sync (one maze's GameState → its Pixi sprites) ──────────────
 

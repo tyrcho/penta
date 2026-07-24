@@ -116,8 +116,21 @@
       background: var(--color-surface);
       border-bottom: 1px solid var(--color-border);
       flex-shrink: 0;
+      overflow-y: auto;
       z-index: 1;
     }
+    /* Drag handle letting the player shrink/grow the controls panel above (GameApp's
+       wireControlsResizeHandle sets an explicit height on #concept-rows, overriding this
+       flex item's natural content height) — #game-container (flex: 1) just absorbs
+       whatever space that leaves, no extra plumbing needed on the canvas side. */
+    #controls-resizer {
+      flex-shrink: 0;
+      height: 0.5rem;
+      background: var(--color-border);
+      cursor: row-resize;
+      touch-action: none;
+    }
+    #controls-resizer:hover, #controls-resizer.dragging { background: var(--color-brand); }
     /* Two lines per row now: `.stat-line` (icon, each side's plain resource stat, and —
        centered between them — the two progress readouts, adjacent to each other instead of
        pinned to the row's opposite outer edges) and `.concept-buildings` underneath. */
@@ -211,6 +224,21 @@
        the AI's maze could render smaller than the player's (see aiScaleFor's doc).
        pointer-events: none keeps the underlying canvas (and its buildings) hoverable
        straight through the banner. */
+    /* Drag handle over the live boundary between the player's and AI's maze — position/
+       size are set every tick by GameApp.updateMazeResizer (mirroring how
+       updateGameOverBoxes already tracks that same boundary), since it moves with the
+       view transform/aiScale rather than sitting at a static CSS split. Dragging it
+       (wireMazeResizeHandle) sets a persisted aiScale override that takes over from the
+       automatic aiScaleFor computation. */
+    #maze-resizer {
+      position: absolute;
+      background: rgba(255, 255, 255, 0.08);
+      touch-action: none;
+      z-index: 2;
+    }
+    #maze-resizer:hover, #maze-resizer.dragging { background: var(--color-brand); }
+    #maze-resizer.portrait { cursor: row-resize; }
+    #maze-resizer.landscape { cursor: col-resize; }
     .game-over-side {
       display: none;
       position: absolute;
@@ -478,7 +506,9 @@
       </div>
     </div>
   </div>
+  <div id="controls-resizer" title="Drag to resize"></div>
   <main id="game-container">
+    <div id="maze-resizer" title="Drag to resize"></div>
     <div id="game-over-player" class="game-over-side">
       <div id="game-over-player-title" class="game-over-title"></div>
       <div id="game-over-player-reason" class="game-over-reason"></div>
