@@ -199,6 +199,11 @@ private object AssetPaths:
 // an idle-animation glow would.
 private val PassingGateFlashTint = 0xd9a3ff
 
+// Balance.ConstructionMsPerCostUnit's doc — a building still under construction is inert
+// (no production/spawn/damage), so its sprite is faded to visibly distinguish it from an
+// already-functioning one, restored to full opacity the instant construction finishes.
+private val UnderConstructionAlpha = 0.5
+
 // Per-BuildingKind rendering data — the JS-side mirror of BuildingSpecs, driving the one
 // generic syncBuildings instead of what used to be 5 near-identical sync functions.
 private case class BuildingVisual(texturePath: String, renderSize: Double, tint: Option[Int])
@@ -1371,6 +1376,7 @@ private def syncBuildings(
     g.width = effectiveSize
     g.height = effectiveSize
     setPos(g, GridConfig.cellCenter(b.col, b.row))
+    g.alpha = if b.constructionRemainingMs > 0.0 then UnderConstructionAlpha else 1.0
     // Only a PassingGate ever has a nonzero flashMs (Building.flashMs's doc) — tint it while
     // a nearby death is still being "harvested", and fall back to its normal (untinted)
     // look the rest of the time, instead of a continuous idle glow.
@@ -1841,7 +1847,7 @@ private def hoverText(target: HoverTarget, battle: BattleState): Option[String] 
 // building kind is a fair corruption target (Corruption.md gives no kind restriction),
 // so it isn't part of the per-kind match itself.
 private def buildingHoverText(kind: BuildingKind, b: Building, maze: MazeState): String =
-  perKindHoverText(kind, b, maze) + spawnAbilitySuffix(kind) + corruptionSuffix(b)
+  perKindHoverText(kind, b, maze) + spawnAbilitySuffix(kind) + corruptionSuffix(b) + constructionSuffix(b)
 
 // A short ability fragment for a creature kind — TooltipText.unitAbilitySummary reads the
 // same Balance constants hoverText's own EnemyH branch does (via TooltipText.
@@ -1865,6 +1871,11 @@ private def spawnAbilitySuffix(kind: BuildingKind): String =
 // so an untouched building's tooltip stays exactly as it read before Death existed.
 private def corruptionSuffix(b: Building): String =
   TooltipText.corruptionSuffix(b.corruptionPercent, Balance.CorruptionMaxPercent, currentLang)
+
+// Balance.ConstructionMsPerCostUnit's doc — surfaces the same under-construction state
+// syncBuildings dims the sprite for, so a player hovering an inert new building sees why.
+private def constructionSuffix(b: Building): String =
+  TooltipText.constructionSuffix(b.constructionRemainingMs, currentLang)
 
 // This one kind's live per-second rate, including whatever Engendre boost `maze`'s other
 // buildings currently grant it (CombatEngine.engendreBoost — same multiplier

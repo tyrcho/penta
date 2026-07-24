@@ -121,6 +121,16 @@ object TooltipText:
       val max = maxPercent.toInt
       if lang == Lang.Fr then s" — corrompu à $pct%/$max%" else s" — corrupted $pct%/$max%"
 
+  // Balance.ConstructionMsPerCostUnit's doc — shown only while a building is still under
+  // construction (Building.constructionRemainingMs > 0), same "only once it's actually
+  // relevant" trigger as corruptionSuffix above; ceil'd to seconds so a nearly-finished
+  // building doesn't read "0s" until it's truly done.
+  def constructionSuffix(constructionRemainingMs: Double, lang: Lang): String =
+    if constructionRemainingMs <= 0 then ""
+    else
+      val secs = math.ceil(constructionRemainingMs / 1000.0).toInt
+      if lang == Lang.Fr then s" — en construction (${secs}s)" else s" — under construction (${secs}s)"
+
   def destroyLabel(refundText: String, lang: Lang): String =
     if lang == Lang.Fr then s"Détruire ($refundText)" else s"Destroy ($refundText)"
 

@@ -262,6 +262,106 @@ class CombatEngineTest extends munit.FunSuite:
     assertEquals(CombatEngine.productionPerSec(state, Resource.Wood), Balance.WoodPerSecPerGrove)
   }
 
+  // ── Construction time (buildings take time to build) ───────────────────
+
+  test("a building still under construction produces nothing, even at a normally nonzero rate") {
+    val grove = Building(1, 5, 5, BuildingKind.Grove, Balance.ElfSpawnIntervalMs, constructionRemainingMs = 1_000.0)
+    val state = withResources().copy(buildings = List(grove))
+    assertEquals(CombatEngine.productionPerSec(state, Resource.Wood), 0.0)
+  }
+
+  test("a building never emits a spawn signal while still under construction, however long deltaMs is") {
+    val forest = Building(
+      100,
+      col = 5,
+      row = 5,
+      kind = BuildingKind.Forest,
+      spawnCountdownMs = 0.0,
+      constructionRemainingMs = 1_000_000.0
+    )
+    val state = withResources().copy(buildings = List(forest))
+    val result = CombatEngine.tick(state, deltaMs = Balance.ElfSpawnIntervalMs * 10)
+    assertEquals(result.spawned.getOrElse(UnitKind.Elf, 0), 0)
+    // Frozen, not just skipped-this-tick: an under-construction building's own spawn
+    // timer doesn't advance at all while it waits out its construction.
+    assertEquals(result.state.buildings.head.spawnCountdownMs, 0.0)
+  }
+
+  test("a forest deals no aura damage while still under construction") {
+    val forest = Building(
+      100,
+      col = 5,
+      row = 5,
+      kind = BuildingKind.Forest,
+      spawnCountdownMs = Balance.ElfSpawnIntervalMs,
+      constructionRemainingMs = 5_000.0
+    )
+    val adjacent =
+      Creature(1, GridConfig.cellCenter(6, 5), hp = 10.0, maxHp = 10.0, speedPerMs = 0.0, UnitKind.Elf)
+    val state = withResources().copy(creatures = List(adjacent), buildings = List(forest))
+    val result = CombatEngine.tick(state, deltaMs = 1000.0)
+    assertEquals(result.state.creatures.head.hp, 10.0)
+  }
+
+  test("a watchtower deals no damage while still under construction") {
+    val watchtower = Building(
+      100,
+      col = 5,
+      row = 5,
+      kind = BuildingKind.Watchtower,
+      spawnCountdownMs = 0.0,
+      constructionRemainingMs = 5_000.0
+    )
+    val adjacent =
+      Creature(1, GridConfig.cellCenter(6, 5), hp = 10.0, maxHp = 10.0, speedPerMs = 0.0, UnitKind.Elf)
+    val state = withResources().copy(creatures = List(adjacent), buildings = List(watchtower))
+    val result = CombatEngine.tick(state, deltaMs = 1000.0)
+    assertEquals(result.state.creatures.head.hp, 10.0)
+  }
+
+  test("a passing gate under construction neither harvests shadow nor flashes for a nearby death") {
+    val gate = Building(
+      100,
+      col = 5,
+      row = 5,
+      kind = BuildingKind.PassingGate,
+      spawnCountdownMs = 0.0,
+      constructionRemainingMs = 5_000.0
+    )
+    val dying =
+      Creature(1, GridConfig.cellCenter(6, 5), hp = 1.0, maxHp = 100.0, speedPerMs = 0.0, UnitKind.Elf)
+    val watchtower = Building(101, col = 6, row = 5, BuildingKind.Watchtower, 0.0)
+    val resources =
+      Map(Resource.Wood -> 100.0, Resource.Fire -> 0.0, Resource.Light -> 0.0, Resource.Shadow -> 20.0, Resource.Crystal -> 0.0)
+    val state = MazeState.initial.copy(resources = resources, creatures = List(dying), buildings = List(gate, watchtower))
+    val result = CombatEngine.tick(state, deltaMs = 1000.0)
+    assertEquals(result.state.creatures, Nil) // the watchtower still kills it
+    assertEqualsDouble(result.state.resources(Resource.Shadow), resources(Resource.Shadow), 1e-9)
+    assertEquals(result.state.buildings.find(_.kind == BuildingKind.PassingGate).get.flashMs, 0.0)
+  }
+
+  test("constructionRemainingMs counts down each tick and floors at zero rather than going negative") {
+    val cave = Building(
+      100,
+      col = 5,
+      row = 5,
+      kind = BuildingKind.Cave,
+      spawnCountdownMs = Balance.GoblinSpawnIntervalMs,
+      constructionRemainingMs = 1_500.0
+    )
+    val state = withResources().copy(buildings = List(cave))
+    val afterPartial = CombatEngine.tick(state, deltaMs = 1000.0)
+    assertEqualsDouble(afterPartial.state.buildings.head.constructionRemainingMs, 500.0, 1e-9)
+    val afterFull = CombatEngine.tick(afterPartial.state, deltaMs = 1000.0)
+    assertEquals(afterFull.state.buildings.head.constructionRemainingMs, 0.0)
+  }
+
+  test("a building resumes producing once its construction timer has fully counted down") {
+    val grove = Building(1, 5, 5, BuildingKind.Grove, Balance.ElfSpawnIntervalMs, constructionRemainingMs = 0.0)
+    val state = withResources().copy(buildings = List(grove))
+    assertEquals(CombatEngine.productionPerSec(state, Resource.Wood), Balance.WoodPerSecPerGrove)
+  }
+
   test("a forest emits exactly one elf-spawn signal per interval") {
     val forest = Building(100, col = 5, row = 5, BuildingKind.Forest, Balance.ElfSpawnIntervalMs)
     val state = withResources().copy(buildings = List(forest))

@@ -49,7 +49,8 @@ object CombatEngine:
   // (every existing test, the live browser game before a match ever researches anything)
   // keeps today's exact behavior with no plumbing required.
   def tick(state: MazeState, deltaMs: Double, attackerResearchLevels: Map[BuildingKind, Int] = Map.empty): TickResult =
-    val (s1, stolen, arrivals) = moveCreatures(state, deltaMs, attackerResearchLevels)
+    val s0 = advanceConstruction(state, deltaMs)
+    val (s1, stolen, arrivals) = moveCreatures(s0, deltaMs, attackerResearchLevels)
     val (s2, deaths) = applyDamageSources(s1, deltaMs)
     val (s3, corrupted, hitsByCreature) = applyCorruption(s2, deltaMs)
     val s3a = healBuildingCorruption(s3, deltaMs)
@@ -201,8 +202,12 @@ object CombatEngine:
     val loyalesMultiplier = 1.0 + ResearchSpecs.all(BuildingKind.LaboDeLaLoi).effectAtLevel(loyalesLevel)
     val watchtowerDamagePerHit = Balance.WatchtowerDamagePerSec * loyalesMultiplier
 
-    val forestsTicked = state.buildings.filter(b => auraBuildingKinds.contains(b.kind)).map(tickDamageCooldown(_, deltaMs))
-    val towersTicked = state.buildings.filter(_.kind == BuildingKind.Watchtower).map(tickDamageCooldown(_, deltaMs))
+    // Still under construction (Building.constructionRemainingMs's doc): excluded here
+    // entirely rather than ticked-but-inert, so its damageCooldownMs stays untouched at
+    // its fresh default and it doesn't accumulate a free "overdue" hit while inactive.
+    val active = state.buildings.filter(_.constructionRemainingMs <= 0.0)
+    val forestsTicked = active.filter(b => auraBuildingKinds.contains(b.kind)).map(tickDamageCooldown(_, deltaMs))
+    val towersTicked = active.filter(_.kind == BuildingKind.Watchtower).map(tickDamageCooldown(_, deltaMs))
 
     val fromForests = forestsTicked.foldLeft(Map.empty[Long, Double]) { case (acc, (f, fires)) =>
       if fires then accumulateAuraHits(f, state.creatures, auraDamagePerSecFor(f.kind) * loyalesMultiplier, acc)
@@ -266,7 +271,9 @@ object CombatEngine:
     val totalResourcesSnapshot = state.resources.values.sum
     val (buildings, shadowReward) =
       state.buildings.foldLeft((List.empty[Building], 0.0)) { case ((acc, reward), b) =>
-        if b.kind != BuildingKind.PassingGate then (b :: acc, reward)
+        // Still under construction: no harvest ability yet (Building.constructionRemainingMs's
+        // doc) — passed through unchanged rather than fading a flashMs that's still 0 anyway.
+        if b.kind != BuildingKind.PassingGate || b.constructionRemainingMs > 0.0 then (b :: acc, reward)
         else
           val adjacent = Pathfinding.neighbors((b.col, b.row)).toSet
           val harvestedCount = deadCells.count(adjacent.contains)
@@ -499,6 +506,7 @@ object CombatEngine:
   // re-deriving `count * rate` by hand and risking it drift out of sync.
   def productionPerSec(state: MazeState, resource: Resource): Double =
     val base = state.buildings
+      .filter(_.constructionRemainingMs <= 0.0)
       .groupBy(_.kind)
       .map { case (kind, bs) =>
         bs.size * BuildingSpecs.all(kind).produces.getOrElse(resource, 0.0) *
@@ -539,6 +547,20 @@ object CombatEngine:
       state.buildings.count(b => BuildingSpecs.all(b.kind).produces.getOrElse(source, 0.0) > 0.0)
     Balance.EngendreBoostPerBuilding * sourceBuildingCount
 
+  // Balance.ConstructionMsPerCostUnit's doc — counts every building's construction timer
+  // down toward 0.0, floored there rather than going negative. Runs first in `tick`, ahead
+  // of production/spawning/damage, so a building that finishes construction partway
+  // through this very tick is already treated as active for the rest of it (see
+  // Building.constructionRemainingMs — every gate below reads the just-updated value, not
+  // the value from before this tick started).
+  private def advanceConstruction(state: MazeState, deltaMs: Double): MazeState =
+    if !state.buildings.exists(_.constructionRemainingMs > 0.0) then state
+    else
+      state.copy(buildings = state.buildings.map { b =>
+        if b.constructionRemainingMs <= 0.0 then b
+        else b.copy(constructionRemainingMs = math.max(0.0, b.constructionRemainingMs - deltaMs))
+      })
+
   private def produceResources(state: MazeState, deltaMs: Double): MazeState =
     val produced = Resource.values.map(res => res -> productionPerSec(state, res) * deltaMs / 1000.0)
     state.copy(
@@ -551,15 +573,20 @@ object CombatEngine:
     val (buildings, spawned) =
       state.buildings.foldLeft((List.empty[Building], Map.empty[UnitKind, Int])) {
         case ((acc, counts), b) =>
-          BuildingSpecs.all(b.kind).spawns match
-            case None => (b :: acc, counts)
-            case Some((unitKind, intervalMs)) =>
-              val remaining = b.spawnCountdownMs - deltaMs
-              if remaining <= 0 then
-                (
-                  b.copy(spawnCountdownMs = remaining + intervalMs) :: acc,
-                  counts.updated(unitKind, counts.getOrElse(unitKind, 0) + 1)
-                )
-              else (b.copy(spawnCountdownMs = remaining) :: acc, counts)
+          // Still under construction: frozen, not just skipped-this-tick — its own
+          // spawnCountdownMs doesn't advance at all until construction finishes (see
+          // Building.constructionRemainingMs's doc).
+          if b.constructionRemainingMs > 0.0 then (b :: acc, counts)
+          else
+            BuildingSpecs.all(b.kind).spawns match
+              case None => (b :: acc, counts)
+              case Some((unitKind, intervalMs)) =>
+                val remaining = b.spawnCountdownMs - deltaMs
+                if remaining <= 0 then
+                  (
+                    b.copy(spawnCountdownMs = remaining + intervalMs) :: acc,
+                    counts.updated(unitKind, counts.getOrElse(unitKind, 0) + 1)
+                  )
+                else (b.copy(spawnCountdownMs = remaining) :: acc, counts)
       }
     (state.copy(buildings = buildings), spawned)

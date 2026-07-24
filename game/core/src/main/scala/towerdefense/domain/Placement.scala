@@ -158,6 +158,12 @@ object Placement:
     val blocked = state.buildingCells + ((col, row))
     !Pathfinding.isReachable(GridConfig.spawnCell, GridConfig.goalCell, blocked)
 
+  // Balance.ConstructionMsPerCostUnit's doc — "1 sec / 5 resources" of whatever was
+  // actually paid (post-discount `cost`, not the kind's raw base price), summed across
+  // every resource in that price.
+  private def constructionMs(cost: Map[Resource, Double]): Double =
+    cost.values.sum * Balance.ConstructionMsPerCostUnit
+
   private def placeBuilding(
       state: MazeState,
       kind: BuildingKind,
@@ -171,7 +177,11 @@ object Placement:
       col,
       row,
       kind,
-      spawnCountdownMs = spec.spawns.map(_._2).getOrElse(0.0)
+      // Halved, not a full interval — see Building.constructionRemainingMs's doc: this
+      // partially compensates for the wait the new construction delay below adds before
+      // the building can do anything at all.
+      spawnCountdownMs = spec.spawns.map(_._2 / 2.0).getOrElse(0.0),
+      constructionRemainingMs = constructionMs(cost)
     )
     state.copy(
       buildings = building :: state.buildings,
@@ -195,8 +205,15 @@ object Placement:
       nextKind: BuildingKind,
       cost: Map[Resource, Double]
   ): MazeState =
-    val spawnCountdownMs = BuildingSpecs.all(nextKind).spawns.map(_._2).getOrElse(0.0)
-    val upgraded = building.copy(kind = nextKind, spawnCountdownMs = spawnCountdownMs)
+    // Same halved-first-interval treatment as a fresh placement (see placeBuilding) — an
+    // upgrade also starts a new construction timer (sized to the upgrade's own cost) and
+    // is just as inert until it finishes.
+    val spawnCountdownMs = BuildingSpecs.all(nextKind).spawns.map(_._2 / 2.0).getOrElse(0.0)
+    val upgraded = building.copy(
+      kind = nextKind,
+      spawnCountdownMs = spawnCountdownMs,
+      constructionRemainingMs = constructionMs(cost)
+    )
     val researchLevels =
       if ResearchSpecs.all.contains(nextKind) then
         state.researchLevels.updated(nextKind, math.max(state.researchLevels.getOrElse(nextKind, 0), 1))

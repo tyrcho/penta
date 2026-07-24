@@ -89,10 +89,20 @@ case class Creature(
 // kind dealt via CombatEngine.applyDamageSources (Watchtower, Forest/Jungle/Angel/
 // PassingGate) — see Balance.DamageTickIntervalMs's doc. Meaningless (never read) for
 // every other kind. Defaults to a full DamageTickIntervalMs, same as spawnCountdownMs's
-// own "the first hit/spawn only lands after waiting out one full interval, not
+// own "the first hit/spawn only lands after waiting out half of one interval, not
 // instantly" convention (see Placement's spawnCountdownMs initialization) — a
 // freshly-placed Watchtower doesn't get a free instant snipe against whatever's already
 // standing adjacent to it the moment it's built.
+// constructionRemainingMs: how much longer this building takes to finish being built
+// (Balance.ConstructionMsPerCostUnit's doc — "1 sec / 5 resources" of whatever it cost),
+// counted down by CombatEngine each tick, floored at 0.0 once construction is done. While
+// positive, this building is inert — it produces nothing, spawns nothing, and deals no
+// damage/harvests nothing (Forest/Jungle/Angel/PassingGate/Watchtower), even though it
+// already occupies its cell and blocks pathing like any other building. 0.0 (already
+// built) for every existing call site that constructs a Building directly rather than
+// through Placement, same "inert field, cheap to carry" default as spawnCountdownMs
+// elsewhere in this file. Placement halves spawnCountdownMs's usual first-interval wait
+// (see its own doc) to partially compensate for this added delay.
 case class Building(
     id: Long,
     col: Int,
@@ -101,7 +111,8 @@ case class Building(
     spawnCountdownMs: Double,
     corruptionPercent: Double = 0.0,
     flashMs: Double = 0.0,
-    damageCooldownMs: Double = Balance.DamageTickIntervalMs
+    damageCooldownMs: Double = Balance.DamageTickIntervalMs,
+    constructionRemainingMs: Double = 0.0
 )
 
 // One player's maze: grid, economy and units currently walking it. A battle is two of these.

@@ -210,6 +210,49 @@ class PlacementTest extends munit.FunSuite:
     assertEquals(result.resources(Resource.Wood), richState.resources(Resource.Wood) - Balance.StonehengeCostWood)
   }
 
+  // ── Construction time (buildings take time to build) ───────────────────
+
+  test("a freshly placed building starts under construction, sized to 1 sec per 5 resources of its cost") {
+    val (col, row) = emptyCell
+    val result = Placement.tryPlaceBuilding(richState, BuildingKind.Cave, col, row).toOption.get
+    val cave = result.buildings.head
+    val totalCost = Balance.CaveCostWood + Balance.CaveCostFire
+    assertEqualsDouble(cave.constructionRemainingMs, totalCost * Balance.ConstructionMsPerCostUnit, 1e-9)
+  }
+
+  test("a freshly placed building's first spawn lands at half the usual interval, not a full one") {
+    val (col, row) = emptyCell
+    val result = Placement.tryPlaceBuilding(richState, BuildingKind.Grove, col, row).toOption.get
+    assertEqualsDouble(result.buildings.head.spawnCountdownMs, Balance.ElfSpawnIntervalMs / 2.0, 1e-9)
+  }
+
+  test("upgrading a building also starts a fresh construction timer, sized to the upgrade's own cost") {
+    val withGrove = Placement.tryPlaceBuilding(richState, BuildingKind.Grove, 5, 5).toOption.get
+    val result = Placement.tryUpgradeBuilding(withGrove, 5, 5).toOption.get
+    assertEqualsDouble(
+      result.buildings.head.constructionRemainingMs,
+      Balance.ForestUpgradeCostWood * Balance.ConstructionMsPerCostUnit,
+      1e-9
+    )
+  }
+
+  test("upgrading a building also halves its first post-upgrade spawn interval") {
+    val withGrove = Placement.tryPlaceBuilding(richState, BuildingKind.Grove, 5, 5).toOption.get
+    val result = Placement.tryUpgradeBuilding(withGrove, 5, 5).toOption.get
+    assertEqualsDouble(result.buildings.head.spawnCountdownMs, Balance.ElfSpawnIntervalMs / 2.0, 1e-9)
+  }
+
+  test("a building with no spawn (e.g. Angel) still gets a construction timer on placement") {
+    val (col, row) = emptyCell
+    val result = Placement.tryPlaceBuilding(richState, BuildingKind.Angel, col, row).toOption.get
+    assertEqualsDouble(
+      result.buildings.head.constructionRemainingMs,
+      Balance.AngelCostLight * Balance.ConstructionMsPerCostUnit,
+      1e-9
+    )
+    assertEquals(result.buildings.head.spawnCountdownMs, 0.0)
+  }
+
   test("rejects placement that would seal off the only route to the goal") {
     val corridor = for row <- 0 until GridConfig.rows yield (1, row)
     val withWall = corridor.init.foldLeft(richState) { (state, cell) =>

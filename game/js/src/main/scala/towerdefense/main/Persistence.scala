@@ -118,7 +118,8 @@ private object Persistence:
       spawnCountdownMs = b.spawnCountdownMs,
       corruptionPercent = b.corruptionPercent,
       flashMs = b.flashMs,
-      damageCooldownMs = b.damageCooldownMs
+      damageCooldownMs = b.damageCooldownMs,
+      constructionRemainingMs = b.constructionRemainingMs
     )
 
   private def encodeOutcome(m: MatchResult): js.Dynamic = m match
@@ -284,7 +285,12 @@ private object Persistence:
       // full DamageTickIntervalMs, matching the case class's own default for a building
       // that hasn't started counting down toward its next hit yet.
       damageCooldownMs =
-        if js.isUndefined(d.damageCooldownMs) then Balance.DamageTickIntervalMs else asDouble(d.damageCooldownMs)
+        if js.isUndefined(d.damageCooldownMs) then Balance.DamageTickIntervalMs else asDouble(d.damageCooldownMs),
+      // Pre-construction-time saves have no constructionRemainingMs at all — default to
+      // 0.0 (already built), same fallback shape as flashMs above: a building saved before
+      // this mechanic existed was always instantly functional, so it stays that way on load.
+      constructionRemainingMs =
+        if js.isUndefined(d.constructionRemainingMs) then 0.0 else asDouble(d.constructionRemainingMs)
     )
 
   private def decodeOutcome(d: js.Dynamic): Option[MatchResult] =

@@ -400,3 +400,11 @@ object Balance:
   // POC default: tearing a building down returns half of what it cost, so reshaping a
   // maze isn't free (discourages build/destroy spam) but also isn't punitive.
   val DemolishRefundFraction: Double = 0.5
+
+  // Not from the vault's own numbers — added at the project owner's explicit request:
+  // a building (or upgrade) takes time to construct rather than functioning the instant
+  // it's placed — "1 sec / 5 resources", i.e. 1000ms per 5 units of the cost actually
+  // paid (summed across every resource in that price), so a cheap Cave finishes in a
+  // couple seconds while a pricier Stonehenge takes tens of seconds. See Placement's
+  // constructionMs and Building.constructionRemainingMs.
+  val ConstructionMsPerCostUnit: Double = 1_000.0 / 5.0
