@@ -1,6 +1,7 @@
 package towerdefense.domain
 
 import towerdefense.domain.geometry.Vec2
+import towerdefense.domain.i18n.EntityNames
 
 // spawned: units this maze's buildings just launched — the caller (BattleEngine)
 // delivers those into the *opponent's* maze.
@@ -42,17 +43,17 @@ case class Corrosion(buildingId: Long, kind: BuildingKind, col: Int, row: Int, c
 object CombatEngine:
 
   // attackerResearchLevels: the *opponent's* researchLevels (i.e. whoever owns the
-  // creatures walking `state`) — only Recherches chaotiques reads it (see moveCreatures),
-  // needed because a creature's plunder is normally a pure function of its kind, but
-  // chaotiques makes it depend on research the creature's owner did in their *own* maze,
-  // invisible from `state` alone. Defaults to empty so every caller untouched by Science
-  // (every existing test, the live browser game before a match ever researches anything)
-  // keeps today's exact behavior with no plumbing required.
+  // creatures walking `state`) — only Recherches Sombres reads it (see applyCorruption),
+  // needed because a corrupting creature's corruption rate is normally a pure function of
+  // its kind, but Sombres makes it depend on research the creature's owner did in their
+  // *own* maze, invisible from `state` alone. Defaults to empty so every caller untouched
+  // by Science (every existing test, the live browser game before a match ever researches
+  // anything) keeps today's exact behavior with no plumbing required.
   def tick(state: MazeState, deltaMs: Double, attackerResearchLevels: Map[BuildingKind, Int] = Map.empty): TickResult =
     val s0 = advanceConstruction(state, deltaMs)
-    val (s1, stolen, arrivals) = moveCreatures(s0, deltaMs, attackerResearchLevels)
+    val (s1, stolen, arrivals) = moveCreatures(s0, deltaMs)
     val (s2, deaths) = applyDamageSources(s1, deltaMs)
-    val (s3, corrupted, hitsByCreature) = applyCorruption(s2, deltaMs)
+    val (s3, corrupted, hitsByCreature) = applyCorruption(s2, deltaMs, attackerResearchLevels)
     val s3a = healBuildingCorruption(s3, deltaMs)
     val s3b = healSummoners(s3a, hitsByCreature, deltaMs)
     val s4 = produceResources(s3b, deltaMs)
@@ -70,15 +71,14 @@ object CombatEngine:
   // with no plunder ability entirely.
   private def moveCreatures(
       state: MazeState,
-      deltaMs: Double,
-      attackerResearchLevels: Map[BuildingKind, Int]
+      deltaMs: Double
   ): (MazeState, Map[Resource, Double], List[UnitKind]) =
     val blocked = state.buildingCells
     val angelCells = state.buildings.filter(_.kind == BuildingKind.Angel).map(b => (b.col, b.row)).toSet
     val (remaining, arrived) =
       state.creatures.map(stepCreature(_, state.creatures, blocked, angelCells, deltaMs)).partitionMap(identity)
     val plundered = arrived
-      .flatMap(c => effectivePlunder(c.kind, attackerResearchLevels))
+      .flatMap(c => CreatureSpecs.all(c.kind).plunder)
       .groupMapReduce(_._1)(_._2)(_ + _)
     val stolen = plundered.map { case (res, amount) =>
       res -> math.min(state.resources.getOrElse(res, 0.0), amount)
@@ -90,18 +90,6 @@ object CombatEngine:
       }
     )
     (next, stolen, arrived.map(_.kind))
-
-  // Recherches chaotiques.md: "Augmente l'efficacite du pillage de chaque unite (meme
-  // celles qui ne pillent pas initialement) dans chaque ressource de: X" — a flat bonus
-  // added to *every* resource (not just ones the kind already plunders), so at a high
-  // enough chaotiques level even Paladin/Wolf/Zombie/Vampire arrivals start stealing.
-  private def effectivePlunder(kind: UnitKind, attackerResearchLevels: Map[BuildingKind, Int]): Map[Resource, Double] =
-    val chaotiquesLevel = attackerResearchLevels.getOrElse(BuildingKind.LaboDuChaos, 0)
-    if chaotiquesLevel <= 0 then CreatureSpecs.all(kind).plunder
-    else
-      val bonus = ResearchSpecs.all(BuildingKind.LaboDuChaos).effectAtLevel(chaotiquesLevel)
-      val base = CreatureSpecs.all(kind).plunder
-      Resource.values.map(res => res -> (base.getOrElse(res, 0.0) + bonus)).toMap
 
   // Necromancien.md: "pendant 1 seconde, il reste immobile" (see CreatureSpec.
   // spawnFreezeMs/Creature.frozenMs) — a frozen creature doesn't pathfind or move at all
@@ -195,26 +183,34 @@ object CombatEngine:
   // values too, applied only in a tick where something actually fired, not scaled by
   // deltaMs the way a continuous rate would need.
   private def applyDamageSources(state: MazeState, deltaMs: Double): (MazeState, List[Death]) =
-    // Recherches loyales.md: "Augmente les degats infliges par les batiments" — purely
-    // local to `state` (the maze whose own buildings are dealing the damage), unlike
-    // chaotiques' plunder bonus above which needs the *opponent's* research instead.
+    // Recherches loyales.md: "Augmente la vitesse d'attaque des batiments" — purely local
+    // to `state` (the maze whose own buildings are dealing the damage), and scoped to
+    // Loi-faction damage dealers ONLY (Watchtower/Angel — Faction.Loi): Forest/Jungle's
+    // aura (Nature) and PassingGate's aura (Mort) always fire at the plain
+    // Balance.DamageTickIntervalMs below, regardless of this maze's own Loi research
+    // level. A faster interval, not a bigger per-hit number — damage-per-hit stays the
+    // building's own flat Balance.*DamagePerSec no matter what.
     val loyalesLevel = state.researchLevels.getOrElse(BuildingKind.LaboDeLaLoi, 0)
-    val loyalesMultiplier = 1.0 + ResearchSpecs.all(BuildingKind.LaboDeLaLoi).effectAtLevel(loyalesLevel)
-    val watchtowerDamagePerHit = Balance.WatchtowerDamagePerSec * loyalesMultiplier
+    val loyalesSpeedMultiplier = 1.0 + ResearchSpecs.all(BuildingKind.LaboDeLaLoi).effectAtLevel(loyalesLevel)
+    def intervalFor(kind: BuildingKind): Double =
+      if EntityNames.buildingInfo(kind).faction == Faction.Loi then Balance.DamageTickIntervalMs / loyalesSpeedMultiplier
+      else Balance.DamageTickIntervalMs
 
     // Still under construction (Building.constructionRemainingMs's doc): excluded here
     // entirely rather than ticked-but-inert, so its damageCooldownMs stays untouched at
     // its fresh default and it doesn't accumulate a free "overdue" hit while inactive.
     val active = state.buildings.filter(_.constructionRemainingMs <= 0.0)
-    val forestsTicked = active.filter(b => auraBuildingKinds.contains(b.kind)).map(tickDamageCooldown(_, deltaMs))
-    val towersTicked = active.filter(_.kind == BuildingKind.Watchtower).map(tickDamageCooldown(_, deltaMs))
+    val forestsTicked =
+      active.filter(b => auraBuildingKinds.contains(b.kind)).map(b => tickDamageCooldown(b, deltaMs, intervalFor(b.kind)))
+    val towersTicked =
+      active.filter(_.kind == BuildingKind.Watchtower).map(b => tickDamageCooldown(b, deltaMs, intervalFor(b.kind)))
 
     val fromForests = forestsTicked.foldLeft(Map.empty[Long, Double]) { case (acc, (f, fires)) =>
-      if fires then accumulateAuraHits(f, state.creatures, auraDamagePerSecFor(f.kind) * loyalesMultiplier, acc)
+      if fires then accumulateAuraHits(f, state.creatures, auraDamagePerSecFor(f.kind), acc)
       else acc
     }
     val fromTowers = towersTicked.foldLeft(Map.empty[Long, Double]) { case (acc, (w, fires)) =>
-      if fires then accumulateWatchtowerHit(w, state.creatures, watchtowerDamagePerHit, acc) else acc
+      if fires then accumulateWatchtowerHit(w, state.creatures, Balance.WatchtowerDamagePerSec, acc) else acc
     }
     val tickedById = (forestsTicked ++ towersTicked).map { case (b, _) => b.id -> b }.toMap
     val buildingsAfterCooldowns = state.buildings.map(b => tickedById.getOrElse(b.id, b))
@@ -243,14 +239,18 @@ object CombatEngine:
 
   // Decrements a damage-dealing building's cooldown by deltaMs and reports whether it
   // fires its one discrete full-rate hit this tick (Balance.DamageTickIntervalMs's doc).
-  // On firing, the new cooldown carries forward whatever the decrement overshot by
-  // (Balance.DamageTickIntervalMs + remaining, where remaining is <= 0) instead of
-  // resetting to a flat DamageTickIntervalMs, so a building's long-run hit rate stays
-  // exactly one per interval regardless of how deltaMs happens to divide it — the same
-  // "preserve the phase" approach spawnCountdownMs/flashMs use elsewhere in this domain.
-  private def tickDamageCooldown(building: Building, deltaMs: Double): (Building, Boolean) =
+  // `intervalMs` is normally that flat constant, but a Loi building (Watchtower/Angel)
+  // gets a shorter one from applyDamageSources' own intervalFor when this maze has
+  // researched Recherches loyales — same "attack speed" effect either way, just applied
+  // once per firing here rather than baked into a stored value. On firing, the new
+  // cooldown carries forward whatever the decrement overshot by (intervalMs + remaining,
+  // where remaining is <= 0) instead of resetting to a flat intervalMs, so a building's
+  // long-run hit rate stays exactly one per interval regardless of how deltaMs happens to
+  // divide it — the same "preserve the phase" approach spawnCountdownMs/flashMs use
+  // elsewhere in this domain.
+  private def tickDamageCooldown(building: Building, deltaMs: Double, intervalMs: Double): (Building, Boolean) =
     val remaining = building.damageCooldownMs - deltaMs
-    if remaining <= 0.0 then (building.copy(damageCooldownMs = Balance.DamageTickIntervalMs + remaining), true)
+    if remaining <= 0.0 then (building.copy(damageCooldownMs = intervalMs + remaining), true)
     else (building.copy(damageCooldownMs = remaining), false)
 
   private def mergeSum(a: Map[Long, Double], b: Map[Long, Double]): Map[Long, Double] =
@@ -365,12 +365,25 @@ object CombatEngine:
   // to this tick — exists solely for Ame.md's heal-the-summoner effect (see
   // healSummoners): every other corruptor (Zombie/Vampire) simply has no `summonedBy` to
   // credit it to, so it's inert for them.
-  private def applyCorruption(state: MazeState, deltaMs: Double): (MazeState, List[Corrosion], Map[Long, Int]) =
+  // Recherches Sombres.md: "Augmente la vitesse de corruption" — every corruptor in
+  // `state.creatures` belongs to the attacker (whoever `attackerResearchLevels` represents,
+  // same convention as `tick`'s own doc), so a single multiplier read once from there
+  // applies uniformly, the same way Recherches loyales' speed boost is purely local to
+  // `state`'s own buildings but mirrored onto the *attacking* side here instead.
+  private def applyCorruption(
+      state: MazeState,
+      deltaMs: Double,
+      attackerResearchLevels: Map[BuildingKind, Int]
+  ): (MazeState, List[Corrosion], Map[Long, Int]) =
     val corruptors = state.creatures.filter(c => corruptionRatesPerSec.contains(c.kind))
     if corruptors.isEmpty then (state, Nil, Map.empty)
     else
+      val sombresLevel = attackerResearchLevels.getOrElse(BuildingKind.LaboSombre, 0)
+      val sombresMultiplier = 1.0 + ResearchSpecs.all(BuildingKind.LaboSombre).effectAtLevel(sombresLevel)
       val corruptionByCell = corruptors
-        .groupMapReduce(c => GridConfig.cellOf(c.pos))(c => corruptionRatesPerSec(c.kind) * deltaMs / 1000.0)(_ + _)
+        .groupMapReduce(c => GridConfig.cellOf(c.pos))(c => corruptionRatesPerSec(c.kind) * sombresMultiplier * deltaMs / 1000.0)(
+          _ + _
+        )
       val updated = state.buildings.map { b =>
         val hits = Pathfinding.neighbors((b.col, b.row)).flatMap(corruptionByCell.get).sum
         if hits <= 0.0 then b
@@ -569,7 +582,17 @@ object CombatEngine:
       }
     )
 
+  // Recherches chaotiques.md: "Diminue le temps de production des unites" — purely local
+  // to `state` (this maze's own buildings), scoped to Chaos-faction spawners ONLY (Cave/
+  // Labyrinth — Faction.Chaos); every other spawner (Tomb, BlackCastle, DeathHouse,
+  // Stonehenge) always resets to its own plain BuildingSpecs interval below, regardless of
+  // this maze's own Chaotiques research level.
   private def advanceSpawnTimers(state: MazeState, deltaMs: Double): (MazeState, Map[UnitKind, Int]) =
+    val chaotiquesLevel = state.researchLevels.getOrElse(BuildingKind.LaboDuChaos, 0)
+    val chaotiquesReduction = ResearchSpecs.all(BuildingKind.LaboDuChaos).effectAtLevel(chaotiquesLevel)
+    def effectiveInterval(kind: BuildingKind, intervalMs: Double): Double =
+      if EntityNames.buildingInfo(kind).faction == Faction.Chaos then intervalMs * (1.0 - chaotiquesReduction)
+      else intervalMs
     val (buildings, spawned) =
       state.buildings.foldLeft((List.empty[Building], Map.empty[UnitKind, Int])) {
         case ((acc, counts), b) =>
@@ -580,7 +603,8 @@ object CombatEngine:
           else
             BuildingSpecs.all(b.kind).spawns match
               case None => (b :: acc, counts)
-              case Some((unitKind, intervalMs)) =>
+              case Some((unitKind, baseIntervalMs)) =>
+                val intervalMs = effectiveInterval(b.kind, baseIntervalMs)
                 val remaining = b.spawnCountdownMs - deltaMs
                 if remaining <= 0 then
                   (

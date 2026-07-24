@@ -285,35 +285,50 @@ object Balance:
   val ResearchCostMultiplierPerLevel: Double = 3.0
   val RecherchesNaturellesCostWood: Double = 5.0 // Recherches naturelles.md: "cout en bois: 5"
   val RecherchesNaturellesCostCrystal: Double = 10.0 // "cout en crystal: 10"
-  // "Diminue le cout des batiments de: 1. 10% 2. 20% 3. 35% 4. 55% 5. 80%" — applied to
-  // every OTHER building this maze places (Placement.effectiveCost), not to research costs
-  // themselves (the vault only ever says "batiments", buildings).
+  // Diminue le cout ET le temps de construction des batiments Nature UNIQUEMENT (Grove/
+  // Forest/Jungle/Stonehenge — Faction.Nature) de: 1. 10% 2. 20% 3. 35% 4. 55% 5. 80%,
+  // applied to this maze's own researchLevels (Placement.effectiveCost). Build time falls
+  // out of this for free rather than needing its own list: Placement.constructionMs derives
+  // straight from the (already-reduced) cost, so a cheaper Nature building is automatically
+  // a faster-to-build one too. Research costs themselves are exempt (see costAtLevel), and
+  // every non-Nature building is entirely unaffected — no discount leaks onto a Cave, a
+  // Watchtower, or any other faction's construction.
   val NaturellesCostReductionByLevel: List[Double] = List(0.10, 0.20, 0.35, 0.55, 0.80)
 
   val RecherchesSombresCostShadow: Double = 5.0 // Recherches Sombres.md: "cout en ombre: 5"
   val RecherchesSombresCostCrystal: Double = 10.0 // "cout en crystal: 10"
-  // "Augmente les conditions de victoire de l'adversaire de: 1. 10% 2. 25% 3. 45% 4. 75%
-  // 5. 120%" — read from the *opponent's* researchLevels wherever a victory target is
-  // computed (VictoryConditions.forestTarget/plunderTarget/corruptionTarget already take
-  // `opponent`, so this needs no new plumbing — see their doc).
-  val SombresOpponentTargetIncreaseByLevel: List[Double] = List(0.10, 0.25, 0.45, 0.75, 1.20)
+  // Augmente la vitesse de corruption des propres unites corruptrices de cette maze
+  // (Zombie/Vampire/Ame — CombatEngine.applyCorruption) de: 1. 10% 2. 25% 3. 45% 4. 75%
+  // 5. 120%. Read from the *attacking* side's own researchLevels (CombatEngine.tick's
+  // attackerResearchLevels param — a corrupting creature standing in the defender's
+  // MazeState still belongs to whoever sent it, same reasoning as Chaotiques' spawn-time
+  // reduction is purely local by contrast). Deliberately has NO effect on either maze's
+  // victory-condition targets any more (that used to inflate the opponent's targets
+  // directly — removed so a Mort maze's own strength never touches the *other* faction's
+  // win conditions, only how fast its own creatures corrupt).
+  val SombresCorruptionSpeedIncreaseByLevel: List[Double] = List(0.10, 0.25, 0.45, 0.75, 1.20)
 
   val RecherchesChaotiquesCostFire: Double = 5.0 // Recherches chaotiques.md: "cout en feu: 5"
   val RecherchesChaotiquesCostCrystal: Double = 10.0 // "cout en crystal: 10"
-  // "Augmente l'efficacite du pillage de chaque unite (meme celles qui ne pillent pas
-  // initialement) dans chaque ressource de: 1. 1 2. 2 3. 4 4. 7 5. 12" — a flat bonus added
-  // to *every* resource for *every* arriving unit (even Paladin/Wolf/Zombie/Vampire, whose
-  // CreatureSpec.plunder is otherwise empty), read from the attacking side's own
-  // researchLevels (CombatEngine.tick's attackerResearchLevels param — see its doc, since
-  // the attacker's research isn't visible from the defender's MazeState alone).
-  val ChaotiquesPlunderBonusByLevel: List[Double] = List(1.0, 2.0, 4.0, 7.0, 12.0)
+  // Diminue le temps de production des unites des batiments Chaos UNIQUEMENT (Cave/
+  // Labyrinth — Faction.Chaos) de: 1. 10% 2. 20% 3. 35% 4. 55% 5. 80%, same reduction-
+  // fraction shape as Naturelles' own cost/build-time list above, just applied to a
+  // building's unit-spawn interval instead (CombatEngine.advanceSpawnTimers), read from
+  // this maze's own researchLevels — purely local, no attacker/defender split needed since
+  // it's about how fast a maze's own buildings produce units, not anything the opponent
+  // experiences directly. Every non-Chaos spawn interval (Tomb, BlackCastle, DeathHouse,
+  // Stonehenge) is entirely unaffected.
+  val ChaotiquesSpawnTimeReductionByLevel: List[Double] = List(0.10, 0.20, 0.35, 0.55, 0.80)
 
   val RecherchesLoyalesCostLight: Double = 5.0 // Recherches loyales.md: "cout en lumiere: 5"
   val RecherchesLoyalesCostCrystal: Double = 10.0 // "cout en crystal: 10"
-  // "Augmente les degats infliges par les batiments de: 1. 10% 2. 20% 3. 40% 4. 70%
-  // 5. 120%" — purely local: multiplies Forest-aura/Watchtower damage this maze's own
-  // buildings deal (CombatEngine.applyDamageSources), read from state's own researchLevels.
-  val LoyalesBuildingDamageIncreaseByLevel: List[Double] = List(0.10, 0.20, 0.40, 0.70, 1.20)
+  // Augmente la vitesse d'attaque des batiments Loi UNIQUEMENT (Watchtower/Angel —
+  // Faction.Loi) de: 1. 10% 2. 20% 3. 40% 4. 70% 5. 120%, purely local (multiplies how
+  // often this maze's own Loi buildings fire — CombatEngine.applyDamageSources — not how
+  // hard each hit lands), read from state's own researchLevels. Forest/Jungle's aura
+  // (Nature) and PassingGate's aura (Mort) keep firing at the plain
+  // Balance.DamageTickIntervalMs regardless of this maze's own Loi research level.
+  val LoyalesAttackSpeedIncreaseByLevel: List[Double] = List(0.10, 0.20, 0.40, 0.70, 1.20)
 
   // Recherche fondamentale.md's own base cost (20 crystal) deliberately differs from Labo
   // de Recherche's building cost (15 crystal) — the one research line whose level-1 cost

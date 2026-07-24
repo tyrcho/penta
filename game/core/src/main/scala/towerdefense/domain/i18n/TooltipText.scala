@@ -161,19 +161,19 @@ object TooltipText:
   private val researchEffectTemplates: Map[BuildingKind, Double => I18nText] = Map(
     BuildingKind.LaboNaturel -> { magnitude =>
       val v = decimal(magnitude * 100)
-      I18nText(fr = s"-$v% coût des bâtiments", en = s"-$v% building cost")
+      I18nText(fr = s"-$v% coût et temps de construction des bâtiments Nature", en = s"-$v% Nature building cost and build time")
     },
     BuildingKind.LaboSombre -> { magnitude =>
       val v = decimal(magnitude * 100)
-      I18nText(fr = s"+$v% conditions de victoire adverses", en = s"+$v% opponent's victory targets")
+      I18nText(fr = s"+$v% vitesse de corruption", en = s"+$v% corruption speed")
     },
     BuildingKind.LaboDuChaos -> { magnitude =>
-      val v = decimal(magnitude)
-      I18nText(fr = s"+$v pillage par ressource, chaque unité", en = s"+$v plunder per resource, every unit")
+      val v = decimal(magnitude * 100)
+      I18nText(fr = s"-$v% temps de production des unités Chaos", en = s"-$v% Chaos unit spawn time")
     },
     BuildingKind.LaboDeLaLoi -> { magnitude =>
       val v = decimal(magnitude * 100)
-      I18nText(fr = s"+$v% dégâts des bâtiments", en = s"+$v% building damage")
+      I18nText(fr = s"+$v% vitesse d'attaque des bâtiments Loi", en = s"+$v% Law building attack speed")
     },
     BuildingKind.LaboDeRecherche -> { magnitude =>
       val level = magnitude.toInt

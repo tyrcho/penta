@@ -15,8 +15,8 @@ Then keeps upgrading further in place up to level 5, the same way any other buil
 
 | Level | Cost | Effect |
 | --- | --- | --- |
-| 1 | Free (granted when upgrading from the Base Lab) | +1 plunder per resource, every unit |
-| 2 | 15 Fire + 30 Crystal | +2 plunder per resource, every unit |
-| 3 | 45 Fire + 90 Crystal | +4 plunder per resource, every unit |
-| 4 | 135 Fire + 270 Crystal | +7 plunder per resource, every unit |
-| 5 | 405 Fire + 810 Crystal | +12 plunder per resource, every unit |
+| 1 | Free (granted when upgrading from the Base Lab) | -10% Chaos unit spawn time |
+| 2 | 15 Fire + 30 Crystal | -20% Chaos unit spawn time |
+| 3 | 45 Fire + 90 Crystal | -35% Chaos unit spawn time |
+| 4 | 135 Fire + 270 Crystal | -55% Chaos unit spawn time |
+| 5 | 405 Fire + 810 Crystal | -80% Chaos unit spawn time |

@@ -184,46 +184,22 @@ class VictoryConditionsTest extends munit.FunSuite:
     assertEquals(VictoryConditions.evaluate(battle), None)
   }
 
-  // ── Recherches Sombres: inflates the OPPONENT's own victory targets ───────
+  // ── Recherches Sombres: no effect on either maze's victory targets ────────
+  // (its effect is now a corruption-speed boost for the researcher's own corrupting
+  // creatures — see CombatEngineTest — not anything that touches VictoryConditions.)
 
-  test("researching Sombres raises the researcher's opponent's forest target") {
-    val sombresLevel = 3
-    val researcher = MazeState.initial.copy(researchLevels = Map(BuildingKind.LaboSombre -> sombresLevel))
-    val bonus = Balance.SombresOpponentTargetIncreaseByLevel(sombresLevel - 1)
-    // forestTarget(state, opponent) reads `opponent`'s own Sombres level, since `opponent`
-    // here is the side making it harder for `state` (whoever calls forestTarget) to win.
-    // `state` itself is irrelevant to this assertion (an empty maze, so it isn't raiding
-    // `researcher` with any Trees of its own).
+  test("researching Sombres has no effect on the researcher's opponent's forest target") {
+    val researcher = MazeState.initial.copy(researchLevels = Map(BuildingKind.LaboSombre -> 5))
     assertEquals(
       VictoryConditions.forestTarget(MazeState.initial, researcher),
-      Balance.NatureVictoryForestTarget * (1.0 + bonus)
+      Balance.NatureVictoryForestTarget.toDouble
     )
   }
 
-  test("Sombres also inflates the plunder and corruption targets, not just forests") {
-    val sombresLevel = 1
-    val researcher = MazeState.initial.copy(researchLevels = Map(BuildingKind.LaboSombre -> sombresLevel))
-    val bonus = Balance.SombresOpponentTargetIncreaseByLevel(sombresLevel - 1)
-    assertEquals(VictoryConditions.plunderTarget(researcher), Balance.ChaosVictoryPlunderTarget * (1.0 + bonus))
-    assertEquals(
-      VictoryConditions.corruptionTarget(researcher),
-      Balance.MortVictoryCorruptionTarget * (1.0 + bonus)
-    )
-  }
-
-  test("a maze that researched Sombres against itself still needs to beat its own inflated target") {
-    // Researching Sombres makes life harder for whoever's *opponent* you are — from the
-    // researcher's own point of view as `state`, its own target is unaffected (only the
-    // *other* side reads this maze's Sombres level as their opponent).
-    val researcher = MazeState.initial.copy(
-      buildingsCorrupted = Balance.MortVictoryCorruptionTarget,
-      researchLevels = Map(BuildingKind.LaboSombre -> 5)
-    )
-    val battle = BattleState(player = researcher, ai = MazeState.initial)
-    assertEquals(
-      VictoryConditions.evaluate(battle).map(_.isInstanceOf[MatchResult.PlayerWins]),
-      Some(true)
-    )
+  test("researching Sombres has no effect on the plunder or corruption targets either") {
+    val researcher = MazeState.initial.copy(researchLevels = Map(BuildingKind.LaboSombre -> 5))
+    assertEquals(VictoryConditions.plunderTarget(researcher), Balance.ChaosVictoryPlunderTarget)
+    assertEquals(VictoryConditions.corruptionTarget(researcher), Balance.MortVictoryCorruptionTarget)
   }
 
   // ── Recherche fondamentale ─────────────────────────────────────────────

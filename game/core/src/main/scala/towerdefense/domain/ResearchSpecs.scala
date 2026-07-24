@@ -23,15 +23,15 @@ object ResearchSpecs:
     ),
     BuildingKind.LaboSombre -> ResearchSpec(
       baseCost = Map(Resource.Shadow -> Balance.RecherchesSombresCostShadow, Resource.Crystal -> Balance.RecherchesSombresCostCrystal),
-      effectByLevel = Balance.SombresOpponentTargetIncreaseByLevel
+      effectByLevel = Balance.SombresCorruptionSpeedIncreaseByLevel
     ),
     BuildingKind.LaboDuChaos -> ResearchSpec(
       baseCost = Map(Resource.Fire -> Balance.RecherchesChaotiquesCostFire, Resource.Crystal -> Balance.RecherchesChaotiquesCostCrystal),
-      effectByLevel = Balance.ChaotiquesPlunderBonusByLevel
+      effectByLevel = Balance.ChaotiquesSpawnTimeReductionByLevel
     ),
     BuildingKind.LaboDeLaLoi -> ResearchSpec(
       baseCost = Map(Resource.Light -> Balance.RecherchesLoyalesCostLight, Resource.Crystal -> Balance.RecherchesLoyalesCostCrystal),
-      effectByLevel = Balance.LoyalesBuildingDamageIncreaseByLevel
+      effectByLevel = Balance.LoyalesAttackSpeedIncreaseByLevel
     ),
     BuildingKind.LaboDeRecherche -> ResearchSpec(
       baseCost = Map(Resource.Crystal -> Balance.RechercheFondamentaleCostCrystal),

@@ -871,6 +871,36 @@ class CombatEngineTest extends munit.FunSuite:
     assertEquals(byId(101).corruptionPercent, 0.0)
   }
 
+  // ── Recherches Sombres: boosts the ATTACKER's own corruption speed ────────
+  // (not either maze's victory-condition targets any more — see VictoryConditionsTest
+  // and Balance.SombresCorruptionSpeedIncreaseByLevel's doc.)
+
+  test("Recherches Sombres speeds up the attacker's own corrupting creature") {
+    val cave = Building(100, col = 5, row = 5, BuildingKind.Cave, 0.0)
+    val zombie = Creature(1, GridConfig.cellCenter(6, 5), Balance.ZombieMaxHp, Balance.ZombieMaxHp, 0.0, UnitKind.Zombie)
+    val state = withResources().copy(creatures = List(zombie), buildings = List(cave))
+    val sombresLevel = 2
+    val result = CombatEngine.tick(
+      state,
+      deltaMs = 1000.0,
+      attackerResearchLevels = Map(BuildingKind.LaboSombre -> sombresLevel)
+    )
+    val bonus = Balance.SombresCorruptionSpeedIncreaseByLevel(sombresLevel - 1)
+    assertEqualsDouble(
+      result.state.buildings.head.corruptionPercent,
+      Balance.ZombieCorruptionPercentPerSec * (1.0 + bonus),
+      1e-9
+    )
+  }
+
+  test("without any Recherches Sombres research, corruption speed is the plain per-kind rate") {
+    val cave = Building(100, col = 5, row = 5, BuildingKind.Cave, 0.0)
+    val zombie = Creature(1, GridConfig.cellCenter(6, 5), Balance.ZombieMaxHp, Balance.ZombieMaxHp, 0.0, UnitKind.Zombie)
+    val state = withResources().copy(creatures = List(zombie), buildings = List(cave))
+    val result = CombatEngine.tick(state, deltaMs = 1000.0)
+    assertEquals(result.state.buildings.head.corruptionPercent, Balance.ZombieCorruptionPercentPerSec)
+  }
+
   test("a vampire corrupts twice as fast as a zombie") {
     // Not a Grove/Forest/Jungle — see the note above.
     val cave = Building(100, col = 5, row = 5, BuildingKind.Cave, 0.0)
@@ -1372,65 +1402,94 @@ class CombatEngineTest extends munit.FunSuite:
     assertEquals(result.state.resources(Resource.Crystal), Balance.CrystalPerSecPerLaboNaturel * 2.0)
   }
 
-  // ── Recherches loyales: boosts this maze's OWN building damage ───────────
+  // ── Recherches loyales: boosts this maze's OWN Loi buildings' attack SPEED ──
+  // (not damage-per-hit, and not any other faction's damage dealers — see Balance.
+  // LoyalesAttackSpeedIncreaseByLevel's doc.)
 
-  test("Recherches loyales increases forest aura damage by the owning maze's own level") {
-    val forest = Building(100, col = 5, row = 5, BuildingKind.Forest, Balance.ElfSpawnIntervalMs)
-    val elf = Creature(1, GridConfig.cellCenter(6, 5), hp = 1000.0, maxHp = 1000.0, speedPerMs = 0.0, UnitKind.Elf)
-    val loyalesLevel = 2
-    val state = withResources()
-      .copy(creatures = List(elf), buildings = List(forest), researchLevels = Map(BuildingKind.LaboDeLaLoi -> loyalesLevel))
-    val result = CombatEngine.tick(state, deltaMs = 1000.0)
-    val bonus = Balance.LoyalesBuildingDamageIncreaseByLevel(loyalesLevel - 1)
-    assertEquals(result.state.creatures.head.hp, elf.hp - Balance.AuraDamagePerSec * (1.0 + bonus))
-  }
-
-  test("Recherches loyales increases watchtower damage the same way") {
+  test("Recherches loyales shortens a watchtower's attack interval, without changing its per-hit damage") {
     val watchtower = Building(100, col = 5, row = 5, BuildingKind.Watchtower, 0.0)
-    val elf = Creature(1, GridConfig.cellCenter(6, 6), hp = 1000.0, maxHp = 1000.0, speedPerMs = 0.0, UnitKind.Elf)
+    val target = Creature(1, GridConfig.cellCenter(6, 5), hp = 1000.0, maxHp = 1000.0, speedPerMs = 0.0, UnitKind.Elf)
     val loyalesLevel = 1
     val state = withResources()
-      .copy(creatures = List(elf), buildings = List(watchtower), researchLevels = Map(BuildingKind.LaboDeLaLoi -> loyalesLevel))
-    val result = CombatEngine.tick(state, deltaMs = 1000.0)
-    val bonus = Balance.LoyalesBuildingDamageIncreaseByLevel(loyalesLevel - 1)
-    assertEquals(result.state.creatures.head.hp, elf.hp - Balance.WatchtowerDamagePerSec * (1.0 + bonus))
+      .copy(creatures = List(target), buildings = List(watchtower), researchLevels = Map(BuildingKind.LaboDeLaLoi -> loyalesLevel))
+    // First hit still lands after the building's plain initial cooldown (Balance.
+    // DamageTickIntervalMs, unaffected by research), at the flat per-hit rate.
+    val afterFirstHit = CombatEngine.tick(state, deltaMs = 1000.0)
+    assertEquals(afterFirstHit.state.creatures.head.hp, target.hp - Balance.WatchtowerDamagePerSec)
+    // The *next* interval is the boosted one: shorter than the plain 1000ms, so 950ms
+    // (which would NOT be enough under the unboosted interval — see the sibling forest
+    // test below) is already enough for the second hit to land, at the same flat rate.
+    val bonus = Balance.LoyalesAttackSpeedIncreaseByLevel(loyalesLevel - 1)
+    val effectiveIntervalMs = Balance.DamageTickIntervalMs / (1.0 + bonus)
+    assert(effectiveIntervalMs < 950.0, "test assumes the boosted interval is under 950ms")
+    val afterSecondHit = CombatEngine.tick(afterFirstHit.state, deltaMs = 950.0)
+    assertEquals(afterSecondHit.state.creatures.head.hp, target.hp - Balance.WatchtowerDamagePerSec * 2.0)
   }
 
-  test("without any Recherches loyales research, building damage is unchanged") {
+  test("Recherches loyales also speeds up an Angel's aura (Loi, not just Watchtower)") {
+    val angel = Building(100, col = 5, row = 5, BuildingKind.Angel, 0.0)
+    val target = Creature(1, GridConfig.cellCenter(6, 5), hp = 1000.0, maxHp = 1000.0, speedPerMs = 0.0, UnitKind.Elf)
+    val loyalesLevel = 1
+    val state = withResources()
+      .copy(creatures = List(target), buildings = List(angel), researchLevels = Map(BuildingKind.LaboDeLaLoi -> loyalesLevel))
+    val afterFirstHit = CombatEngine.tick(state, deltaMs = 1000.0)
+    assertEquals(afterFirstHit.state.creatures.head.hp, target.hp - Balance.AngelDamagePerSec)
+    val afterSecondHit = CombatEngine.tick(afterFirstHit.state, deltaMs = 950.0)
+    assertEquals(afterSecondHit.state.creatures.head.hp, target.hp - Balance.AngelDamagePerSec * 2.0)
+  }
+
+  test("Recherches loyales does NOT speed up a forest's aura — Nature, not a Loi building") {
     val forest = Building(100, col = 5, row = 5, BuildingKind.Forest, Balance.ElfSpawnIntervalMs)
-    val elf = Creature(1, GridConfig.cellCenter(6, 5), hp = 1000.0, maxHp = 1000.0, speedPerMs = 0.0, UnitKind.Elf)
-    val state = withResources().copy(creatures = List(elf), buildings = List(forest))
-    val result = CombatEngine.tick(state, deltaMs = 1000.0)
-    assertEquals(result.state.creatures.head.hp, elf.hp - Balance.AuraDamagePerSec)
+    val target = Creature(1, GridConfig.cellCenter(6, 5), hp = 1000.0, maxHp = 1000.0, speedPerMs = 0.0, UnitKind.Elf)
+    val state = withResources()
+      .copy(creatures = List(target), buildings = List(forest), researchLevels = Map(BuildingKind.LaboDeLaLoi -> 5))
+    val afterFirstHit = CombatEngine.tick(state, deltaMs = 1000.0)
+    assertEquals(afterFirstHit.state.creatures.head.hp, target.hp - Balance.AuraDamagePerSec)
+    // Still the plain (unboosted) 1000ms interval, so 950ms isn't enough for a second hit.
+    val stillWithinSameInterval = CombatEngine.tick(afterFirstHit.state, deltaMs = 950.0)
+    assertEquals(stillWithinSameInterval.state.creatures.head.hp, afterFirstHit.state.creatures.head.hp)
   }
 
-  // ── Recherches chaotiques: boosts the ATTACKER's own plunder efficiency ──
+  // ── Recherches chaotiques: reduces THIS maze's OWN Chaos buildings' unit-spawn time ──
+  // (not plunder any more — see Balance.ChaotiquesSpawnTimeReductionByLevel's doc.)
 
-  test("Recherches chaotiques gives a normally non-plundering unit (Wolf) plunder on arrival") {
-    val goalPos = GridConfig.cellCenter(GridConfig.goalCell._1, GridConfig.goalCell._2)
-    val wolf = Creature(1, goalPos, Balance.WolfMaxHp, Balance.WolfMaxHp, speedPerMs = 0.0, UnitKind.Wolf)
-    val state = withResources(wood = 100.0, fire = 100.0).copy(creatures = List(wolf))
-    val chaotiquesLevel = 3
-    val result = CombatEngine.tick(state, deltaMs = 1.0, attackerResearchLevels = Map(BuildingKind.LaboDuChaos -> chaotiquesLevel))
-    val bonus = Balance.ChaotiquesPlunderBonusByLevel(chaotiquesLevel - 1)
-    assertEquals(result.stolen.getOrElse(Resource.Wood, 0.0), bonus)
-    assertEquals(result.stolen.getOrElse(Resource.Fire, 0.0), bonus)
-  }
-
-  test("Recherches chaotiques adds its flat bonus on top of a unit's existing plunder, per resource") {
-    val goalPos = GridConfig.cellCenter(GridConfig.goalCell._1, GridConfig.goalCell._2)
-    val goblin = Creature(1, goalPos, Balance.GoblinMaxHp, Balance.GoblinMaxHp, speedPerMs = 0.0, UnitKind.Goblin)
-    val state = withResources(wood = 100.0, fire = 100.0).copy(creatures = List(goblin))
+  test("Recherches chaotiques shortens a Cave's Goblin spawn interval") {
+    val cave = Building(100, col = 5, row = 5, BuildingKind.Cave, spawnCountdownMs = 0.0)
     val chaotiquesLevel = 1
-    val result = CombatEngine.tick(state, deltaMs = 1.0, attackerResearchLevels = Map(BuildingKind.LaboDuChaos -> chaotiquesLevel))
-    val bonus = Balance.ChaotiquesPlunderBonusByLevel(chaotiquesLevel - 1)
-    assertEquals(result.stolen.getOrElse(Resource.Wood, 0.0), Balance.PlunderPerUnit + bonus)
+    val state = withResources().copy(buildings = List(cave), researchLevels = Map(BuildingKind.LaboDuChaos -> chaotiquesLevel))
+    val result = CombatEngine.tick(state, deltaMs = 1.0)
+    assertEquals(result.spawned.getOrElse(UnitKind.Goblin, 0), 1)
+    val reduction = Balance.ChaotiquesSpawnTimeReductionByLevel(chaotiquesLevel - 1)
+    assertEqualsDouble(
+      result.state.buildings.head.spawnCountdownMs,
+      Balance.GoblinSpawnIntervalMs * (1.0 - reduction) - 1.0,
+      1e-9
+    )
   }
 
-  test("without attackerResearchLevels, plunder matches today's exact behavior (no bonus, empty for Wolf)") {
+  test("Recherches chaotiques does NOT shorten a Tomb's Zombie spawn interval — Mort, not a Chaos building") {
+    val tomb = Building(100, col = 5, row = 5, BuildingKind.Tomb, spawnCountdownMs = 0.0)
+    val state = withResources().copy(buildings = List(tomb), researchLevels = Map(BuildingKind.LaboDuChaos -> 5))
+    val result = CombatEngine.tick(state, deltaMs = 1.0)
+    assertEquals(result.spawned.getOrElse(UnitKind.Zombie, 0), 1)
+    assertEqualsDouble(result.state.buildings.head.spawnCountdownMs, Balance.ZombieSpawnIntervalMs - 1.0, 1e-9)
+  }
+
+  test("without any Recherches chaotiques research, Cave's spawn interval is the plain base one") {
+    val cave = Building(100, col = 5, row = 5, BuildingKind.Cave, spawnCountdownMs = 0.0)
+    val state = withResources().copy(buildings = List(cave))
+    val result = CombatEngine.tick(state, deltaMs = 1.0)
+    assertEqualsDouble(result.state.buildings.head.spawnCountdownMs, Balance.GoblinSpawnIntervalMs - 1.0, 1e-9)
+  }
+
+  // ── Recherches chaotiques no longer touches plunder at all ────────────────
+
+  test("plunder is always the plain per-kind amount now, regardless of attackerResearchLevels") {
     val goalPos = GridConfig.cellCenter(GridConfig.goalCell._1, GridConfig.goalCell._2)
     val wolf = Creature(1, goalPos, Balance.WolfMaxHp, Balance.WolfMaxHp, speedPerMs = 0.0, UnitKind.Wolf)
-    val state = withResources(wood = 100.0, fire = 100.0).copy(creatures = List(wolf))
-    val result = CombatEngine.tick(state, deltaMs = 1.0)
-    assertEquals(result.stolen, Map.empty[Resource, Double])
+    val goblin = Creature(2, goalPos, Balance.GoblinMaxHp, Balance.GoblinMaxHp, speedPerMs = 0.0, UnitKind.Goblin)
+    val state = withResources(wood = 100.0, fire = 100.0).copy(creatures = List(wolf, goblin))
+    val result =
+      CombatEngine.tick(state, deltaMs = 1.0, attackerResearchLevels = Map(BuildingKind.LaboDuChaos -> 5))
+    assertEquals(result.stolen.getOrElse(Resource.Wood, 0.0), Balance.PlunderPerUnit) // only Goblin plunders wood
   }

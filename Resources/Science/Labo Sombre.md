@@ -15,8 +15,8 @@ S'améliore ensuite sur place jusqu'au niveau 5, comme n'importe quel autre bât
 
 | Niveau | Coût | Effet |
 | --- | --- | --- |
-| 1 | Gratuit (obtenu en améliorant le Labo Fondamental) | +10% conditions de victoire adverses |
-| 2 | 15 Ombre + 30 Crystal | +25% conditions de victoire adverses |
-| 3 | 45 Ombre + 90 Crystal | +45% conditions de victoire adverses |
-| 4 | 135 Ombre + 270 Crystal | +75% conditions de victoire adverses |
-| 5 | 405 Ombre + 810 Crystal | +120% conditions de victoire adverses |
+| 1 | Gratuit (obtenu en améliorant le Labo Fondamental) | +10% vitesse de corruption |
+| 2 | 15 Ombre + 30 Crystal | +25% vitesse de corruption |
+| 3 | 45 Ombre + 90 Crystal | +45% vitesse de corruption |
+| 4 | 135 Ombre + 270 Crystal | +75% vitesse de corruption |
+| 5 | 405 Ombre + 810 Crystal | +120% vitesse de corruption |

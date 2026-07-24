@@ -648,3 +648,32 @@ class PlacementTest extends munit.FunSuite:
     val reduction = Balance.NaturellesCostReductionByLevel.head
     assertEquals(before - result.resources(Resource.Wood), Balance.ForestUpgradeCostWood * (1.0 - reduction))
   }
+
+  test("Naturelles' discount does NOT apply to a non-Nature building (e.g. a Cave)") {
+    val withNaturel = withLab(richState, BuildingKind.LaboNaturel, 1, 1)
+    val before = withNaturel.resources(Resource.Wood)
+    val result = Placement.tryPlaceBuilding(withNaturel, BuildingKind.Cave, 5, 5).toOption.get
+    assertEquals(before - result.resources(Resource.Wood), Balance.CaveCostWood)
+  }
+
+  test("Naturelles' cost reduction also shrinks the resulting Nature building's construction time") {
+    val withNaturel = withLab(richState, BuildingKind.LaboNaturel, 1, 1)
+    val result = Placement.tryPlaceBuilding(withNaturel, BuildingKind.Grove, 5, 5).toOption.get
+    val reduction = Balance.NaturellesCostReductionByLevel.head
+    assertEqualsDouble(
+      result.buildings.head.constructionRemainingMs,
+      Balance.GroveCostWood * (1.0 - reduction) * Balance.ConstructionMsPerCostUnit,
+      1e-9
+    )
+  }
+
+  test("Naturelles' cost reduction does NOT shrink a non-Nature building's construction time") {
+    val withNaturel = withLab(richState, BuildingKind.LaboNaturel, 1, 1)
+    val result = Placement.tryPlaceBuilding(withNaturel, BuildingKind.Cave, 5, 5).toOption.get
+    val totalCost = Balance.CaveCostWood + Balance.CaveCostFire
+    assertEqualsDouble(
+      result.buildings.head.constructionRemainingMs,
+      totalCost * Balance.ConstructionMsPerCostUnit,
+      1e-9
+    )
+  }

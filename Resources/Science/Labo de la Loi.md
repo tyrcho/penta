@@ -15,8 +15,8 @@ S'améliore ensuite sur place jusqu'au niveau 5, comme n'importe quel autre bât
 
 | Niveau | Coût | Effet |
 | --- | --- | --- |
-| 1 | Gratuit (obtenu en améliorant le Labo Fondamental) | +10% dégâts des bâtiments |
-| 2 | 15 Lumière + 30 Crystal | +20% dégâts des bâtiments |
-| 3 | 45 Lumière + 90 Crystal | +40% dégâts des bâtiments |
-| 4 | 135 Lumière + 270 Crystal | +70% dégâts des bâtiments |
-| 5 | 405 Lumière + 810 Crystal | +120% dégâts des bâtiments |
+| 1 | Gratuit (obtenu en améliorant le Labo Fondamental) | +10% vitesse d'attaque des bâtiments Loi |
+| 2 | 15 Lumière + 30 Crystal | +20% vitesse d'attaque des bâtiments Loi |
+| 3 | 45 Lumière + 90 Crystal | +40% vitesse d'attaque des bâtiments Loi |
+| 4 | 135 Lumière + 270 Crystal | +70% vitesse d'attaque des bâtiments Loi |
+| 5 | 405 Lumière + 810 Crystal | +120% vitesse d'attaque des bâtiments Loi |

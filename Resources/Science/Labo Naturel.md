@@ -15,8 +15,8 @@ S'améliore ensuite sur place jusqu'au niveau 5, comme n'importe quel autre bât
 
 | Niveau | Coût | Effet |
 | --- | --- | --- |
-| 1 | Gratuit (obtenu en améliorant le Labo Fondamental) | -10% coût des bâtiments |
-| 2 | 15 Bois + 30 Crystal | -20% coût des bâtiments |
-| 3 | 45 Bois + 90 Crystal | -35% coût des bâtiments |
-| 4 | 135 Bois + 270 Crystal | -55% coût des bâtiments |
-| 5 | 405 Bois + 810 Crystal | -80% coût des bâtiments |
+| 1 | Gratuit (obtenu en améliorant le Labo Fondamental) | -10% coût et temps de construction des bâtiments Nature |
+| 2 | 15 Bois + 30 Crystal | -20% coût et temps de construction des bâtiments Nature |
+| 3 | 45 Bois + 90 Crystal | -35% coût et temps de construction des bâtiments Nature |
+| 4 | 135 Bois + 270 Crystal | -55% coût et temps de construction des bâtiments Nature |
+| 5 | 405 Bois + 810 Crystal | -80% coût et temps de construction des bâtiments Nature |

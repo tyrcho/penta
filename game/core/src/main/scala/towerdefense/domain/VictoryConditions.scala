@@ -53,33 +53,20 @@ object VictoryConditions:
   // `opponent`, symmetric to forestCount's own reasoning) — the target itself is about
   // what `opponent` has, same as every other *Target function below.
   def forestTarget(state: MazeState, opponent: MazeState): Double =
-    withSombresBonus(
-      opponent,
-      math.max(Balance.NatureVictoryForestTarget.toDouble, opponentTarget(forestCount(opponent, state)))
-    )
+    math.max(Balance.NatureVictoryForestTarget.toDouble, opponentTarget(forestCount(opponent, state)))
 
   def plunderTarget(opponent: MazeState): Double =
-    withSombresBonus(opponent, math.max(Balance.ChaosVictoryPlunderTarget, opponentTarget(opponent.resourcesPlundered)))
+    math.max(Balance.ChaosVictoryPlunderTarget, opponentTarget(opponent.resourcesPlundered))
 
   // Victoire.md "B: Corruption Totale" — Corrompre ou detruire XX unites/batiments
   // ennemis. Only buildings corrupted-to-destruction count (not creatures killed by an
   // unrelated Forest aura/Watchtower) — same shape as Chaos's condition tracking only
   // Elf/Goblin/Minotaur plunder, not every way resources move.
   def corruptionTarget(opponent: MazeState): Double =
-    withSombresBonus(opponent, math.max(Balance.MortVictoryCorruptionTarget, opponentTarget(opponent.buildingsCorrupted)))
+    math.max(Balance.MortVictoryCorruptionTarget, opponentTarget(opponent.buildingsCorrupted))
 
   private def opponentTarget(opponentCount: Double): Double =
     Balance.VictoryMultiplierOverOpponent * opponentCount
-
-  // Recherches Sombres.md: "Augmente les conditions de victoire de l'adversaire" — inflates
-  // the *whole* target (floor included, not just the doubling-over-opponent component), so
-  // it still bites even when the opponent hasn't built/plundered/corrupted anything yet and
-  // the floor alone is what's being compared against. Read from `opponent` (the side that
-  // benefits from making this harder for `state`) since every target function above already
-  // takes it.
-  private def withSombresBonus(opponent: MazeState, target: Double): Double =
-    val sombresLevel = opponent.researchLevels.getOrElse(BuildingKind.LaboSombre, 0)
-    target * (1.0 + ResearchSpecs.all(BuildingKind.LaboSombre).effectAtLevel(sombresLevel))
 
   // Recherche fondamentale.md: at research level N, wins outright once the 4 other labs
   // are all at level (6-N) or higher — see Balance.FondamentaleRequiredOtherLabLevel's doc.

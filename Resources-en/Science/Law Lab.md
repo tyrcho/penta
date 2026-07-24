@@ -15,8 +15,8 @@ Then keeps upgrading further in place up to level 5, the same way any other buil
 
 | Level | Cost | Effect |
 | --- | --- | --- |
-| 1 | Free (granted when upgrading from the Base Lab) | +10% building damage |
-| 2 | 15 Light + 30 Crystal | +20% building damage |
-| 3 | 45 Light + 90 Crystal | +40% building damage |
-| 4 | 135 Light + 270 Crystal | +70% building damage |
-| 5 | 405 Light + 810 Crystal | +120% building damage |
+| 1 | Free (granted when upgrading from the Base Lab) | +10% Law building attack speed |
+| 2 | 15 Light + 30 Crystal | +20% Law building attack speed |
+| 3 | 45 Light + 90 Crystal | +40% Law building attack speed |
+| 4 | 135 Light + 270 Crystal | +70% Law building attack speed |
+| 5 | 405 Light + 810 Crystal | +120% Law building attack speed |

@@ -15,8 +15,8 @@ Then keeps upgrading further in place up to level 5, the same way any other buil
 
 | Level | Cost | Effect |
 | --- | --- | --- |
-| 1 | Free (granted when upgrading from the Base Lab) | -10% building cost |
-| 2 | 15 Wood + 30 Crystal | -20% building cost |
-| 3 | 45 Wood + 90 Crystal | -35% building cost |
-| 4 | 135 Wood + 270 Crystal | -55% building cost |
-| 5 | 405 Wood + 810 Crystal | -80% building cost |
+| 1 | Free (granted when upgrading from the Base Lab) | -10% Nature building cost and build time |
+| 2 | 15 Wood + 30 Crystal | -20% Nature building cost and build time |
+| 3 | 45 Wood + 90 Crystal | -35% Nature building cost and build time |
+| 4 | 135 Wood + 270 Crystal | -55% Nature building cost and build time |
+| 5 | 405 Wood + 810 Crystal | -80% Nature building cost and build time |

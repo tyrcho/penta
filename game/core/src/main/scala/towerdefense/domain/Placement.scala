@@ -1,5 +1,7 @@
 package towerdefense.domain
 
+import towerdefense.domain.i18n.EntityNames
+
 enum PlacementError derives CanEqual:
   case OutOfBounds, OnSpawnOrGoal, CellOccupied, WouldBlockPath, InsufficientResources,
     CannotBuildDirectly, NoBuildingThere, NoUpgradeAvailable, MaxCountReached,
@@ -56,7 +58,7 @@ object Placement:
       blocksPath: Boolean
   ): Either[PlacementError, MazeState] =
     val spec = BuildingSpecs.all(kind)
-    val cost = effectiveCost(state, spec.cost)
+    val cost = effectiveCost(state, kind, spec.cost)
     for
       _ <- Either.cond(spec.buildableDirectly, (), PlacementError.CannotBuildDirectly)
       _ <- checkCellCheap(state, col, row)
@@ -65,14 +67,18 @@ object Placement:
       _ <- Either.cond(!blocksPath, (), PlacementError.WouldBlockPath)
     yield placeBuilding(state, kind, cost, col, row)
 
-  // Recherches naturelles.md: "Diminue le cout des batiments" — a flat % reduction on every
-  // resource this maze's OWN Naturelles research level applies to, read from state's own
-  // researchLevels (never the opponent's — this discounts what you build, not what they
-  // do). Research costs themselves are exempt (see Balance.NaturellesCostReductionByLevel's
-  // doc): callers computing a *research* cost use spec.costAtLevel directly, not this.
-  private[domain] def effectiveCost(state: MazeState, baseCost: Map[Resource, Double]): Map[Resource, Double] =
+  // Recherches naturelles.md: "Diminue le cout des batiments" — a flat % reduction, scoped
+  // to Nature-faction buildings ONLY (Grove/Forest/Jungle/Stonehenge; see
+  // Balance.NaturellesCostReductionByLevel's doc), on every resource this maze's OWN
+  // Naturelles research level applies to, read from state's own researchLevels (never the
+  // opponent's — this discounts what you build, not what they do). A non-Nature `kind`
+  // (Cave, Watchtower, a Science lab, ...) passes `baseCost` through unchanged regardless
+  // of this maze's Naturelles level. Research costs themselves are exempt (see
+  // Balance.NaturellesCostReductionByLevel's doc): callers computing a *research* cost use
+  // spec.costAtLevel directly, not this.
+  private[domain] def effectiveCost(state: MazeState, kind: BuildingKind, baseCost: Map[Resource, Double]): Map[Resource, Double] =
     val level = state.researchLevels.getOrElse(BuildingKind.LaboNaturel, 0)
-    if level <= 0 then baseCost
+    if level <= 0 || EntityNames.buildingInfo(kind).faction != Faction.Nature then baseCost
     else
       val reduction = ResearchSpecs.all(BuildingKind.LaboNaturel).effectAtLevel(level)
       baseCost.view.mapValues(_ * (1.0 - reduction)).toMap
@@ -119,7 +125,7 @@ object Placement:
       ).toRight(PlacementError.NoUpgradeAvailable)
       targetSpec = BuildingSpecs.all(chosenKind)
       _ <- checkMaxCount(state, chosenKind, targetSpec)
-      cost = effectiveCost(state, targetSpec.cost)
+      cost = effectiveCost(state, chosenKind, targetSpec.cost)
       _ <- Either.cond(canAfford(state.resources, cost), (), PlacementError.InsufficientResources)
     yield upgradeBuilding(state, building, chosenKind, cost)
 
