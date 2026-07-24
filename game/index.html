@@ -294,7 +294,14 @@
        "14. resource-maze@5s") is capped with an ellipsis rather than left free to force
        a wrap; button/text sizes then shrink to match. Desktop/tablet keep the full
        layout untouched. */
-    @media (max-width: 700px) {
+    /* Same compact styling on a SHORT window as on a narrow one — Playing mode's header
+       (build-button rows + the AI-level selector, both absent while Spectating) is tall
+       enough in rem units that on a short-but-wide laptop window (plenty of width, not
+       much height) it could dominate the viewport and squeeze the maze canvas down to a
+       sliver, even though nothing here was actually cramped for width. A comma between
+       media conditions is OR, so this one ruleset now answers either kind of "not enough
+       room" instead of only the width one. */
+    @media (max-width: 700px), (max-height: 750px) {
       #controlbar { padding: 0.3rem 0.5rem; gap: 0.4rem; }
       #controlbar h1 { font-size: 0.8rem; }
       .panel { gap: 0.35rem; }

@@ -14,6 +14,15 @@ class TooltipTextTest extends munit.FunSuite:
     assertEquals(TooltipText.costIcons(cost), "5 🔥")
   }
 
+  test("costIcons drops zero-amount resources instead of showing a bare 0") {
+    val cost = Map(Resource.Wood -> 0.0, Resource.Fire -> 10.0)
+    assertEquals(TooltipText.costIcons(cost), "10 🔥")
+  }
+
+  test("costIcons is empty when every cost is zero") {
+    assertEquals(TooltipText.costIcons(Map(Resource.Wood -> 0.0)), "")
+  }
+
   test("costText (used by the wiki) still spells resource names out, unaffected by costIcons") {
     val cost = Map(Resource.Wood -> 5.0)
     assertEquals(TooltipText.costText(cost, Lang.En), "5 Wood")
@@ -29,6 +38,36 @@ class TooltipTextTest extends munit.FunSuite:
     )
     assert(text.contains("🪵"), s"expected a wood icon in: $text")
     assert(!text.contains("Wood"), s"expected no written-out resource name in: $text")
+  }
+
+  test("buildingButtonTooltip follows the 'Name (cost) - rate' template") {
+    val text = TooltipText.buildingButtonTooltip(
+      BuildingKind.Cave,
+      cost = Map(Resource.Wood -> 0.0, Resource.Fire -> 10.0),
+      produces = Map(Resource.Fire -> 0.2),
+      Lang.En
+    )
+    assertEquals(text, "Cave (10 🔥) - +0.2 🔥/s")
+  }
+
+  test("buildingButtonTooltip omits the parens entirely when every cost is zero") {
+    val text = TooltipText.buildingButtonTooltip(
+      BuildingKind.Cave,
+      cost = Map(Resource.Wood -> 0.0),
+      produces = Map.empty,
+      Lang.En
+    )
+    assertEquals(text, "Cave")
+  }
+
+  test("buildingButtonTooltip omits the dash entirely when there's no production") {
+    val text = TooltipText.buildingButtonTooltip(
+      BuildingKind.Cave,
+      cost = Map(Resource.Fire -> 10.0),
+      produces = Map.empty,
+      Lang.En
+    )
+    assertEquals(text, "Cave (10 🔥)")
   }
 
   test("rate shows the resource's icon, not its written-out name") {

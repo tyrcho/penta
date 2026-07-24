@@ -50,25 +50,32 @@ object TooltipText:
 
   // Icon-based counterpart to costText, for the in-game #tooltip div only (see
   // resourceIcon's doc for why the wiki keeps costText's plain names instead) — same
-  // "amount + amount" shape, just a glyph instead of a written-out name per resource.
+  // "amount + amount" shape, just a glyph instead of a written-out name per resource. A
+  // resource whose cost is 0 (e.g. Cave's own Wood — BuildingSpecs.all(Cave).cost) is
+  // dropped entirely rather than printed as a bare, meaningless "0 🪵".
   def costIcons(cost: Map[Resource, Double]): String =
     cost.toList
+      .filter(_._2 > 0.0)
       .sortBy(_._1.ordinal)
       .map { case (res, amount) => s"${decimal(amount)} ${resourceIcon(res)}" }
       .mkString(" + ")
 
-  // The static build-button tooltip, shown before anything is placed — cost plus, for a
-  // producing kind, its rate; the unit it spawns (if any) is appended separately by the
-  // caller via unitAbilitySummary, same split GameApp already made (spawnAbilitySuffix).
+  // The static build-button tooltip, shown before anything is placed — "Name (cost) -
+  // rate", e.g. "Cave (10 🔥) - +0.2 🔥/s" — the same template every building tooltip
+  // uses (upgradeLabel/levelUpLabel's "Name (cost)" for upgrades, destroyLabel's
+  // "Destroy (refund)"). The parens are omitted entirely for a kind with no nonzero cost
+  // at all (costIcons empty), and the " - rate" suffix is omitted when the kind produces
+  // nothing — a building's own ability/spawn summary (BuildingOwnAbility/
+  // spawnAbilitySuffix) is still appended separately by the caller, same split as before.
   def buildingButtonTooltip(kind: BuildingKind, cost: Map[Resource, Double], produces: Map[Resource, Double], lang: Lang): String =
     val name = EntityNames.buildingName(kind, lang)
     val cText = costIcons(cost)
-    val rates = produces.toList.sortBy(_._1.ordinal)
+    val costSuffix = if cText.isEmpty then "" else s" ($cText)"
+    val rates = produces.toList.filter(_._2 > 0.0).sortBy(_._1.ordinal)
     val rateText =
       if rates.isEmpty then ""
-      else " " + rates.map { case (res, rate) => s"+${decimal(rate)} ${resourceIcon(res)}/s" }.mkString(", ") + "."
-    val costWord = if lang == Lang.Fr then "coût" else "cost"
-    s"$name — $costWord $cText.$rateText"
+      else " - " + rates.map { case (res, rate) => s"+${decimal(rate)} ${resourceIcon(res)}/s" }.mkString(", ")
+    s"$name$costSuffix$rateText"
 
   // ── Unit ability summaries — one entry per kind, all static (Balance-only) data ──────
 

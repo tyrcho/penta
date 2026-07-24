@@ -291,11 +291,31 @@ private val MazeGapPx = GridConfig.cellSize
 // side can build/win the same way), not screen real estate, so shrinking it here to give
 // the player's own maze (the thing they're actually tapping on, on a small phone screen
 // most of all) more space is a pure UI choice. Spectating keeps both sides at equal
-// billing (aiScaleFor below), since neither side is "the player" there.
+// billing (aiScaleFor below), since neither side is "the player" there. Only a ceiling,
+// not a fixed size — aiScaleFor below skips the shrink entirely once the screen has room
+// to spare, so this is "how small the AI's maze gets on a cramped screen", not "how small
+// it always is while Playing".
 private val AiMazeScaleWhenPlaying = 0.6
 
-private def aiScaleFor(mode: Mode): Double = mode match
-  case Mode.Playing    => AiMazeScaleWhenPlaying
+// The overall fit-to-screen `scale` (computeViewTransform) a given aiScale would produce —
+// used by aiScaleFor below to check whether shrinking the AI's maze actually buys the
+// player's own maze anything.
+private def fitScale(screenW: Double, screenH: Double, aiScale: Double): Double =
+  computeViewTransform(screenW, screenH, currentLayout(screenW, screenH, aiScale)).scale
+
+// Shrinking the AI's maze (AiMazeScaleWhenPlaying) only ever helps by making the *other*
+// (non-stacking) dimension the tighter constraint less often — the stacking dimension
+// itself (width in landscape, height in portrait) only grows as aiScale grows, so the
+// resulting fit-to-screen scale at aiScale = 1.0 can never exceed the shrunk one, only
+// match or fall short of it. Matching it means the shrink was buying nothing (some other
+// dimension was already the binding constraint), so there's no reason to shrink at all —
+// only fall back to AiMazeScaleWhenPlaying once going full-size would genuinely cost the
+// player's own maze some cell size (the original complaint: a small phone screen where
+// every pixel toward the player's own tap targets counts).
+private def aiScaleFor(screenW: Double, screenH: Double, mode: Mode): Double = mode match
+  case Mode.Playing =>
+    if fitScale(screenW, screenH, 1.0) >= fitScale(screenW, screenH, AiMazeScaleWhenPlaying) then 1.0
+    else AiMazeScaleWhenPlaying
   case Mode.Spectating(_, _) => 1.0
 
 // Side-by-side on wide screens, stacked (player maze above the AI's) on narrow/portrait
@@ -1025,7 +1045,7 @@ private def clearSprites(world: Container, sprites: MazeSprites): Unit =
 // regardless of aiScaleFor(mode), so this bound never needs to shrink to match a smaller
 // AI maze; only `layout`'s overall size (and so vt.scale/offset) depends on it.
 private def cellAt(app: Application, e: FederatedPointerEvent, mode: Mode): Option[(Int, Int)] =
-  val layout = currentLayout(app.screen.width, app.screen.height, aiScaleFor(mode))
+  val layout = currentLayout(app.screen.width, app.screen.height, aiScaleFor(app.screen.width, app.screen.height, mode))
   val vt = computeViewTransform(app.screen.width, app.screen.height, layout)
   val localX = (e.globalX - vt.offsetX) / vt.scale
   val localY = (e.globalY - vt.offsetY) / vt.scale
@@ -1076,7 +1096,7 @@ private def computeViewTransform(screenW: Double, screenH: Double, layout: Layou
 // (see currentLayout), so a real slot with real slack to center within actually exists
 // there, unlike the stacking axis.
 private def applyViewTransform(app: Application, battleWorld: Container, aiWorld: Container, mode: Mode): Unit =
-  val aiScale = aiScaleFor(mode)
+  val aiScale = aiScaleFor(app.screen.width, app.screen.height, mode)
   val layout = currentLayout(app.screen.width, app.screen.height, aiScale)
   aiWorld.scale.set(aiScale)
   if layout.portrait then
@@ -1713,6 +1733,7 @@ private def destroyInfo(target: HoverTarget, maze: MazeState): Option[(Int, Int,
         maze.buildings.find(_.id == target.id).map { b =>
           val cost = BuildingSpecs.all(b.kind).cost
           val refundText = cost.toList
+            .filter(_._2 > 0.0)
             .sortBy(_._1.ordinal)
             .map { case (res, amount) =>
               s"+${formatDecimal(amount * Balance.DemolishRefundFraction)} ${TooltipText.icon(res)}"
