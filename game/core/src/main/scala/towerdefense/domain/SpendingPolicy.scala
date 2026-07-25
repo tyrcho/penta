@@ -44,7 +44,20 @@ object SpendingPolicy:
     if amount == 0.0 then 1.0
     else
       val available = state.resources.getOrElse(res, 0.0)
-      if available <= 0.0 then UnaffordableMarginFloor
+      if available <= 0.0 then
+        // Zero stock doesn't mean actually unaffordable — Placement.canAfford (what
+        // really gates whether a build succeeds) lets Gold cover any shortfall 1-for-1,
+        // but this margin used to ignore that entirely, so a candidate Gold could easily
+        // pay for (e.g. Grove's Wood cost, from the real starting position of 0 Wood/100
+        // Gold) scored the same UnaffordableMarginFloor as one nothing on the board could
+        // ever afford — a real lockout: Cave (whose Wood cost happens to be exactly 0.0,
+        // sidestepping this branch entirely) was the only building that ever competed,
+        // confirmed via a full tournament run's per-match transcripts (see AiStrategy.
+        // ladder's doc). Scored the same as a zero-cost term (1.0, "not what's
+        // constraining this candidate") rather than penalized — growthBonus, not this
+        // term, is what should keep preferring a candidate that'd actually establish
+        // production over one Gold merely bankrolls forever.
+        if state.resources.getOrElse(Resource.Gold, 0.0) >= amount then 1.0 else UnaffordableMarginFloor
       else
         val plainMargin = (available - amount) / available
         val rate = CombatEngine.productionPerSec(state, res)

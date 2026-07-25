@@ -111,6 +111,50 @@ class SpendingPolicyTest extends munit.FunSuite:
     assert(!score.isNaN, s"resourceScore must never be NaN, got $score")
   }
 
+  // Regression for a real lockout found via a full sim/tournament run's per-match logs
+  // (see AiStrategy.ladder's doc): every maze now starts at 0 of every named resource
+  // (Balance.StartingResources), so the UnaffordableMarginFloor above fired on turn one
+  // for almost everything — Placement.canAfford already treats Gold as a 1-for-1 joker
+  // for any shortfall, but marginFor didn't know that, so a candidate Gold could easily
+  // pay for still scored the same catastrophic floor as one nothing on the board could
+  // ever afford. Cave was the one exception (its Wood cost is exactly 0.0), which is why
+  // every strategy on the ladder got stuck building only Cave forever.
+  test("marginFor treats a zero-stock resource as affordable, not the unaffordable floor, when Gold covers it") {
+    val goldCoversIt = MazeState.initial.copy(resources = Map(Resource.Wood -> 0.0, Resource.Gold -> 100.0))
+    val margin = SpendingPolicy.rawMargin(goldCoversIt, BuildingKind.Grove)
+    assert(
+      margin > 0.0,
+      s"Grove's Wood cost (${Balance.GroveCostWood}) is comfortably covered by 100 Gold; rawMargin should not read as unaffordable, got $margin"
+    )
+  }
+
+  test("marginFor still applies the unaffordable floor when Gold can't cover the shortfall either") {
+    val goldTooLow = MazeState.initial.copy(resources = Map(Resource.Wood -> 0.0, Resource.Gold -> 1.0))
+    val margin = SpendingPolicy.rawMargin(goldTooLow, BuildingKind.Grove)
+    assert(
+      margin < -1.0,
+      s"Grove's Wood cost (${Balance.GroveCostWood}) exceeds the 1.0 Gold on hand; rawMargin should still read as unaffordable, got $margin"
+    )
+  }
+
+  test("once Fire has some production, Grove clearly outscores a second Cave — the observed lockout is broken") {
+    // Mirrors the exact shape of the transcript that surfaced this bug: a Cave already
+    // stands (so Fire now has production), Gold is plentiful, but Wood has never been
+    // produced. Before marginFor became Gold-aware, Grove's Wood term scored the
+    // catastrophic floor regardless of Gold, so a second (third, fourth, ...) Cave kept
+    // winning forever. Now Grove's Wood term reads as affordable (Gold-covered), and
+    // growthBonus (Wood still unproduced, unlike Fire) tips it ahead of a Cave repeat.
+    val afterOneCave = MazeState.initial.copy(
+      resources = Map(Resource.Gold -> 80.0, Resource.Fire -> 5.0),
+      buildings = List(building(1, 0, 1, BuildingKind.Cave))
+    )
+    assert(
+      SpendingPolicy.resourceScore(afterOneCave, BuildingKind.Grove) >
+        SpendingPolicy.resourceScore(afterOneCave, BuildingKind.Cave),
+      "Grove (still establishing Wood) should now beat a repeat Cave (Fire already flowing, discounted by existingCount)"
+    )
+  }
+
   test("rawMargin is a finite (not infinite) number when a NONZERO-cost resource's stock is exactly zero") {
     // Every maze now starts with 0 of the 5 named resources (only Gold — see
     // Balance.StartingResources), so this is no longer a rare edge case but the literal
