@@ -14,7 +14,17 @@ object Simulator:
   // aggregate stats (Tally.avgResearch/Standing.avgResearch below) — a strategy's own
   // build/upgrade choices already drive whether it researches at all (see
   // AiStrategy.maybeResearch), this just surfaces the outcome.
-  case class MatchOutcome(winner: Option[String], ticks: Int, totalResearchA: Int, totalResearchB: Int)
+  // finalBattle: the match's last BattleState, kept around (not just discarded after
+  // winner/ticks/research are extracted) so a caller can log a cheap final snapshot
+  // (MatchLog.snapshotLine) without re-simulating the match just to see it — see
+  // tournamentMatchLine below, the reason this field exists.
+  case class MatchOutcome(
+      winner: Option[String],
+      ticks: Int,
+      totalResearchA: Int,
+      totalResearchB: Int,
+      finalBattle: BattleState
+  )
   case class Tally(name: String, wins: Int, draws: Int, avgTicks: Double, avgResearch: Double)
   case class SpendingWeights(resourceWeight: Double, counterWeight: Double, layoutWeight: Double)
   case class WeightResult(weights: SpendingWeights, winRate: Double)
@@ -44,7 +54,7 @@ object Simulator:
       case MatchResult.PlayerWins(_) => "a"
       case MatchResult.AiWins(_)     => "b"
     }
-    MatchOutcome(winner, ticks, battle.player.researchLevels.values.sum, battle.ai.researchLevels.values.sum)
+    MatchOutcome(winner, ticks, battle.player.researchLevels.values.sum, battle.ai.researchLevels.values.sum, battle)
 
   // Same match as runMatch, but drives BattleEngine.tickDetailed instead of tick and
   // formats every event through MatchLog, handing each line to `writeLine` — a separate
@@ -76,7 +86,7 @@ object Simulator:
       case MatchResult.PlayerWins(_) => "a"
       case MatchResult.AiWins(_)     => "b"
     }
-    MatchOutcome(winner, ticks, battle.player.researchLevels.values.sum, battle.ai.researchLevels.values.sum)
+    MatchOutcome(winner, ticks, battle.player.researchLevels.values.sum, battle.ai.researchLevels.values.sum, battle)
 
   // Runs `matches` independent games of the two named strategies (resolved via
   // AiStrategy.all) and tallies wins/draws/avg-ticks per side. `onProgress` (default
@@ -130,21 +140,31 @@ object Simulator:
   // strategies that aren't (and shouldn't be) registered on the real ladder — e.g.
   // rateTournament's RateLimited-wrapped variants, a one-off comparison rather than a
   // permanent addition to AiStrategy.all.
+  // logLine: called once per individual match (not once per pairing) with a cheap
+  // one-line summary — no-op by default so every existing caller/test pays nothing for
+  // it; the `tournament` CLI wires it to a PrintWriter so every match played is logged
+  // preemptively, rather than needing a separate reproduction step (not even guaranteed
+  // to reproduce the same outcome, since ComposedStrategy's tie-breaks are unseeded here)
+  // after the fact to see why an unusual result happened.
   def tournamentStandings(
       names: Seq[String],
       matchesPerPairing: Int,
       maxTicks: Int,
       deltaMs: Double,
       onPairingDone: Int => Unit = _ => (),
-      resolve: String => AiStrategy = AiStrategy.all
+      resolve: String => AiStrategy = AiStrategy.all,
+      logLine: String => Unit = _ => ()
   ): Seq[Standing] =
     val strategies = names.map(n => n -> resolve(n)).toMap
     val records = scala.collection.mutable.Map.empty[String, (Int, Int, Int)].withDefaultValue((0, 0, 0))
     val ratings = scala.collection.mutable.Map.from(names.map(_ -> EloRating.InitialRating))
     val researchTotals = scala.collection.mutable.Map.empty[String, Int].withDefaultValue(0)
     names.combinations(2).zipWithIndex.foreach { case (Seq(nameA, nameB), idx) =>
-      val outcomes =
-        Seq.fill(matchesPerPairing)(runMatch(strategies(nameA), strategies(nameB), maxTicks, deltaMs))
+      val outcomes = (1 to matchesPerPairing).map { m =>
+        val outcome = runMatch(strategies(nameA), strategies(nameB), maxTicks, deltaMs)
+        logLine(tournamentMatchLine(nameA, nameB, m, matchesPerPairing, outcome))
+        outcome
+      }
       outcomes.foreach { outcome =>
         val scoreA = outcome.winner match
           case Some("a") => 1.0
@@ -171,6 +191,123 @@ object Simulator:
         Standing(name, wins, draws, losses, matches, winRate, ratings(name), avgResearch)
       }
       .sortBy(-_.winRate)
+
+  // One line per match: pairing, which match within the pairing, winner, and a final
+  // resource/plunder/corrupted snapshot (MatchLog.snapshotLine — cheap, no per-tick
+  // diffing) — enough to see e.g. "both sides only ever built Cave, so the plunder-race
+  // victory condition's 2x-opponent target chased itself into a draw" without needing a
+  // separate `sim/run --log` reproduction.
+  private def tournamentMatchLine(
+      nameA: String,
+      nameB: String,
+      matchIndex: Int,
+      matchesPerPairing: Int,
+      outcome: MatchOutcome
+  ): String =
+    val winner = outcome.winner.getOrElse("draw")
+    s"$nameA vs $nameB  match $matchIndex/$matchesPerPairing  winner=$winner  " +
+      MatchLog.snapshotLine(outcome.ticks, outcome.finalBattle)
+
+  // ceil, not floor/round: a Swiss tournament needs enough rounds to fully separate a
+  // ranking as the field doubles, and ceil is what guarantees that (a 33-name field needs
+  // a 6th round just as much as a 64-name one does, floor would round both down to 5).
+  private[sim] def swissRounds(playerCount: Int): Int =
+    math.ceil(math.log(playerCount.toDouble) / math.log(2.0)).toInt
+
+  // Swiss-system pairing instead of a full round-robin: each round ranks every player by
+  // score (win=1, draw=0.5 — the same accumulator the final Standing.wins/draws produce)
+  // first and Elo second, then folds the ranked field in half and pairs rank i of the top
+  // half against rank i of the bottom half ("pair the best ranked with the best of the
+  // second half, and so on"), skipping any pairing already played this tournament where
+  // an alternative is available. Cuts a 25-name ladder's 300-pairing round-robin down to
+  // swissRounds(25) = 5 rounds x 12 pairings = 60 matches — enough rounds to separate a
+  // clear ranking without needing to play every possible pairing.
+  //
+  // Odd-sized fields can't fold-pair everyone every round — the lowest-ranked player who
+  // hasn't already had a bye sits out instead, credited a full win (and a played "match")
+  // in the standings, same as beating a real opponent, but touching no Elo since no game
+  // was actually simulated.
+  //
+  // The rematch-avoidance search below is greedy, not a globally-optimal Swiss matcher: it
+  // walks the top half in rank order, giving each the best-ranked still-available bottom-
+  // half opponent it hasn't already played, falling back to a forced rematch only if
+  // every remaining bottom-half opponent has already been played (only plausible on a
+  // very small or heavily-rematched field) — simple, and sufficient for "avoid matches
+  // which were already played" without needing a real matching-algorithm dependency.
+  def swissStandings(
+      names: Seq[String],
+      matchesPerPairing: Int,
+      maxTicks: Int,
+      deltaMs: Double,
+      onRoundDone: Int => Unit = _ => (),
+      resolve: String => AiStrategy = AiStrategy.all,
+      logLine: String => Unit = _ => ()
+  ): Seq[Standing] =
+    val strategies = names.map(n => n -> resolve(n)).toMap
+    val records = scala.collection.mutable.Map.empty[String, (Int, Int, Int)].withDefaultValue((0, 0, 0))
+    val ratings = scala.collection.mutable.Map.from(names.map(_ -> EloRating.InitialRating))
+    val researchTotals = scala.collection.mutable.Map.empty[String, Int].withDefaultValue(0)
+    val hadBye = scala.collection.mutable.Set.empty[String]
+    val played = scala.collection.mutable.Set.empty[Set[String]]
+
+    def scoreOf(name: String): Double =
+      val (wins, draws, _) = records(name)
+      wins + 0.5 * draws
+
+    val rounds = swissRounds(names.size)
+    (1 to rounds).foreach { round =>
+      val ranked = names.sortBy(n => (-scoreOf(n), -ratings(n)))
+      val (byeName, field) =
+        if ranked.size % 2 == 1 then
+          val bye = ranked.reverseIterator.find(n => !hadBye.contains(n)).getOrElse(ranked.last)
+          (Some(bye), ranked.filterNot(_ == bye))
+        else (None, ranked)
+      byeName.foreach { name =>
+        hadBye += name
+        records(name) = addRecord(records(name), (1, 0, 0))
+      }
+      val half = field.size / 2
+      val topHalf = field.take(half)
+      val bottomPool = scala.collection.mutable.ListBuffer.from(field.drop(half))
+      val pairs = topHalf.map { nameA =>
+        val idx = bottomPool.indexWhere(nameB => !played.contains(Set(nameA, nameB)))
+        val nameB = if idx >= 0 then bottomPool.remove(idx) else bottomPool.remove(0)
+        (nameA, nameB)
+      }
+      pairs.foreach { case (nameA, nameB) =>
+        played += Set(nameA, nameB)
+        val outcomes = (1 to matchesPerPairing).map { m =>
+          val outcome = runMatch(strategies(nameA), strategies(nameB), maxTicks, deltaMs)
+          logLine(tournamentMatchLine(nameA, nameB, m, matchesPerPairing, outcome))
+          outcome
+        }
+        outcomes.foreach { outcome =>
+          val scoreA = outcome.winner match
+            case Some("a") => 1.0
+            case Some("b") => 0.0
+            case _         => 0.5
+          val (newA, newB) = EloRating.updateRatings(ratings(nameA), ratings(nameB), scoreA)
+          ratings(nameA) = newA
+          ratings(nameB) = newB
+        }
+        val (winsA, drawsA, lossesA) = record(outcomes, "a")
+        val (winsB, drawsB, lossesB) = record(outcomes, "b")
+        records(nameA) = addRecord(records(nameA), (winsA, drawsA, lossesA))
+        records(nameB) = addRecord(records(nameB), (winsB, drawsB, lossesB))
+        researchTotals(nameA) = researchTotals(nameA) + outcomes.map(_.totalResearchA).sum
+        researchTotals(nameB) = researchTotals(nameB) + outcomes.map(_.totalResearchB).sum
+      }
+      onRoundDone(round)
+    }
+    names
+      .map { name =>
+        val (wins, draws, losses) = records(name)
+        val matches = wins + draws + losses
+        val winRate = if matches == 0 then 0.0 else wins.toDouble / matches
+        val avgResearch = if matches == 0 then 0.0 else researchTotals(name).toDouble / matches
+        Standing(name, wins, draws, losses, matches, winRate, ratings(name), avgResearch)
+      }
+      .sortBy(s => (-(s.wins + 0.5 * s.draws), -s.elo))
 
   private def record(outcomes: Seq[MatchOutcome], side: String): (Int, Int, Int) =
     val wins = outcomes.count(_.winner.contains(side))
@@ -287,15 +424,31 @@ object Simulator:
       case Nil => (None, 100, Nil)
 
   // Defaults to every strategy on AiStrategy.ladder — "a mini tournament across the AIs"
-  // means all of them, not a hand-picked subset — round-robin, one pairing at a time.
+  // means all of them, not a hand-picked subset. Swiss rounds (swissStandings), not a full
+  // round-robin: a 25-entry ladder's C(25,2)=300 pairings took ~2h17m at 2 matches/pairing
+  // last measured — swissRounds(25)=5 rounds x 12 pairings cuts that down to a fraction of
+  // the matches while still separating a clear ranking. Every match played is logged
+  // preemptively (one line: pairing, winner, final snapshot) to `logPath` as it happens,
+  // not just on request after the fact — diagnosing an odd result (e.g. an unexpectedly
+  // high draw rate at the ladder's slowest tier) used to mean manually reproducing it with
+  // `sim/run --log` afterwards, which isn't even guaranteed to reproduce the same outcome
+  // since ComposedStrategy's tie-breaks are unseeded here.
   @main def tournament(args: String*): Unit =
-    val matchesPerPairing = args.lift(0).map(_.toInt).getOrElse(10)
+    val matchesPerPairing = args.lift(0).map(_.toInt).getOrElse(1)
     val maxTicks = args.lift(1).map(_.toInt).getOrElse(3_000)
     val deltaMs = args.lift(2).map(_.toDouble).getOrElse(100.0)
+    val logPath = args.lift(3).getOrElse("tournament-matches.log")
     val names = AiStrategy.ladder.map(_._1)
-    val reporter = new ProgressReporter("tournament", names.combinations(2).size)
-    val standings = tournamentStandings(names, matchesPerPairing, maxTicks, deltaMs, reporter.tick)
-    println(s"Tournament: ${names.mkString(", ")} ($matchesPerPairing matches/pairing):")
+    val rounds = swissRounds(names.size)
+    val reporter = new ProgressReporter("tournament", rounds)
+    val writer = new java.io.PrintWriter(logPath)
+    val standings =
+      try swissStandings(names, matchesPerPairing, maxTicks, deltaMs, reporter.tick, logLine = writer.println)
+      finally writer.close()
+    println(
+      s"Swiss tournament: ${names.size} strategies, $rounds rounds, " +
+        s"$matchesPerPairing match(es)/pairing (per-match log: $logPath):"
+    )
     println(formatStandingsTable(standings))
 
   // One-off comparison of build *speed* (RateLimited.buildCooldownMs) crossed with a

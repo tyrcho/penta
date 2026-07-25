@@ -187,40 +187,48 @@ object AiStrategy:
   // GameApp.aiLevelIndex): 25 levels built by crossing 5 of catalog's strongest/most
   // distinct base strategies with 5 build-speed periods (1/2/3/5/8 seconds per build, via
   // RateLimited — see AiStrategy.buildCooldownMs's doc), then ordering all 25 combinations
-  // by the Elo rating `sim/runMain towerdefense.sim.rateTournament` measured across a full
-  // round-robin (300 pairings, 1 match each). Build speed turned out to dominate strategy
-  // choice at every tier (each base strategy's own @1s beats its @2s beats its @3s, ...,
-  // monotonically), so the ladder interleaves strategies and speeds rather than grouping
-  // by either alone — e.g. maze-corruption@1s (Elo 1653) outranks resource-maze@3s (Elo
-  // 1628), even though resource-maze beats maze-corruption at matched speed.
+  // by measured Elo rating. Build speed turned out to dominate strategy choice at every
+  // tier (each base strategy's own @1s beats its @2s beats its @3s, ..., monotonically),
+  // so the ladder interleaves strategies and speeds rather than grouping by either alone.
+  //
+  // Re-measured via `sim/runMain towerdefense.sim.tournament 2` (full 25-entry
+  // round-robin, 300 pairings, 2 matches/pairing) after the Gold-resource rework zeroed
+  // every maze's starting Wood/Fire/Light/Shadow/Crystal down to 0.0 in favor of a single
+  // shared 100-Gold joker (Balance.StartingGold) — that rebalance reordered the ladder
+  // enough that comb-corruption now leads every single speed tier (previously
+  // maze-corruption edged it out at @1s). See AiStrategyTest's ladder-order test for the
+  // exact ranking this produced. `sim/runMain towerdefense.sim.tournament` itself now
+  // plays Swiss rounds rather than a full round-robin (see Simulator.swissStandings) —
+  // future re-measurements after further rebalances will be faster to produce, at the
+  // cost of needing a couple of rounds' worth of matches rather than every pairing.
   private val catalogByName: Map[String, AiStrategy] = catalog.toMap
 
   private def rateLimited(baseName: String, periodSec: Int): (String, AiStrategy) =
     s"$baseName@${periodSec}s" -> RateLimited(catalogByName(baseName), buildCooldownMs = periodSec * 1_000.0)
 
   val ladder: Seq[(String, AiStrategy)] = Seq(
-    rateLimited("comb-corruption", 8),
-    rateLimited("balanced", 8),
     rateLimited("linear", 8),
+    rateLimited("linear", 5),
+    rateLimited("linear", 3),
+    rateLimited("balanced", 5),
+    rateLimited("balanced", 8),
+    rateLimited("comb-corruption", 8),
     rateLimited("maze-corruption", 8),
     rateLimited("resource-maze", 8),
     rateLimited("comb-corruption", 5),
-    rateLimited("balanced", 5),
-    rateLimited("linear", 5),
-    rateLimited("linear", 3),
-    rateLimited("comb-corruption", 3),
-    rateLimited("maze-corruption", 5),
-    rateLimited("balanced", 3),
-    rateLimited("linear", 2),
     rateLimited("resource-maze", 5),
-    rateLimited("linear", 1),
-    rateLimited("maze-corruption", 3),
-    rateLimited("balanced", 2),
-    rateLimited("maze-corruption", 2),
+    rateLimited("maze-corruption", 5),
+    rateLimited("linear", 2),
     rateLimited("resource-maze", 3),
-    rateLimited("maze-corruption", 1),
+    rateLimited("balanced", 3),
+    rateLimited("comb-corruption", 3),
+    rateLimited("maze-corruption", 3),
+    rateLimited("linear", 1),
+    rateLimited("maze-corruption", 2),
     rateLimited("resource-maze", 2),
+    rateLimited("balanced", 2),
     rateLimited("balanced", 1),
+    rateLimited("maze-corruption", 1),
     rateLimited("resource-maze", 1),
     rateLimited("comb-corruption", 2),
     rateLimited("comb-corruption", 1)
