@@ -191,47 +191,52 @@ object AiStrategy:
   // tier (each base strategy's own @1s beats its @2s beats its @3s, ..., monotonically),
   // so the ladder interleaves strategies and speeds rather than grouping by either alone.
   //
-  // Re-measured via `sim/runMain towerdefense.sim.tournament 2` (full 25-entry
-  // round-robin, 300 pairings, 2 matches/pairing) after the Gold-resource rework zeroed
-  // every maze's starting Wood/Fire/Light/Shadow/Crystal down to 0.0 in favor of a single
-  // shared 100-Gold joker (Balance.StartingGold) — that rebalance reordered the ladder
-  // enough that comb-corruption now leads every single speed tier (previously
-  // maze-corruption edged it out at @1s). See AiStrategyTest's ladder-order test for the
-  // exact ranking this produced. `sim/runMain towerdefense.sim.tournament` itself now
-  // plays Swiss rounds rather than a full round-robin (see Simulator.swissStandings) —
-  // future re-measurements after further rebalances will be faster to produce, at the
-  // cost of needing a couple of rounds' worth of matches rather than every pairing.
+  // Re-measured via `sim/runMain towerdefense.sim.tournament 2` (Swiss rounds, not a full
+  // round-robin — see Simulator.swissStandings) after fixing SpendingPolicy.marginFor to
+  // treat a zero-stock resource as affordable when Gold covers it. The *previous*
+  // measurement (comb-corruption leading every speed tier) turned out to be an artifact of
+  // a real lockout, not real strategic strength: every maze now starts at 0 of every named
+  // resource, and the old Gold-blind marginFor penalized any building needing one of them
+  // as catastrophically unaffordable regardless of Gold on hand — Cave was the sole
+  // exception (its Wood cost happens to be exactly 0.0), so every strategy on the ladder
+  // got stuck building only Cave forever, and comb-corruption/maze-corruption's flat
+  // Mort-kind scoring bonus was the only thing left differentiating anyone. With
+  // diversifying into Grove/Tomb/labs actually possible again, resource-aware strategies
+  // (resource-maze, then linear, which never touched Science/labs either way) now
+  // dominate the top of the ladder at every speed, and comb-corruption fell to the bottom
+  // tier at every speed except @8s. See AiStrategyTest's ladder-order test for the exact
+  // ranking this produced.
   private val catalogByName: Map[String, AiStrategy] = catalog.toMap
 
   private def rateLimited(baseName: String, periodSec: Int): (String, AiStrategy) =
     s"$baseName@${periodSec}s" -> RateLimited(catalogByName(baseName), buildCooldownMs = periodSec * 1_000.0)
 
   val ladder: Seq[(String, AiStrategy)] = Seq(
-    rateLimited("linear", 8),
     rateLimited("linear", 5),
-    rateLimited("linear", 3),
-    rateLimited("balanced", 5),
-    rateLimited("balanced", 8),
-    rateLimited("comb-corruption", 8),
-    rateLimited("maze-corruption", 8),
-    rateLimited("resource-maze", 8),
     rateLimited("comb-corruption", 5),
-    rateLimited("resource-maze", 5),
-    rateLimited("maze-corruption", 5),
-    rateLimited("linear", 2),
-    rateLimited("resource-maze", 3),
-    rateLimited("balanced", 3),
-    rateLimited("comb-corruption", 3),
-    rateLimited("maze-corruption", 3),
-    rateLimited("linear", 1),
-    rateLimited("maze-corruption", 2),
-    rateLimited("resource-maze", 2),
-    rateLimited("balanced", 2),
-    rateLimited("balanced", 1),
-    rateLimited("maze-corruption", 1),
-    rateLimited("resource-maze", 1),
+    rateLimited("resource-maze", 8),
     rateLimited("comb-corruption", 2),
-    rateLimited("comb-corruption", 1)
+    rateLimited("comb-corruption", 1),
+    rateLimited("linear", 8),
+    rateLimited("comb-corruption", 3),
+    rateLimited("balanced", 8),
+    rateLimited("maze-corruption", 5),
+    rateLimited("comb-corruption", 8),
+    rateLimited("maze-corruption", 1),
+    rateLimited("maze-corruption", 3),
+    rateLimited("balanced", 5),
+    rateLimited("maze-corruption", 2),
+    rateLimited("resource-maze", 5),
+    rateLimited("balanced", 1),
+    rateLimited("maze-corruption", 8),
+    rateLimited("balanced", 2),
+    rateLimited("linear", 3),
+    rateLimited("balanced", 3),
+    rateLimited("resource-maze", 3),
+    rateLimited("resource-maze", 2),
+    rateLimited("resource-maze", 1),
+    rateLimited("linear", 1),
+    rateLimited("linear", 2)
   )
 
   // Both catalog (named base combinations, for CLI experiments) and ladder (the 25

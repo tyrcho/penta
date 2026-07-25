@@ -135,42 +135,46 @@ class AiStrategyTest extends munit.FunSuite:
     assertEquals(count(result, BuildingKind.Grove), 0)
   }
 
-  // Re-measured via `sim/runMain towerdefense.sim.tournament 2` (full 25-entry
-  // round-robin, 300 pairings, 2 matches/pairing) after the Gold-resource rework zeroed
-  // every maze's starting Wood/Fire/Light/Shadow/Crystal down to 0.0 in favor of a single
-  // shared 100-Gold joker (see Balance.StartingGold) — that rebalance shuffled the ladder
-  // enough (comb-corruption now leads every speed tier, where maze-corruption used to at
-  // the old pre-Gold measurement) that the previous ordering no longer reflected actual
-  // relative strength. Ranked by Elo rating, weakest to strongest, ascending.
+  // Re-measured via `sim/runMain towerdefense.sim.tournament 2` (Swiss rounds, not a full
+  // round-robin — see Simulator.swissStandings) after fixing SpendingPolicy.marginFor to
+  // treat a zero-stock resource as affordable when Gold covers it: before that fix, every
+  // strategy on the ladder got stuck building only Cave forever (the one building whose
+  // cost structurally dodged the old Gold-blind unaffordable-floor), which is also why the
+  // previous measurement's ranking barely reflected real strategic differences — Science
+  // and every non-Chaos faction's buildings were simply never reachable. resource-maze and
+  // linear (both resource-aware at every speed once diversifying is actually possible) rose
+  // sharply; comb-corruption (whose previous lead came from CorruptionSpending's flat
+  // Mort-kind bonus dominating an all-strategies-are-stuck field) fell to the bottom tier
+  // at every speed except @8s. Ranked by Elo rating, weakest to strongest, ascending.
   test("the ladder is ordered weakest to strongest by measured Elo rating") {
     assertEquals(
       AiStrategy.ladder.map(_._1),
       Seq(
-        "linear@8s",
         "linear@5s",
-        "linear@3s",
-        "balanced@5s",
-        "balanced@8s",
-        "comb-corruption@8s",
-        "maze-corruption@8s",
-        "resource-maze@8s",
         "comb-corruption@5s",
-        "resource-maze@5s",
-        "maze-corruption@5s",
-        "linear@2s",
-        "resource-maze@3s",
-        "balanced@3s",
-        "comb-corruption@3s",
-        "maze-corruption@3s",
-        "linear@1s",
-        "maze-corruption@2s",
-        "resource-maze@2s",
-        "balanced@2s",
-        "balanced@1s",
-        "maze-corruption@1s",
-        "resource-maze@1s",
+        "resource-maze@8s",
         "comb-corruption@2s",
-        "comb-corruption@1s"
+        "comb-corruption@1s",
+        "linear@8s",
+        "comb-corruption@3s",
+        "balanced@8s",
+        "maze-corruption@5s",
+        "comb-corruption@8s",
+        "maze-corruption@1s",
+        "maze-corruption@3s",
+        "balanced@5s",
+        "maze-corruption@2s",
+        "resource-maze@5s",
+        "balanced@1s",
+        "maze-corruption@8s",
+        "balanced@2s",
+        "linear@3s",
+        "balanced@3s",
+        "resource-maze@3s",
+        "resource-maze@2s",
+        "resource-maze@1s",
+        "linear@1s",
+        "linear@2s"
       )
     )
   }
