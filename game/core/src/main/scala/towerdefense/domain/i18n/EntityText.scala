@@ -129,23 +129,22 @@ object EntityText:
   )
 
   private def passingGateBody: I18nText =
-    val f = faction(BuildingKind.PassingGate)
-    val shadowLinkFr = EntityNames.resourceLink(f, Resource.Shadow, Lang.Fr)
-    val shadowLinkEn = EntityNames.resourceLink(f, Resource.Shadow, Lang.En)
+    val goldFr = EntityNames.resourceName(Resource.Gold, Lang.Fr)
+    val goldEn = EntityNames.resourceName(Resource.Gold, Lang.En)
     I18nText(
       fr = s(
         s"N'envoie aucune unité. Inflige ${decimal(Balance.PassingGateDamagePerSec)} dégâts par seconde à toute " +
           "unité se trouvant sur l'une de ses 4 cases adjacentes.",
         s"Chaque fois qu'une unité meurt sur l'une de ces 4 cases (peu importe ce qui l'a tuée), le Portail " +
-          s"draine ${percentPoints(Balance.PassingGateDeathShadowFraction * 100)} des ressources totales " +
-          s"actuelles de son propriétaire et les convertit en $shadowLinkFr bonus."
+          s"récupère ${percentPoints(Balance.PassingGateHarvestFraction * 100)} de la valeur en ressources de " +
+          s"CETTE unité (ce qu'elle aurait elle-même pillé), convertie en $goldFr."
       ),
       en = s(
         s"Spawns no unit. Deals ${decimal(Balance.PassingGateDamagePerSec)} damage per second to any unit " +
           "standing on one of its 4 adjacent cells.",
-        "Whenever a unit dies on one of those 4 cells (no matter what killed it), the Passing Gate drains " +
-          s"${percentPoints(Balance.PassingGateDeathShadowFraction * 100)} of its owner's current total " +
-          s"resources and converts them into bonus $shadowLinkEn."
+        "Whenever a unit dies on one of those 4 cells (no matter what killed it), the Passing Gate recovers " +
+          s"${percentPoints(Balance.PassingGateHarvestFraction * 100)} of THAT unit's own resource value " +
+          s"(whatever it would itself have plundered), converted to $goldEn."
       )
     )
 
@@ -298,20 +297,22 @@ object EntityText:
   val unitBodies: Map[UnitKind, I18nText] = Map(
     UnitKind.Elf -> I18nText.combine(
       spawnedByLine(BuildingKind.Grove, faction(UnitKind.Elf)),
-      plunderLine(List(Resource.Wood -> Balance.PlunderPerUnit), faction(UnitKind.Elf))
+      plunderLine(List(Resource.Wood -> Balance.PlunderPerUnit), faction(UnitKind.Elf), asGold = false)
     ),
     UnitKind.Goblin -> I18nText.combine(
       spawnedByLine(BuildingKind.Cave, faction(UnitKind.Goblin)),
       plunderLine(
         List(Resource.Wood -> Balance.PlunderPerUnit, Resource.Fire -> Balance.PlunderPerUnit),
-        faction(UnitKind.Goblin)
+        faction(UnitKind.Goblin),
+        asGold = true
       )
     ),
     UnitKind.Minotaur -> I18nText.combine(
       spawnedByLine(BuildingKind.Labyrinth, faction(UnitKind.Minotaur)),
       plunderLine(
         List(Resource.Wood -> Balance.MinotaurPlunderPerUnit, Resource.Fire -> Balance.MinotaurPlunderPerUnit),
-        faction(UnitKind.Minotaur)
+        faction(UnitKind.Minotaur),
+        asGold = true
       )
     ),
     UnitKind.Paladin -> I18nText.combine(spawnedByLine(BuildingKind.Church, faction(UnitKind.Paladin)), paladinAuraLine),
@@ -468,21 +469,27 @@ object EntityText:
   )
 
   // The amounts/resources listed here are what's drained from the VICTIM (Balance's own
-  // per-unit plunder table, unchanged since before Resource.Gold existed) — but the
-  // attacker's own maze is credited Gold equal to the value stolen, not the plundered
-  // resource itself (BattleEngine.creditPlunder), so a Goblin's owner gains Gold even
-  // though the line below still (correctly) says it plunders Wood and Fire from whoever
-  // it hit. Spelled out explicitly rather than left implicit, since "Pille du Bois"/
-  // "Plunders Wood" alone would otherwise read as "and gains Wood", which is only true of
-  // the resource the *victim* loses, not what the attacker's own economy actually gets.
-  private def plunderLine(amounts: List[(Resource, Double)], from: Faction): I18nText =
+  // per-unit plunder table, unchanged since before Resource.Gold existed) — what the
+  // ATTACKER'S own maze is credited (CreatureSpec.plunderAsGold/BattleEngine.
+  // creditPlunder) differs by kind: Elf (asGold = false) gains the real resource itself,
+  // Goblin/Minotaur (asGold = true) gain the equivalent in Gold instead. Either way the
+  // credit is the FULL nominal amount below, never reduced by how much the opponent
+  // actually had on hand ("you always win res, even if the opponent does not have them" —
+  // project owner's explicit request) — only the victim's own loss is capped at that.
+  private def plunderLine(amounts: List[(Resource, Double)], from: Faction, asGold: Boolean): I18nText =
     val frLinks = amounts.map { case (res, amount) => s"${decimal(amount)} ${EntityNames.resourceLink(from, res, Lang.Fr)}" }
     val enLinks = amounts.map { case (res, amount) => s"${decimal(amount)} ${EntityNames.resourceLink(from, res, Lang.En)}" }
-    val goldFr = EntityNames.resourceName(Resource.Gold, Lang.Fr)
-    val goldEn = EntityNames.resourceName(Resource.Gold, Lang.En)
+    val payoutFr =
+      if asGold then
+        s"reçoit l'équivalent en ${EntityNames.resourceName(Resource.Gold, Lang.Fr)} (en totalité), pas la ressource pillée elle-même"
+      else "reçoit exactement cette ressource, en totalité"
+    val payoutEn =
+      if asGold then
+        s"receives the equivalent in ${EntityNames.resourceName(Resource.Gold, Lang.En)} (in full), not the plundered resource itself"
+      else "receives exactly that resource in full"
     I18nText(
-      fr = s"Pille ${frLinks.mkString(" et ")} à l'adversaire, mais son propriétaire reçoit l'équivalent " +
-        s"en $goldFr, pas la ressource pillée elle-même.",
-      en = s"Plunders ${enLinks.mkString(" and ")} from the opponent, but its owner receives the equivalent " +
-        s"in $goldEn, not the plundered resource itself."
+      fr = s"Pille ${frLinks.mkString(" et ")} à l'adversaire ; son propriétaire $payoutFr, même si " +
+        "l'adversaire n'en a pas assez en stock.",
+      en = s"Plunders ${enLinks.mkString(" and ")} from the opponent; its owner $payoutEn, even if " +
+        "the opponent doesn't have enough in stock."
     )

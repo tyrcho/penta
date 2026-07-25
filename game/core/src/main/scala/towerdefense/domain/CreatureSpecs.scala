@@ -16,10 +16,18 @@ package towerdefense.domain
 // position, e.g. a Soul appearing on top of its Necromancer) for every kind except Tree,
 // which clones itself one cell further along its own path instead (Arbre Anime.md — see
 // CombatEngine.advanceCreatureSummons's nextPathCellCenter).
+// plunderAsGold: how `plunder` pays out to the ATTACKER on arrival (CombatEngine.
+// moveCreatures/BattleEngine.creditPlunder) — false credits the named resource(s) for
+// real (Elf: real Wood, matching Nature's own resource), true converts the sum to Gold
+// instead (Goblin/Minotaur: Chaos raiding for a fungible war-chest, not a specific
+// resource). Either way the VICTIM's own loss (CombatEngine.moveCreatures' `stolen`) is
+// unaffected by this flag and stays capped at whatever they actually have — only the
+// attacker's own credit differs by kind, and is never capped (see creditPlunder's doc).
 case class CreatureSpec(
     maxHp: Double,
     speedPerMs: Double,
     plunder: Map[Resource, Double],
+    plunderAsGold: Boolean = false,
     spawns: Option[(UnitKind, Double)] = None,
     spawnFreezeMs: Double = 0.0,
     spawnAtNextCell: Boolean = false
@@ -35,7 +43,8 @@ object CreatureSpecs:
     UnitKind.Goblin -> CreatureSpec(
       Balance.GoblinMaxHp,
       Balance.GoblinSpeedPerMs,
-      plunder = Map(Resource.Wood -> Balance.PlunderPerUnit, Resource.Fire -> Balance.PlunderPerUnit)
+      plunder = Map(Resource.Wood -> Balance.PlunderPerUnit, Resource.Fire -> Balance.PlunderPerUnit),
+      plunderAsGold = true
     ),
     UnitKind.Minotaur -> CreatureSpec(
       Balance.MinotaurMaxHp,
@@ -43,7 +52,8 @@ object CreatureSpecs:
       plunder = Map(
         Resource.Wood -> Balance.MinotaurPlunderPerUnit,
         Resource.Fire -> Balance.MinotaurPlunderPerUnit
-      )
+      ),
+      plunderAsGold = true
     ),
     // Paladin.md gives it no plunder ability — its value is the shield it provides to
     // adjacent allies, a combat ability that stays outside this spec (see CombatEngine).

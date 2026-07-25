@@ -2213,7 +2213,7 @@ private val perKindHoverRenderers: Map[BuildingKind, (Building, MazeState) => St
   BuildingKind.PassingGate -> { (_, _) =>
     val name = EntityNames.buildingName(BuildingKind.PassingGate, currentLang)
     s"$name — ${TooltipText.spawnsNothing(currentLang)}, " +
-      s"${TooltipText.passingGateAbility(Balance.PassingGateDamagePerSec, Balance.PassingGateDeathShadowFraction * 100, currentLang)}"
+      s"${TooltipText.passingGateAbility(Balance.PassingGateDamagePerSec, Balance.PassingGateHarvestFraction * 100, currentLang)}"
   }
 )
 

@@ -8,4 +8,4 @@ PV: "5"
 
 Produit par [Bosquet](Bosquet.md).
 
-Pille 1 [Bois](Bois.md) à l'adversaire, mais son propriétaire reçoit l'équivalent en Or, pas la ressource pillée elle-même.
+Pille 1 [Bois](Bois.md) à l'adversaire ; son propriétaire reçoit exactement cette ressource, en totalité, même si l'adversaire n'en a pas assez en stock.

@@ -160,28 +160,31 @@ class BattleEngineTest extends munit.FunSuite:
     assertEquals(buildingCount(thirdTick.ai), 2)
   }
 
-  test("a goblin pillaging the player drains the player's real resources but credits the AI in Gold") {
+  test("a goblin pillaging the player drains the player's real resources but credits the AI in Gold, uncapped") {
     val goalPos = GridConfig.cellCenter(GridConfig.goalCell._1, GridConfig.goalCell._2)
     val incomingGoblin =
       Creature(1, goalPos, Balance.GoblinMaxHp, Balance.GoblinMaxHp, speedPerMs = 0.0, UnitKind.Goblin)
     val battle = BattleState(
-      player = withResources(wood = 5.0, fire = 5.0).copy(creatures = List(incomingGoblin)),
+      // Wood set below the nominal plunder amount on purpose, to prove the attacker's
+      // credit isn't capped by it — "you always win res, even if the opponent does not
+      // have them" (project owner's explicit request).
+      player = withResources(wood = 0.5, fire = 5.0).copy(creatures = List(incomingGoblin)),
       ai = withResources() // isolates the plunder-credit effect from production
     )
     val result = BattleEngine.tick(battle, deltaMs = 1.0)
-    // The victim's own loss is unaffected by the Gold change — still drained of the real
-    // resource a Goblin actually plunders (Chaos.md), same as before.
-    assertEquals(result.player.resources(Resource.Wood), 5.0 - Balance.PlunderPerUnit)
+    // The victim's own loss is still capped at what they actually had.
+    assertEquals(result.player.resources(Resource.Wood), 0.0)
     assertEquals(result.player.resources(Resource.Fire), 5.0 - Balance.PlunderPerUnit)
-    // The attacker's payout is Gold instead of Wood/Fire ("chaos units get gold instead of
-    // resources") — the tally (resourcesPlundered) is still the same currency-agnostic sum.
+    // The attacker's payout is Gold instead of Wood/Fire (CreatureSpec.plunderAsGold), and
+    // the FULL nominal amount — 2 * PlunderPerUnit — even though the player only had 0.5
+    // Wood to actually lose. The tally (resourcesPlundered) is the same uncapped sum.
     assertEquals(result.ai.resources(Resource.Wood), 0.0)
     assertEquals(result.ai.resources(Resource.Fire), 0.0)
     assertEquals(result.ai.resources(Resource.Gold), 2 * Balance.PlunderPerUnit)
     assertEquals(result.ai.resourcesPlundered, 2 * Balance.PlunderPerUnit)
   }
 
-  test("a minotaur pillaging the player drains the player's real resources but credits the AI in Gold") {
+  test("a minotaur pillaging the player drains the player's real resources but credits the AI in Gold, uncapped") {
     val goalPos = GridConfig.cellCenter(GridConfig.goalCell._1, GridConfig.goalCell._2)
     val incomingMinotaur = Creature(
       1,
@@ -192,16 +195,35 @@ class BattleEngineTest extends munit.FunSuite:
       UnitKind.Minotaur
     )
     val battle = BattleState(
-      player = withResources(wood = 50.0, fire = 50.0).copy(creatures = List(incomingMinotaur)),
+      player = withResources(wood = 5.0, fire = 50.0).copy(creatures = List(incomingMinotaur)),
       ai = withResources() // isolates the plunder-credit effect from production
     )
     val result = BattleEngine.tick(battle, deltaMs = 1.0)
-    assertEquals(result.player.resources(Resource.Wood), 50.0 - Balance.MinotaurPlunderPerUnit)
+    assertEquals(result.player.resources(Resource.Wood), 0.0) // capped: only 5 Wood available
     assertEquals(result.player.resources(Resource.Fire), 50.0 - Balance.MinotaurPlunderPerUnit)
     assertEquals(result.ai.resources(Resource.Wood), 0.0)
     assertEquals(result.ai.resources(Resource.Fire), 0.0)
+    // Uncapped: the full nominal 2 * MinotaurPlunderPerUnit, not just the 5 Wood the player
+    // actually had to lose.
     assertEquals(result.ai.resources(Resource.Gold), 2 * Balance.MinotaurPlunderPerUnit)
     assertEquals(result.ai.resourcesPlundered, 2 * Balance.MinotaurPlunderPerUnit)
+  }
+
+  test("an elf pillaging the player drains the player's real Wood and credits the AI real Wood too, uncapped") {
+    val goalPos = GridConfig.cellCenter(GridConfig.goalCell._1, GridConfig.goalCell._2)
+    val incomingElf = Creature(1, goalPos, Balance.ElfMaxHp, Balance.ElfMaxHp, speedPerMs = 0.0, UnitKind.Elf)
+    val battle = BattleState(
+      // Wood set below the nominal plunder amount, same reasoning as the Goblin test above.
+      player = withResources(wood = 0.1).copy(creatures = List(incomingElf)),
+      ai = withResources()
+    )
+    val result = BattleEngine.tick(battle, deltaMs = 1.0)
+    assertEquals(result.player.resources(Resource.Wood), 0.0) // capped: only 0.1 available
+    // Elf pays out real Wood, not Gold (CreatureSpec.plunderAsGold is false) — and the full
+    // nominal PlunderPerUnit, not the 0.1 the player actually had to lose.
+    assertEquals(result.ai.resources(Resource.Wood), Balance.PlunderPerUnit)
+    assertEquals(result.ai.resources.getOrElse(Resource.Gold, 0.0), 0.0)
+    assertEquals(result.ai.resourcesPlundered, Balance.PlunderPerUnit)
   }
 
   test("a zombie corrupting a building to destruction credits the full cost and tally to the AI, plus a Gold bonus") {

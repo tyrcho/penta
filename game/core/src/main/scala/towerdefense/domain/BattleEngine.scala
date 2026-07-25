@@ -85,8 +85,14 @@ object BattleEngine:
           )
         case None => (playerResult.state, 0.0)
 
-      val aiCredited = creditCorruption(creditPlunder(aiBuilt, playerResult.stolen), playerResult.corrupted)
-      val playerCredited = creditCorruption(creditPlunder(playerBuilt, aiResult.stolen), aiResult.corrupted)
+      val aiCredited = creditCorruption(
+        creditPlunder(aiBuilt, playerResult.plunderedResources, playerResult.plunderedGold),
+        playerResult.corrupted
+      )
+      val playerCredited = creditCorruption(
+        creditPlunder(playerBuilt, aiResult.plunderedResources, aiResult.plunderedGold),
+        aiResult.corrupted
+      )
       val aiFinal = deliverUnits(aiCredited, playerResult.spawned)
       val playerFinal = deliverUnits(playerCredited, aiResult.spawned)
 
@@ -125,19 +131,26 @@ object BattleEngine:
       val researched = strategy.maybeResearch(upgraded, opponent)
       (strategy.maybeBuild(researched, opponent), strategy.buildCooldownMs)
 
-  // What a Goblin/Minotaur plundered from the opponent (Chaos.md: "arracher ses
-  // ressources") lands in the attacker's own economy as Gold instead of whatever specific
-  // resource was actually stolen — added at the project owner's explicit request alongside
-  // the new Gold resource ("chaos units get gold instead of resources"). The victim's own
-  // loss is unaffected (CombatEngine.moveCreatures still drains their real Wood/Fire/etc.,
-  // capped at what they have) — only the attacker's payout currency changes here. The
-  // Chaos victory tally (resourcesPlundered) is still the plain sum of value stolen,
-  // currency-agnostic either way.
-  private def creditPlunder(state: MazeState, stolen: Map[Resource, Double]): MazeState =
-    val goldGained = stolen.values.sum
+  // What a Goblin/Minotaur/Elf plundered from the opponent (Chaos.md: "arracher ses
+  // ressources") lands in the attacker's own economy — as Gold for Goblin/Minotaur
+  // (CreatureSpec.plunderAsGold), as the real named resource for Elf — via
+  // CombatEngine.moveCreatures' plunderedResources/plunderedGold split (its own doc).
+  // Deliberately NOT the same amount as the victim's own loss (CombatEngine.
+  // moveCreatures' `stolen`, capped at what they had): the attacker's credit here is
+  // always the full nominal plunder value, even raiding a maze with nothing left to
+  // steal — "you always win res, even if the opponent does not have them" (project
+  // owner's explicit request). The Chaos victory tally (resourcesPlundered) sums both
+  // forms together, currency-agnostic.
+  private def creditPlunder(state: MazeState, plunderedResources: Map[Resource, Double], plunderedGold: Double): MazeState =
+    val creditedResources = plunderedResources.foldLeft(state.resources) { case (acc, (res, amount)) =>
+      acc.updated(res, acc.getOrElse(res, 0.0) + amount)
+    }
+    val creditedWithGold =
+      if plunderedGold > 0 then creditedResources.updated(Resource.Gold, creditedResources.getOrElse(Resource.Gold, 0.0) + plunderedGold)
+      else creditedResources
     state.copy(
-      resources = state.resources.updated(Resource.Gold, state.resources.getOrElse(Resource.Gold, 0.0) + goldGained),
-      resourcesPlundered = state.resourcesPlundered + goldGained
+      resources = creditedWithGold,
+      resourcesPlundered = state.resourcesPlundered + plunderedResources.values.sum + plunderedGold
     )
 
   // A corrupted-to-death building's full cost (Corruption.md) lands in the corrupting

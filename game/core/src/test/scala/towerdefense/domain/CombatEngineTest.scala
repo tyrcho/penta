@@ -405,6 +405,11 @@ class CombatEngineTest extends munit.FunSuite:
     assertEquals(result.stolen.getOrElse(Resource.Fire, 0.0), Balance.PlunderPerUnit)
     assertEquals(result.state.resources(Resource.Wood), 0.0)
     assertEquals(result.state.resources(Resource.Fire), 100.0 - Balance.PlunderPerUnit)
+    // Goblin pays out in Gold (CreatureSpecs.all(Goblin).plunderAsGold) — and unlike the
+    // victim's own loss above, the attacker's credit is NEVER clamped: it's the full
+    // nominal 2 * PlunderPerUnit even though only 0.5 Wood actually existed to steal.
+    assertEquals(result.plunderedResources, Map.empty[Resource, Double])
+    assertEqualsDouble(result.plunderedGold, 2 * Balance.PlunderPerUnit, 1e-9)
   }
 
   test("an elf reaching the goal only plunders wood, not fire") {
@@ -414,6 +419,20 @@ class CombatEngineTest extends munit.FunSuite:
     val result = CombatEngine.tick(state, deltaMs = 1.0)
     assertEquals(result.stolen.getOrElse(Resource.Wood, 0.0), Balance.PlunderPerUnit)
     assertEquals(result.stolen.getOrElse(Resource.Fire, 0.0), 0.0)
+    // Elf pays out real Wood, not Gold (CreatureSpecs.all(Elf).plunderAsGold is false).
+    assertEquals(result.plunderedResources, Map(Resource.Wood -> Balance.PlunderPerUnit))
+    assertEqualsDouble(result.plunderedGold, 0.0, 1e-9)
+  }
+
+  test("an elf's plundered credit is the full nominal Wood amount even when the victim has less than that") {
+    val goalPos = GridConfig.cellCenter(GridConfig.goalCell._1, GridConfig.goalCell._2)
+    val elf = Creature(1, goalPos, Balance.ElfMaxHp, Balance.ElfMaxHp, speedPerMs = 0.0, UnitKind.Elf)
+    val state = withResources(wood = 0.1).copy(creatures = List(elf))
+    val result = CombatEngine.tick(state, deltaMs = 1.0)
+    // The victim's own loss is still clamped (can't go negative)...
+    assertEqualsDouble(result.stolen.getOrElse(Resource.Wood, 0.0), 0.1, 1e-9)
+    // ...but the attacker's credit is the full plunder amount regardless.
+    assertEqualsDouble(result.plunderedResources.getOrElse(Resource.Wood, 0.0), Balance.PlunderPerUnit, 1e-9)
   }
 
   test("a labyrinthe emits exactly one minotaur-spawn signal per interval") {
@@ -441,6 +460,10 @@ class CombatEngineTest extends munit.FunSuite:
     assertEquals(result.stolen.getOrElse(Resource.Fire, 0.0), Balance.MinotaurPlunderPerUnit)
     assertEquals(result.state.resources(Resource.Wood), 0.0)
     assertEquals(result.state.resources(Resource.Fire), 100.0 - Balance.MinotaurPlunderPerUnit)
+    // Minotaur pays out in Gold too, uncapped: the full nominal 2 * MinotaurPlunderPerUnit
+    // even though only 5 Wood actually existed to steal.
+    assertEquals(result.plunderedResources, Map.empty[Resource, Double])
+    assertEqualsDouble(result.plunderedGold, 2 * Balance.MinotaurPlunderPerUnit, 1e-9)
   }
 
   test("an eglise emits exactly one paladin-spawn signal per interval") {
@@ -584,44 +607,45 @@ class CombatEngineTest extends munit.FunSuite:
   }
 
   test(
-    "a passing gate harvests PassingGateDeathShadowFraction of the maze's own total resources " +
-      "(Gold included) when a creature dies on one of its 4 adjacent cells, and flashes"
+    "a passing gate harvests PassingGateHarvestFraction of the DYING UNIT's own resource value, " +
+      "as Gold, when a creature dies on one of its 4 adjacent cells, and flashes"
   ) {
     val gate = Building(100, col = 5, row = 5, BuildingKind.PassingGate, 0.0)
-    // hp set to die from exactly one tick of the gate's own aura damage.
-    val dying =
-      Creature(1, GridConfig.cellCenter(6, 5), hp = Balance.PassingGateDamagePerSec, maxHp = 100.0, speedPerMs = 0.0, UnitKind.Elf)
-    // Gold included and dominant on purpose: post-Gold-rework every maze's real economy
-    // sits mostly in Gold (the 5 named resources start at 0.0 and ramp slowly), so a
-    // "total resources" that carved Gold back out would leave this reward negligible
-    // almost the entire match — Portail.md says "3% des ressources totales", no carve-out.
-    val resources = Map(
-      Resource.Wood -> 100.0,
-      Resource.Fire -> 0.0,
-      Resource.Light -> 0.0,
-      Resource.Shadow -> 20.0,
-      Resource.Crystal -> 0.0,
-      Resource.Gold -> 50.0
+    // hp set to die from exactly one tick of the gate's own aura damage. A Goblin (plunder
+    // Wood + Fire, PlunderPerUnit each) so its own resource value is easy to compute.
+    val dying = Creature(
+      1,
+      GridConfig.cellCenter(6, 5),
+      hp = Balance.PassingGateDamagePerSec,
+      maxHp = 100.0,
+      speedPerMs = 0.0,
+      UnitKind.Goblin
     )
-    val state = MazeState.initial.copy(resources = resources, creatures = List(dying), buildings = List(gate))
+    val state = MazeState.initial.copy(resources = Map.empty, creatures = List(dying), buildings = List(gate))
     val result = CombatEngine.tick(state, deltaMs = 1000.0)
     assertEquals(result.state.creatures, Nil)
-    val expectedShadow = resources(Resource.Shadow) + Balance.PassingGateDeathShadowFraction * resources.values.sum
-    assertEqualsDouble(result.state.resources(Resource.Shadow), expectedShadow, 1e-9)
+    // Not "3% of the maze's own total resources" any more (that left the reward negligible
+    // once every maze starts at 0 of every named resource) — 3% of what the dying unit
+    // itself was carrying (CreatureSpecs.all(kind).plunder), credited as Gold regardless of
+    // whether that unit's own plunder normally pays out in Gold or a real resource.
+    val goblinValue = 2 * Balance.PlunderPerUnit // Wood + Fire, one PlunderPerUnit each
+    val expectedGold = Balance.PassingGateHarvestFraction * goblinValue
+    assertEqualsDouble(result.state.resources(Resource.Gold), expectedGold, 1e-9)
     assertEquals(result.state.buildings.head.flashMs, Balance.PassingGateFlashMs)
   }
 
-  test("a passing gate does not harvest shadow (or flash) for a death far from it") {
+  test("a passing gate does not harvest gold (or flash) for a death far from it") {
     val gate = Building(100, col = 0, row = 0, BuildingKind.PassingGate, 0.0)
     val watchtower = Building(101, col = 10, row = 10, BuildingKind.Watchtower, 0.0)
     val farDying =
       Creature(1, GridConfig.cellCenter(9, 10), hp = Balance.WatchtowerDamagePerSec, maxHp = 100.0, speedPerMs = 0.0, UnitKind.Elf)
-    val resources =
-      Map(Resource.Wood -> 100.0, Resource.Fire -> 0.0, Resource.Light -> 0.0, Resource.Shadow -> 20.0, Resource.Crystal -> 0.0)
-    val state = MazeState.initial.copy(resources = resources, creatures = List(farDying), buildings = List(gate, watchtower))
+    val state = MazeState.initial.copy(resources = Map.empty, creatures = List(farDying), buildings = List(gate, watchtower))
     val result = CombatEngine.tick(state, deltaMs = 1000.0)
     assertEquals(result.state.creatures, Nil)
-    assertEqualsDouble(result.state.resources(Resource.Shadow), resources(Resource.Shadow), 1e-9)
+    // The Watchtower kill itself grants Balance.LoyalesKillGoldReward Gold (a Loi
+    // mechanic, unrelated to Passing Gate) — this test is only about the FAR gate's own
+    // contribution being exactly 0, not about total Gold staying at 0.
+    assertEqualsDouble(result.state.resources.getOrElse(Resource.Gold, 0.0), Balance.LoyalesKillGoldReward, 1e-9)
     assertEquals(result.state.buildings.find(_.kind == BuildingKind.PassingGate).get.flashMs, 0.0)
   }
 

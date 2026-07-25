@@ -5,8 +5,15 @@ import towerdefense.domain.i18n.EntityNames
 
 // spawned: units this maze's buildings just launched — the caller (BattleEngine)
 // delivers those into the *opponent's* maze.
-// stolen: resources this maze just lost to arriving Goblins/Minotaurs — the caller
-// credits those (and the plunder tally) to the opponent that owns them.
+// stolen: resources this maze just LOST to arriving Goblins/Minotaurs/Elves this tick —
+// clamped to what was actually on hand (can't go negative), purely descriptive of this
+// side's own loss.
+// plunderedResources/plunderedGold: what the ATTACKER gets credited (BattleEngine.
+// creditPlunder) for those same arrivals — NOT clamped by `stolen` above, always the
+// full nominal CreatureSpecs.all(kind).plunder amount regardless of how much this side
+// actually had to lose (a raid on an empty maze is still a full raid from the attacker's
+// side). Split by CreatureSpec.plunderAsGold: Elf's Wood lands in plunderedResources as
+// real Wood, Goblin/Minotaur's Wood+Fire value lands in plunderedGold instead.
 // deaths: creatures killed this tick by an aura and/or a Watchtower (see DeathCause) —
 // purely observational, nothing else in CombatEngine reads it back.
 // arrivals: the UnitKind of every creature that reached the goal this tick, including
@@ -18,6 +25,8 @@ case class TickResult(
     state: MazeState,
     spawned: Map[UnitKind, Int],
     stolen: Map[Resource, Double],
+    plunderedResources: Map[Resource, Double],
+    plunderedGold: Double,
     deaths: List[Death],
     arrivals: List[UnitKind],
     corrupted: List[Corrosion]
@@ -51,7 +60,7 @@ object CombatEngine:
   // anything) keeps today's exact behavior with no plumbing required.
   def tick(state: MazeState, deltaMs: Double, attackerResearchLevels: Map[BuildingKind, Int] = Map.empty): TickResult =
     val s0 = advanceConstruction(state, deltaMs)
-    val (s1, stolen, arrivals) = moveCreatures(s0, deltaMs)
+    val (s1, stolen, plunderedResources, plunderedGold, arrivals) = moveCreatures(s0, deltaMs)
     val (s2, deaths) = applyDamageSources(s1, deltaMs)
     val (s3, corrupted, hitsByCreature) = applyCorruption(s2, deltaMs, attackerResearchLevels)
     val s3a = healBuildingCorruption(s3, deltaMs)
@@ -59,7 +68,7 @@ object CombatEngine:
     val s4 = produceResources(s3b, deltaMs)
     val (s5, spawned) = advanceSpawnTimers(s4, deltaMs)
     val s6 = advanceCreatureSummons(s5, deltaMs)
-    TickResult(s6, spawned, stolen, deaths, arrivals, corrupted)
+    TickResult(s6, spawned, stolen, plunderedResources, plunderedGold, deaths, arrivals, corrupted)
 
   // Re-pathfinds every creature from its current cell to the goal each tick, avoiding
   // building cells — no cached path to invalidate when a new building changes the maze.
@@ -67,12 +76,16 @@ object CombatEngine:
   // Goblin/Minotaur take both (Minotaur much more), and the Paladin/Wolf take neither
   // (Paladin.md/Loup.md give them no plunder ability — their value is the shield/speed
   // buff they provide in applyDamageSources/effectiveSpeedPerMs). `arrived`'s kinds are
-  // reported in full via the third return value, since `stolen` alone drops any arrival
+  // reported in full via the final return value, since `stolen` alone drops any arrival
   // with no plunder ability entirely.
+  // stolen (this side's own loss) stays clamped to what was actually on hand; the
+  // plunderedResources/plunderedGold split (what the attacker gets — TickResult's own
+  // doc) is computed separately from the same `arrived` list but deliberately NOT
+  // clamped, straight off each kind's full nominal plunder amount.
   private def moveCreatures(
       state: MazeState,
       deltaMs: Double
-  ): (MazeState, Map[Resource, Double], List[UnitKind]) =
+  ): (MazeState, Map[Resource, Double], Map[Resource, Double], Double, List[UnitKind]) =
     val blocked = state.buildingCells
     val angelCells = state.buildings.filter(_.kind == BuildingKind.Angel).map(b => (b.col, b.row)).toSet
     val (remaining, arrived) =
@@ -83,13 +96,17 @@ object CombatEngine:
     val stolen = plundered.map { case (res, amount) =>
       res -> math.min(state.resources.getOrElse(res, 0.0), amount)
     }
+    val (goldPlunderers, resourcePlunderers) = arrived.partition(c => CreatureSpecs.all(c.kind).plunderAsGold)
+    val plunderedResources =
+      resourcePlunderers.flatMap(c => CreatureSpecs.all(c.kind).plunder).groupMapReduce(_._1)(_._2)(_ + _)
+    val plunderedGold = goldPlunderers.flatMap(c => CreatureSpecs.all(c.kind).plunder.values).sum
     val next = state.copy(
       creatures = remaining,
       resources = stolen.foldLeft(state.resources) { case (acc, (res, amount)) =>
         acc.updated(res, acc.getOrElse(res, 0.0) - amount)
       }
     )
-    (next, stolen, arrived.map(_.kind))
+    (next, stolen, plunderedResources, plunderedGold, arrived.map(_.kind))
 
   // Necromancien.md: "pendant 1 seconde, il reste immobile" (see CreatureSpec.
   // spawnFreezeMs/Creature.frozenMs) — a frozen creature doesn't pathfind or move at all
@@ -289,38 +306,38 @@ object CombatEngine:
 
   // Portail.md: any creature dying on one of a PassingGate's 4 orthogonally-adjacent cells
   // this tick — regardless of what actually killed it (its own aura, a Watchtower, even a
-  // Forest/Angel aura elsewhere reaching the same cell) — earns the owning maze a Shadow
-  // reward equal to PassingGateDeathShadowFraction of `state`'s OWN current total resource
-  // stockpile, Gold included — "3% des ressources totales", no carve-out, per the wiki.
-  // (Gold used to be excluded here on the theory that its stock swings on unrelated
-  // mechanics — plunder, Loi kills, Mort's own corruption bonus — Portail.md was never
-  // balanced against; but post-Gold-rework every maze's real economy sits mostly in Gold
-  // (the 5 named resources all start at 0.0 and ramp slowly), so excluding it left this
-  // reward negligible almost the entire match instead of the meaningful bonus intended.)
-  // Snapshotted once before any reward is added, so multiple qualifying deaths this tick
-  // don't compound off each other's reward.
+  // Forest/Angel aura elsewhere reaching the same cell) — earns the owning maze a Gold
+  // reward equal to PassingGateHarvestFraction of THAT DYING UNIT's own resource value
+  // (CreatureSpecs.all(kind).plunder.values.sum), not a share of the maze's own stockpile.
+  // (Used to be "3% of the maze's own total resources, as Shadow" — but every maze now
+  // starts at 0 of every named resource, which left that version's reward negligible
+  // almost the entire match; scaling off the dying unit's own value instead means the
+  // reward tracks what actually died, not how the rest of the economy happens to be
+  // doing. Always paid as Gold now, not Shadow — a non-plunderer death (Paladin, Wolf,
+  // Zombie, ...) has no resource value to harvest, so it contributes 0.)
   // Two gates both adjacent to the same death each independently harvest it, and each also
   // sets its own flashMs (Building.flashMs's doc) to the UI's kill-flash duration; a gate
   // with no qualifying death nearby this tick just counts flashMs down toward 0 instead,
   // same shape as spawnCountdownMs/frozenMs elsewhere in the domain.
   private def applyPassingGateHarvest(state: MazeState, dead: List[Creature], deltaMs: Double): MazeState =
-    val deadCells = dead.map(c => GridConfig.cellOf(c.pos))
-    val totalResourcesSnapshot = state.resources.values.sum
-    val (buildings, shadowReward) =
+    val deadByCell = dead.map(c => GridConfig.cellOf(c.pos) -> c.kind)
+    val (buildings, goldReward) =
       state.buildings.foldLeft((List.empty[Building], 0.0)) { case ((acc, reward), b) =>
         // Still under construction: no harvest ability yet (Building.constructionRemainingMs's
         // doc) — passed through unchanged rather than fading a flashMs that's still 0 anyway.
         if b.kind != BuildingKind.PassingGate || b.constructionRemainingMs > 0.0 then (b :: acc, reward)
         else
           val adjacent = Pathfinding.neighbors((b.col, b.row)).toSet
-          val harvestedCount = deadCells.count(adjacent.contains)
-          if harvestedCount > 0 then
-            val gateReward = harvestedCount * Balance.PassingGateDeathShadowFraction * totalResourcesSnapshot
+          val harvestedKinds = deadByCell.collect { case (cell, kind) if adjacent.contains(cell) => kind }
+          if harvestedKinds.nonEmpty then
+            val gateReward = harvestedKinds.map(kind =>
+              Balance.PassingGateHarvestFraction * CreatureSpecs.all(kind).plunder.values.sum
+            ).sum
             (b.copy(flashMs = Balance.PassingGateFlashMs) :: acc, reward + gateReward)
           else (b.copy(flashMs = math.max(0.0, b.flashMs - deltaMs)) :: acc, reward)
       }
     val resources =
-      if shadowReward > 0 then state.resources.updated(Resource.Shadow, state.resources.getOrElse(Resource.Shadow, 0.0) + shadowReward)
+      if goldReward > 0 then state.resources.updated(Resource.Gold, state.resources.getOrElse(Resource.Gold, 0.0) + goldReward)
       else state.resources
     state.copy(buildings = buildings.reverse, resources = resources)
 

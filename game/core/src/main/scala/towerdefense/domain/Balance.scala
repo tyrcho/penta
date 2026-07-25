@@ -185,14 +185,14 @@ object Balance:
   // DeathHouse. A hybrid Loi/Mort cost (Light + Shadow, no Wood), dealing passive aura
   // damage to the 4 orthogonally-adjacent cells (same adjacency rule/auraBuildingKinds
   // treatment as Forest/Jungle/Angel — see CombatEngine.auraDamagePerSecFor), and uniquely
-  // harvesting Shadow whenever ANY creature (not just ones it damaged itself) dies on one of
-  // those 4 cells (see CombatEngine.applyPassingGateHarvest) — a percentage of the owning
-  // maze's OWN current total resource stockpile (summed across all 5 Resource kinds), not a
-  // steal from the opponent like Goblin/Minotaur's plunder.
+  // harvesting Gold whenever ANY creature (not just ones it damaged itself) dies on one of
+  // those 4 cells (see CombatEngine.applyPassingGateHarvest) — a percentage of THAT DYING
+  // UNIT's own resource value (CreatureSpecs.all(kind).plunder), not a share of the owning
+  // maze's own stockpile, and not a steal from the opponent like Goblin/Minotaur's plunder.
   val PassingGateCostShadow: Double = 60.0
   val PassingGateCostLight: Double = 30.0
   val PassingGateDamagePerSec: Double = 3.0
-  val PassingGateDeathShadowFraction: Double = 0.03
+  val PassingGateHarvestFraction: Double = 0.03
   // How long the sprite's kill-flash tint stays visible (GameApp.scala) after a harvest —
   // a UI-only cue, see Building.flashMs's doc.
   val PassingGateFlashMs: Double = 500.0

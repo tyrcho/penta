@@ -255,11 +255,11 @@ object TooltipText:
 
   def passingGateAbility(dmgPerSec: Double, harvestPercent: Double, lang: Lang): String =
     if lang == Lang.Fr then
-      s"${decimal(dmgPerSec)} dégâts/sec sur ses 4 cases adjacentes, récolte ${decimal(harvestPercent)}% de vos " +
-        "ressources totales en ombre à chaque mort à proximité"
+      s"${decimal(dmgPerSec)} dégâts/sec sur ses 4 cases adjacentes, récupère ${decimal(harvestPercent)}% de la " +
+        "valeur en ressources de toute unité qui meurt à proximité, convertie en or"
     else
-      s"${decimal(dmgPerSec)} dmg/s to enemies on its 4 adjacent cells, harvests ${decimal(harvestPercent)}% " +
-        "of your own total resources as shadow on every nearby death"
+      s"${decimal(dmgPerSec)} dmg/s to enemies on its 4 adjacent cells, recovers ${decimal(harvestPercent)}% " +
+        "of the resource value of any unit that dies nearby, converted to gold"
 
   def noBonusYet(lang: Lang): String =
     if lang == Lang.Fr then "aucun bonus propre — améliorez-le en un labo spécifique ci-dessous"
@@ -299,14 +299,14 @@ object TooltipText:
 
   private val passingGateOwnAbility: I18nText =
     val dmg = decimal(Balance.PassingGateDamagePerSec)
-    val harvest = decimal(Balance.PassingGateDeathShadowFraction * 100)
+    val harvest = decimal(Balance.PassingGateHarvestFraction * 100)
     I18nText(
       fr = s" ${upperFirst(spawnsNothing(Lang.Fr))} — inflige $dmg dégâts/sec aux ennemis sur ses 4 cases " +
-        s"adjacentes, et récolte $harvest% de vos ressources totales en ombre bonus à chaque mort sur " +
-        "l'une de ces cases",
+        s"adjacentes, et récupère $harvest% de la valeur en ressources de toute unité qui meurt sur " +
+        "l'une de ces cases, convertie en or",
       en = s" ${upperFirst(spawnsNothing(Lang.En))} — inflicts $dmg dmg/s to enemies on its 4 adjacent cells, " +
-        s"and harvests $harvest% of your own total resources as bonus shadow whenever any creature dies " +
-        "on one of those cells"
+        s"and recovers $harvest% of the resource value of any unit that dies on one of those cells, " +
+        "converted to gold"
     )
 
   private val laboFondamentalOwnAbility: I18nText = I18nText(
