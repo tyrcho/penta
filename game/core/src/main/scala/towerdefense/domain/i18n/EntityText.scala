@@ -209,15 +209,24 @@ object EntityText:
         if lang == Lang.Fr then "Gratuit (obtenu en améliorant le Labo Fondamental)"
         else "Free (granted when upgrading from the Base Lab)"
       else TooltipText.costText(spec.costAtLevel(level), lang)
+    // CombatEngine.researchProductionMultiplier's exact formula (1 + boost)^level,
+    // compounding — the prose above only states the base rate and the per-level percent,
+    // the table is what actually spells out the compounded Crystal/sec a level reaches.
+    def crystalPerSecAtLevel(level: Int): Double =
+      crystalPerSec * math.pow(1.0 + Balance.LaboCrystalBoostPerResearchLevel, level.toDouble)
     def row(level: Int, lang: Lang): String =
       val effect = TooltipText.researchEffectSummary(kind, ResearchSpecs.magnitudeAtLevel(kind, level), lang)
-      s"| $level | ${costCell(level, lang)} | $effect |"
+      s"| $level | ${costCell(level, lang)} | ${decimal(crystalPerSecAtLevel(level))} | $effect |"
     val tableFr =
-      ("| Niveau | Coût | Effet |" :: "| --- | --- | --- |" :: (1 to Balance.MaxResearchLevel).map(row(_, Lang.Fr)).toList)
-        .mkString("\n")
+      (
+        "| Niveau | Coût | Cristal/sec | Effet |" :: "| --- | --- | --- | --- |" ::
+          (1 to Balance.MaxResearchLevel).map(row(_, Lang.Fr)).toList
+      ).mkString("\n")
     val tableEn =
-      ("| Level | Cost | Effect |" :: "| --- | --- | --- |" :: (1 to Balance.MaxResearchLevel).map(row(_, Lang.En)).toList)
-        .mkString("\n")
+      (
+        "| Level | Cost | Crystal/sec | Effect |" :: "| --- | --- | --- | --- |" ::
+          (1 to Balance.MaxResearchLevel).map(row(_, Lang.En)).toList
+      ).mkString("\n")
     I18nText(
       fr = s(
         s"Amélioration du $baseLabLinkFr — pas constructible directement.",
@@ -458,7 +467,22 @@ object EntityText:
     en = s"Spawned by ${EntityNames.buildingLink(from, building, Lang.En)}."
   )
 
+  // The amounts/resources listed here are what's drained from the VICTIM (Balance's own
+  // per-unit plunder table, unchanged since before Resource.Gold existed) — but the
+  // attacker's own maze is credited Gold equal to the value stolen, not the plundered
+  // resource itself (BattleEngine.creditPlunder), so a Goblin's owner gains Gold even
+  // though the line below still (correctly) says it plunders Wood and Fire from whoever
+  // it hit. Spelled out explicitly rather than left implicit, since "Pille du Bois"/
+  // "Plunders Wood" alone would otherwise read as "and gains Wood", which is only true of
+  // the resource the *victim* loses, not what the attacker's own economy actually gets.
   private def plunderLine(amounts: List[(Resource, Double)], from: Faction): I18nText =
     val frLinks = amounts.map { case (res, amount) => s"${decimal(amount)} ${EntityNames.resourceLink(from, res, Lang.Fr)}" }
     val enLinks = amounts.map { case (res, amount) => s"${decimal(amount)} ${EntityNames.resourceLink(from, res, Lang.En)}" }
-    I18nText(fr = s"Pille ${frLinks.mkString(" et ")}.", en = s"Plunders ${enLinks.mkString(" and ")}.")
+    val goldFr = EntityNames.resourceName(Resource.Gold, Lang.Fr)
+    val goldEn = EntityNames.resourceName(Resource.Gold, Lang.En)
+    I18nText(
+      fr = s"Pille ${frLinks.mkString(" et ")} à l'adversaire, mais son propriétaire reçoit l'équivalent " +
+        s"en $goldFr, pas la ressource pillée elle-même.",
+      en = s"Plunders ${enLinks.mkString(" and ")} from the opponent, but its owner receives the equivalent " +
+        s"in $goldEn, not the plundered resource itself."
+    )

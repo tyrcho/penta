@@ -585,14 +585,24 @@ class CombatEngineTest extends munit.FunSuite:
 
   test(
     "a passing gate harvests PassingGateDeathShadowFraction of the maze's own total resources " +
-      "when a creature dies on one of its 4 adjacent cells, and flashes"
+      "(Gold included) when a creature dies on one of its 4 adjacent cells, and flashes"
   ) {
     val gate = Building(100, col = 5, row = 5, BuildingKind.PassingGate, 0.0)
     // hp set to die from exactly one tick of the gate's own aura damage.
     val dying =
       Creature(1, GridConfig.cellCenter(6, 5), hp = Balance.PassingGateDamagePerSec, maxHp = 100.0, speedPerMs = 0.0, UnitKind.Elf)
-    val resources =
-      Map(Resource.Wood -> 100.0, Resource.Fire -> 0.0, Resource.Light -> 0.0, Resource.Shadow -> 20.0, Resource.Crystal -> 0.0)
+    // Gold included and dominant on purpose: post-Gold-rework every maze's real economy
+    // sits mostly in Gold (the 5 named resources start at 0.0 and ramp slowly), so a
+    // "total resources" that carved Gold back out would leave this reward negligible
+    // almost the entire match — Portail.md says "3% des ressources totales", no carve-out.
+    val resources = Map(
+      Resource.Wood -> 100.0,
+      Resource.Fire -> 0.0,
+      Resource.Light -> 0.0,
+      Resource.Shadow -> 20.0,
+      Resource.Crystal -> 0.0,
+      Resource.Gold -> 50.0
+    )
     val state = MazeState.initial.copy(resources = resources, creatures = List(dying), buildings = List(gate))
     val result = CombatEngine.tick(state, deltaMs = 1000.0)
     assertEquals(result.state.creatures, Nil)

@@ -8,4 +8,4 @@ HP: "50"
 
 Spawned by [Labyrinth](Labyrinth.md).
 
-Plunders 10 [Wood](../Nature/Wood.md) and 10 [Fire](Fire.md).
+Plunders 10 [Wood](../Nature/Wood.md) and 10 [Fire](Fire.md) from the opponent, but its owner receives the equivalent in Gold, not the plundered resource itself.

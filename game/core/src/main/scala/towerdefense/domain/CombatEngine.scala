@@ -291,19 +291,21 @@ object CombatEngine:
   // this tick — regardless of what actually killed it (its own aura, a Watchtower, even a
   // Forest/Angel aura elsewhere reaching the same cell) — earns the owning maze a Shadow
   // reward equal to PassingGateDeathShadowFraction of `state`'s OWN current total resource
-  // stockpile (summed across the vault's original 5 Resource kinds — deliberately NOT
-  // Gold, whose stock now swings on unrelated mechanics of its own — plunder, Loi kills,
-  // Mort's own corruption bonus — that Portail.md was never balanced against; folding it
-  // in here would inflate this reward by whatever those happen to add up to. Snapshotted
-  // once before any reward is added, so multiple qualifying deaths this tick don't
-  // compound off each other's reward).
+  // stockpile, Gold included — "3% des ressources totales", no carve-out, per the wiki.
+  // (Gold used to be excluded here on the theory that its stock swings on unrelated
+  // mechanics — plunder, Loi kills, Mort's own corruption bonus — Portail.md was never
+  // balanced against; but post-Gold-rework every maze's real economy sits mostly in Gold
+  // (the 5 named resources all start at 0.0 and ramp slowly), so excluding it left this
+  // reward negligible almost the entire match instead of the meaningful bonus intended.)
+  // Snapshotted once before any reward is added, so multiple qualifying deaths this tick
+  // don't compound off each other's reward.
   // Two gates both adjacent to the same death each independently harvest it, and each also
   // sets its own flashMs (Building.flashMs's doc) to the UI's kill-flash duration; a gate
   // with no qualifying death nearby this tick just counts flashMs down toward 0 instead,
   // same shape as spawnCountdownMs/frozenMs elsewhere in the domain.
   private def applyPassingGateHarvest(state: MazeState, dead: List[Creature], deltaMs: Double): MazeState =
     val deadCells = dead.map(c => GridConfig.cellOf(c.pos))
-    val totalResourcesSnapshot = state.resources.collect { case (res, amount) if res != Resource.Gold => amount }.sum
+    val totalResourcesSnapshot = state.resources.values.sum
     val (buildings, shadowReward) =
       state.buildings.foldLeft((List.empty[Building], 0.0)) { case ((acc, reward), b) =>
         // Still under construction: no harvest ability yet (Building.constructionRemainingMs's

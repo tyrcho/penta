@@ -8,4 +8,4 @@ HP: "5"
 
 Spawned by [Grove](Grove.md).
 
-Plunders 1 [Wood](Wood.md).
+Plunders 1 [Wood](Wood.md) from the opponent, but its owner receives the equivalent in Gold, not the plundered resource itself.
