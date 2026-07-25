@@ -8,4 +8,4 @@ PV: "5"
 
 Produit par [Cave](Cave.md).
 
-Pille 1 [Bois](../Nature/Bois.md) et 1 [Feu](Feu.md) à l'adversaire ; son propriétaire reçoit l'équivalent en Or (en totalité), pas la ressource pillée elle-même, même si l'adversaire n'en a pas assez en stock.
+Pille 2 Or à l'adversaire ; son propriétaire reçoit exactement cette ressource, en totalité, même si l'adversaire n'en a pas assez en stock.

@@ -16,18 +16,10 @@ package towerdefense.domain
 // position, e.g. a Soul appearing on top of its Necromancer) for every kind except Tree,
 // which clones itself one cell further along its own path instead (Arbre Anime.md — see
 // CombatEngine.advanceCreatureSummons's nextPathCellCenter).
-// plunderAsGold: how `plunder` pays out to the ATTACKER on arrival (CombatEngine.
-// moveCreatures/BattleEngine.creditPlunder) — false credits the named resource(s) for
-// real (Elf: real Wood, matching Nature's own resource), true converts the sum to Gold
-// instead (Goblin/Minotaur: Chaos raiding for a fungible war-chest, not a specific
-// resource). Either way the VICTIM's own loss (CombatEngine.moveCreatures' `stolen`) is
-// unaffected by this flag and stays capped at whatever they actually have — only the
-// attacker's own credit differs by kind, and is never capped (see creditPlunder's doc).
 case class CreatureSpec(
     maxHp: Double,
     speedPerMs: Double,
     plunder: Map[Resource, Double],
-    plunderAsGold: Boolean = false,
     spawns: Option[(UnitKind, Double)] = None,
     spawnFreezeMs: Double = 0.0,
     spawnAtNextCell: Boolean = false
@@ -40,20 +32,21 @@ object CreatureSpecs:
       Balance.ElfSpeedPerMs,
       plunder = Map(Resource.Wood -> Balance.PlunderPerUnit)
     ),
+    // Goblin/Minotaur steal Gold directly (project owner's explicit request: "steal gold,
+    // not convert") — a real transfer, same shape as Elf's Wood theft: the victim loses
+    // Gold, the attacker gains that same Gold, both capped/uncapped the same way
+    // (CombatEngine.moveCreatures' stolen/plundered, BattleEngine.creditPlunder). The
+    // 2x multiplier keeps the same total value these two used to steal (1 Wood + 1 Fire,
+    // 10 + 10 for Minotaur) before that value was Wood/Fire specifically.
     UnitKind.Goblin -> CreatureSpec(
       Balance.GoblinMaxHp,
       Balance.GoblinSpeedPerMs,
-      plunder = Map(Resource.Wood -> Balance.PlunderPerUnit, Resource.Fire -> Balance.PlunderPerUnit),
-      plunderAsGold = true
+      plunder = Map(Resource.Gold -> 2 * Balance.PlunderPerUnit)
     ),
     UnitKind.Minotaur -> CreatureSpec(
       Balance.MinotaurMaxHp,
       Balance.MinotaurSpeedPerMs,
-      plunder = Map(
-        Resource.Wood -> Balance.MinotaurPlunderPerUnit,
-        Resource.Fire -> Balance.MinotaurPlunderPerUnit
-      ),
-      plunderAsGold = true
+      plunder = Map(Resource.Gold -> 2 * Balance.MinotaurPlunderPerUnit)
     ),
     // Paladin.md gives it no plunder ability — its value is the shield it provides to
     // adjacent allies, a combat ability that stays outside this spec (see CombatEngine).
@@ -92,4 +85,27 @@ object CreatureSpecs:
       spawnFreezeMs = Balance.TreeCloneFreezeMs,
       spawnAtNextCell = true
     )
+  )
+
+  // Which building "made" each unit kind — used by CombatEngine.applyPassingGateHarvest to
+  // scale a dying unit's harvest off the cost of what produced it, not off `plunder`
+  // (which is empty for most kinds — Paladin, Wolf, Zombie, ... — that would otherwise
+  // never contribute anything to a nearby Passing Gate). The inverse of BuildingSpecs.
+  // all(_).spawns, picking the BASE tier when an upgrade chain spawns the same kind at
+  // multiple tiers (Elf: Grove, even though upgrading to Forest keeps spawning Elf too —
+  // same convention EntityText.unitBodies' spawnedByLine already uses for Elf's wiki
+  // page), and tracing a creature-to-creature spawn back to that summoner's own building
+  // (Soul is summoned by a Necromancer, never by a building directly, so it maps to
+  // DeathHouse — the building that made the Necromancer that then made it).
+  val spawningBuilding: Map[UnitKind, BuildingKind] = Map(
+    UnitKind.Elf -> BuildingKind.Grove,
+    UnitKind.Goblin -> BuildingKind.Cave,
+    UnitKind.Minotaur -> BuildingKind.Labyrinth,
+    UnitKind.Paladin -> BuildingKind.Church,
+    UnitKind.Wolf -> BuildingKind.Jungle,
+    UnitKind.Zombie -> BuildingKind.Tomb,
+    UnitKind.Vampire -> BuildingKind.BlackCastle,
+    UnitKind.Necromancer -> BuildingKind.DeathHouse,
+    UnitKind.Soul -> BuildingKind.DeathHouse,
+    UnitKind.Tree -> BuildingKind.Stonehenge
   )

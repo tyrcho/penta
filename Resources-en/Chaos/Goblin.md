@@ -8,4 +8,4 @@ HP: "5"
 
 Spawned by [Cave](Cave.md).
 
-Plunders 1 [Wood](../Nature/Wood.md) and 1 [Fire](Fire.md) from the opponent; its owner receives the equivalent in Gold (in full), not the plundered resource itself, even if the opponent doesn't have enough in stock.
+Plunders 2 Gold from the opponent; its owner receives exactly that resource in full, even if the opponent doesn't have enough in stock.

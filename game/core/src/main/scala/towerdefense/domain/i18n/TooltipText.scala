@@ -125,9 +125,10 @@ object TooltipText:
   // GameApp's original spawnAbilitySuffix/unitAbilitySummary split.
   val unitAbilities: Map[UnitKind, I18nText] = Map(
     UnitKind.Elf -> plunders(List(Resource.Wood -> Balance.PlunderPerUnit)),
-    UnitKind.Goblin -> plunders(List(Resource.Wood -> Balance.PlunderPerUnit, Resource.Fire -> Balance.PlunderPerUnit)),
-    UnitKind.Minotaur ->
-      plunders(List(Resource.Wood -> Balance.MinotaurPlunderPerUnit, Resource.Fire -> Balance.MinotaurPlunderPerUnit)),
+    // Goblin/Minotaur steal Gold directly now ("steal gold, not convert" — project owner's
+    // explicit request), 2x the shared per-unit constant (see Balance's own doc).
+    UnitKind.Goblin -> plunders(List(Resource.Gold -> 2 * Balance.PlunderPerUnit)),
+    UnitKind.Minotaur -> plunders(List(Resource.Gold -> 2 * Balance.MinotaurPlunderPerUnit)),
     UnitKind.Paladin -> (noPlunder ++ shields(Balance.PaladinAuraDamageReductionPerSec)),
     UnitKind.Wolf -> (noPlunder ++ speedsUp(Balance.WolfSpeedAuraRangeCells, (Balance.WolfSpeedAuraMultiplier - 1) * 100)),
     UnitKind.Zombie -> (noPlunder ++ corrupts(Balance.ZombieCorruptionPercentPerSec)),
@@ -255,11 +256,11 @@ object TooltipText:
 
   def passingGateAbility(dmgPerSec: Double, harvestPercent: Double, lang: Lang): String =
     if lang == Lang.Fr then
-      s"${decimal(dmgPerSec)} dégâts/sec sur ses 4 cases adjacentes, récupère ${decimal(harvestPercent)}% de la " +
-        "valeur en ressources de toute unité qui meurt à proximité, convertie en or"
+      s"${decimal(dmgPerSec)} dégâts/sec sur ses 4 cases adjacentes, récupère ${decimal(harvestPercent)}% du " +
+        "coût du bâtiment ayant produit toute unité qui meurt à proximité, en or"
     else
       s"${decimal(dmgPerSec)} dmg/s to enemies on its 4 adjacent cells, recovers ${decimal(harvestPercent)}% " +
-        "of the resource value of any unit that dies nearby, converted to gold"
+        "of the cost of the building that produced any unit that dies nearby, in gold"
 
   def noBonusYet(lang: Lang): String =
     if lang == Lang.Fr then "aucun bonus propre — améliorez-le en un labo spécifique ci-dessous"
@@ -302,11 +303,11 @@ object TooltipText:
     val harvest = decimal(Balance.PassingGateHarvestFraction * 100)
     I18nText(
       fr = s" ${upperFirst(spawnsNothing(Lang.Fr))} — inflige $dmg dégâts/sec aux ennemis sur ses 4 cases " +
-        s"adjacentes, et récupère $harvest% de la valeur en ressources de toute unité qui meurt sur " +
-        "l'une de ces cases, convertie en or",
+        s"adjacentes, et récupère $harvest% du coût du bâtiment ayant produit toute unité qui meurt sur " +
+        "l'une de ces cases, en or",
       en = s" ${upperFirst(spawnsNothing(Lang.En))} — inflicts $dmg dmg/s to enemies on its 4 adjacent cells, " +
-        s"and recovers $harvest% of the resource value of any unit that dies on one of those cells, " +
-        "converted to gold"
+        s"and recovers $harvest% of the cost of the building that produced any unit that dies on one of " +
+        "those cells, in gold"
     )
 
   private val laboFondamentalOwnAbility: I18nText = I18nText(

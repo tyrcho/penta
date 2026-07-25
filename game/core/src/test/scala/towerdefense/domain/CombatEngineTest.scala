@@ -395,33 +395,31 @@ class CombatEngineTest extends munit.FunSuite:
     assertEquals(at.spawned.getOrElse(UnitKind.Goblin, 0), 1)
   }
 
-  test("a goblin reaching the goal plunders wood and fire, clamped to what's available") {
+  test("a goblin reaching the goal steals Gold directly, clamped for the victim but not for the attacker") {
     val goalPos = GridConfig.cellCenter(GridConfig.goalCell._1, GridConfig.goalCell._2)
     val goblin =
       Creature(1, goalPos, Balance.GoblinMaxHp, Balance.GoblinMaxHp, speedPerMs = 0.0, UnitKind.Goblin)
-    val state = withResources(wood = 0.5, fire = 100.0).copy(creatures = List(goblin))
+    // Gold set below the nominal plunder amount, to prove the victim's own loss is capped
+    // while the attacker's credit (checked below) is not.
+    val state = MazeState.initial.copy(resources = Map(Resource.Gold -> 0.5), creatures = List(goblin))
     val result = CombatEngine.tick(state, deltaMs = 1.0)
-    assertEquals(result.stolen.getOrElse(Resource.Wood, 0.0), 0.5) // clamped: only 0.5 wood available
-    assertEquals(result.stolen.getOrElse(Resource.Fire, 0.0), Balance.PlunderPerUnit)
-    assertEquals(result.state.resources(Resource.Wood), 0.0)
-    assertEquals(result.state.resources(Resource.Fire), 100.0 - Balance.PlunderPerUnit)
-    // Goblin pays out in Gold (CreatureSpecs.all(Goblin).plunderAsGold) — and unlike the
-    // victim's own loss above, the attacker's credit is NEVER clamped: it's the full
-    // nominal 2 * PlunderPerUnit even though only 0.5 Wood actually existed to steal.
-    assertEquals(result.plunderedResources, Map.empty[Resource, Double])
-    assertEqualsDouble(result.plunderedGold, 2 * Balance.PlunderPerUnit, 1e-9)
+    assertEqualsDouble(result.stolen.getOrElse(Resource.Gold, 0.0), 0.5, 1e-9) // clamped: only 0.5 Gold available
+    assertEqualsDouble(result.state.resources(Resource.Gold), 0.0, 1e-9)
+    // Goblin steals Gold directly now ("steal gold, not convert" — project owner's
+    // explicit request) — the full nominal 2 * PlunderPerUnit, not clamped by the 0.5
+    // the victim actually had.
+    assertEqualsDouble(result.plundered.getOrElse(Resource.Gold, 0.0), 2 * Balance.PlunderPerUnit, 1e-9)
   }
 
-  test("an elf reaching the goal only plunders wood, not fire") {
+  test("an elf reaching the goal only plunders wood, not fire or gold") {
     val goalPos = GridConfig.cellCenter(GridConfig.goalCell._1, GridConfig.goalCell._2)
     val elf = Creature(1, goalPos, Balance.ElfMaxHp, Balance.ElfMaxHp, speedPerMs = 0.0, UnitKind.Elf)
     val state = withResources(wood = 5.0, fire = 5.0).copy(creatures = List(elf))
     val result = CombatEngine.tick(state, deltaMs = 1.0)
     assertEquals(result.stolen.getOrElse(Resource.Wood, 0.0), Balance.PlunderPerUnit)
     assertEquals(result.stolen.getOrElse(Resource.Fire, 0.0), 0.0)
-    // Elf pays out real Wood, not Gold (CreatureSpecs.all(Elf).plunderAsGold is false).
-    assertEquals(result.plunderedResources, Map(Resource.Wood -> Balance.PlunderPerUnit))
-    assertEqualsDouble(result.plunderedGold, 0.0, 1e-9)
+    assertEquals(result.stolen.getOrElse(Resource.Gold, 0.0), 0.0)
+    assertEquals(result.plundered, Map(Resource.Wood -> Balance.PlunderPerUnit))
   }
 
   test("an elf's plundered credit is the full nominal Wood amount even when the victim has less than that") {
@@ -432,7 +430,7 @@ class CombatEngineTest extends munit.FunSuite:
     // The victim's own loss is still clamped (can't go negative)...
     assertEqualsDouble(result.stolen.getOrElse(Resource.Wood, 0.0), 0.1, 1e-9)
     // ...but the attacker's credit is the full plunder amount regardless.
-    assertEqualsDouble(result.plunderedResources.getOrElse(Resource.Wood, 0.0), Balance.PlunderPerUnit, 1e-9)
+    assertEqualsDouble(result.plundered.getOrElse(Resource.Wood, 0.0), Balance.PlunderPerUnit, 1e-9)
   }
 
   test("a labyrinthe emits exactly one minotaur-spawn signal per interval") {
@@ -444,7 +442,7 @@ class CombatEngineTest extends munit.FunSuite:
     assertEquals(at.spawned.getOrElse(UnitKind.Minotaur, 0), 1)
   }
 
-  test("a minotaur reaching the goal plunders 10 of each resource, clamped to what's available") {
+  test("a minotaur reaching the goal steals Gold directly, clamped for the victim but not for the attacker") {
     val goalPos = GridConfig.cellCenter(GridConfig.goalCell._1, GridConfig.goalCell._2)
     val minotaur = Creature(
       1,
@@ -454,16 +452,13 @@ class CombatEngineTest extends munit.FunSuite:
       speedPerMs = 0.0,
       UnitKind.Minotaur
     )
-    val state = withResources(wood = 5.0, fire = 100.0).copy(creatures = List(minotaur))
+    val state = MazeState.initial.copy(resources = Map(Resource.Gold -> 5.0), creatures = List(minotaur))
     val result = CombatEngine.tick(state, deltaMs = 1.0)
-    assertEquals(result.stolen.getOrElse(Resource.Wood, 0.0), 5.0) // clamped: only 5 wood available
-    assertEquals(result.stolen.getOrElse(Resource.Fire, 0.0), Balance.MinotaurPlunderPerUnit)
-    assertEquals(result.state.resources(Resource.Wood), 0.0)
-    assertEquals(result.state.resources(Resource.Fire), 100.0 - Balance.MinotaurPlunderPerUnit)
-    // Minotaur pays out in Gold too, uncapped: the full nominal 2 * MinotaurPlunderPerUnit
-    // even though only 5 Wood actually existed to steal.
-    assertEquals(result.plunderedResources, Map.empty[Resource, Double])
-    assertEqualsDouble(result.plunderedGold, 2 * Balance.MinotaurPlunderPerUnit, 1e-9)
+    assertEqualsDouble(result.stolen.getOrElse(Resource.Gold, 0.0), 5.0, 1e-9) // clamped: only 5 Gold available
+    assertEqualsDouble(result.state.resources(Resource.Gold), 0.0, 1e-9)
+    // Uncapped: the full nominal 2 * MinotaurPlunderPerUnit, not clamped by the 5 the
+    // victim actually had.
+    assertEqualsDouble(result.plundered.getOrElse(Resource.Gold, 0.0), 2 * Balance.MinotaurPlunderPerUnit, 1e-9)
   }
 
   test("an eglise emits exactly one paladin-spawn signal per interval") {
@@ -607,29 +602,27 @@ class CombatEngineTest extends munit.FunSuite:
   }
 
   test(
-    "a passing gate harvests PassingGateHarvestFraction of the DYING UNIT's own resource value, " +
-      "as Gold, when a creature dies on one of its 4 adjacent cells, and flashes"
+    "a passing gate harvests PassingGateHarvestFraction of the SPAWNING BUILDING's cost, " +
+      "as Gold — even for a unit with no plunder ability of its own"
   ) {
     val gate = Building(100, col = 5, row = 5, BuildingKind.PassingGate, 0.0)
-    // hp set to die from exactly one tick of the gate's own aura damage. A Goblin (plunder
-    // Wood + Fire, PlunderPerUnit each) so its own resource value is easy to compute.
+    // A Zombie specifically: CreatureSpecs.all(Zombie).plunder is empty (Zombie.md gives it
+    // no plunder ability — its value is corrupting buildings instead), so this proves the
+    // harvest is scored off Tomb's cost (CreatureSpecs.spawningBuilding(Zombie)), not the
+    // dying unit's own plunder value.
     val dying = Creature(
       1,
       GridConfig.cellCenter(6, 5),
       hp = Balance.PassingGateDamagePerSec,
       maxHp = 100.0,
       speedPerMs = 0.0,
-      UnitKind.Goblin
+      UnitKind.Zombie
     )
     val state = MazeState.initial.copy(resources = Map.empty, creatures = List(dying), buildings = List(gate))
     val result = CombatEngine.tick(state, deltaMs = 1000.0)
     assertEquals(result.state.creatures, Nil)
-    // Not "3% of the maze's own total resources" any more (that left the reward negligible
-    // once every maze starts at 0 of every named resource) — 3% of what the dying unit
-    // itself was carrying (CreatureSpecs.all(kind).plunder), credited as Gold regardless of
-    // whether that unit's own plunder normally pays out in Gold or a real resource.
-    val goblinValue = 2 * Balance.PlunderPerUnit // Wood + Fire, one PlunderPerUnit each
-    val expectedGold = Balance.PassingGateHarvestFraction * goblinValue
+    val tombCost = Balance.TombCostWood + Balance.TombCostShadow
+    val expectedGold = Balance.PassingGateHarvestFraction * tombCost
     assertEqualsDouble(result.state.resources(Resource.Gold), expectedGold, 1e-9)
     assertEquals(result.state.buildings.head.flashMs, Balance.PassingGateFlashMs)
   }
@@ -1580,8 +1573,8 @@ class CombatEngineTest extends munit.FunSuite:
     val goalPos = GridConfig.cellCenter(GridConfig.goalCell._1, GridConfig.goalCell._2)
     val wolf = Creature(1, goalPos, Balance.WolfMaxHp, Balance.WolfMaxHp, speedPerMs = 0.0, UnitKind.Wolf)
     val goblin = Creature(2, goalPos, Balance.GoblinMaxHp, Balance.GoblinMaxHp, speedPerMs = 0.0, UnitKind.Goblin)
-    val state = withResources(wood = 100.0, fire = 100.0).copy(creatures = List(wolf, goblin))
+    val state = MazeState.initial.copy(resources = Map(Resource.Gold -> 100.0), creatures = List(wolf, goblin))
     val result =
       CombatEngine.tick(state, deltaMs = 1.0, attackerResearchLevels = Map(BuildingKind.LaboDuChaos -> 5))
-    assertEquals(result.stolen.getOrElse(Resource.Wood, 0.0), Balance.PlunderPerUnit) // only Goblin plunders wood
+    assertEquals(result.stolen.getOrElse(Resource.Gold, 0.0), 2 * Balance.PlunderPerUnit) // only Goblin plunders (Gold)
   }

@@ -81,9 +81,12 @@ object Balance:
   val GoblinMaxHp: Double = 5.0
   val GoblinSpeedPerMs: Double = 0.05 // POC default, matches Elf
 
-  // Goblin.md: "Pille une ressource de chaque type" — POC default: 1 unit of wood
-  // and 1 unit of fire per unit that reaches the goal (Elf included: symmetric, see
-  // CLAUDE.md), clamped to what's available.
+  // Shared per-unit plunder magnitude — Elf's real Wood theft (CreatureSpecs.all(Elf))
+  // uses it directly (1 unit of Wood per Elf that reaches the goal, clamped to what's
+  // available); Goblin's Gold theft (CreatureSpecs.all(Goblin)) uses 2x this, preserving
+  // the same total value Goblin.md's original "Pille une ressource de chaque type" (1
+  // Wood + 1 Fire) used to steal, now taken as Gold directly instead ("steal gold, not
+  // convert" — project owner's explicit request).
   val PlunderPerUnit: Double = 1.0
 
   val LabyrintheCostWood: Double = 10.0 // Labyrinthe.md: "cout en bois: 20"
@@ -94,8 +97,9 @@ object Balance:
   val MinotaurMaxHp: Double = 50.0 // Minotaure.md: "PV: 50"
   val MinotaurSpeedPerMs: Double = 0.05 // POC default, matches Elf/Goblin
 
-  // Minotaure.md: "Pille 10 ressources de chaque type" — a heavier, slower-to-produce
-  // raider than the Goblin's PlunderPerUnit.
+  // A heavier, slower-to-produce raider than Goblin's PlunderPerUnit — same 2x-for-Gold
+  // shape (CreatureSpecs.all(Minotaur)), preserving Minotaure.md's original "Pille 10
+  // ressources de chaque type" (10 Wood + 10 Fire) total value, now taken as Gold.
   val MinotaurPlunderPerUnit: Double = 10.0
 
   // ── Loi ──────────────────────────────────────────────────────────────────
@@ -186,9 +190,11 @@ object Balance:
   // damage to the 4 orthogonally-adjacent cells (same adjacency rule/auraBuildingKinds
   // treatment as Forest/Jungle/Angel — see CombatEngine.auraDamagePerSecFor), and uniquely
   // harvesting Gold whenever ANY creature (not just ones it damaged itself) dies on one of
-  // those 4 cells (see CombatEngine.applyPassingGateHarvest) — a percentage of THAT DYING
-  // UNIT's own resource value (CreatureSpecs.all(kind).plunder), not a share of the owning
-  // maze's own stockpile, and not a steal from the opponent like Goblin/Minotaur's plunder.
+  // those 4 cells (see CombatEngine.applyPassingGateHarvest) — a percentage of the total
+  // cost of the BUILDING that made that unit (CreatureSpecs.spawningBuilding), not a share
+  // of the owning maze's own stockpile, and not the unit's own plunder value — every unit
+  // has some spawning building with a real cost, so even one with no plunder ability of
+  // its own (Paladin, Wolf, Zombie, ...) still yields something.
   val PassingGateCostShadow: Double = 60.0
   val PassingGateCostLight: Double = 30.0
   val PassingGateDamagePerSec: Double = 3.0

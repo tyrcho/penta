@@ -136,15 +136,15 @@ object EntityText:
         s"N'envoie aucune unité. Inflige ${decimal(Balance.PassingGateDamagePerSec)} dégâts par seconde à toute " +
           "unité se trouvant sur l'une de ses 4 cases adjacentes.",
         s"Chaque fois qu'une unité meurt sur l'une de ces 4 cases (peu importe ce qui l'a tuée), le Portail " +
-          s"récupère ${percentPoints(Balance.PassingGateHarvestFraction * 100)} de la valeur en ressources de " +
-          s"CETTE unité (ce qu'elle aurait elle-même pillé), convertie en $goldFr."
+          s"récupère ${percentPoints(Balance.PassingGateHarvestFraction * 100)} du coût total du bâtiment qui a " +
+          s"produit cette unité, en $goldFr — même une unité sans capacité de pillage en rapporte donc."
       ),
       en = s(
         s"Spawns no unit. Deals ${decimal(Balance.PassingGateDamagePerSec)} damage per second to any unit " +
           "standing on one of its 4 adjacent cells.",
         "Whenever a unit dies on one of those 4 cells (no matter what killed it), the Passing Gate recovers " +
-          s"${percentPoints(Balance.PassingGateHarvestFraction * 100)} of THAT unit's own resource value " +
-          s"(whatever it would itself have plundered), converted to $goldEn."
+          s"${percentPoints(Balance.PassingGateHarvestFraction * 100)} of the total cost of the building that " +
+          s"produced that unit, in $goldEn — so even a unit with no plunder ability of its own still yields some."
       )
     )
 
@@ -297,23 +297,18 @@ object EntityText:
   val unitBodies: Map[UnitKind, I18nText] = Map(
     UnitKind.Elf -> I18nText.combine(
       spawnedByLine(BuildingKind.Grove, faction(UnitKind.Elf)),
-      plunderLine(List(Resource.Wood -> Balance.PlunderPerUnit), faction(UnitKind.Elf), asGold = false)
+      plunderLine(List(Resource.Wood -> Balance.PlunderPerUnit), faction(UnitKind.Elf))
     ),
+    // Goblin/Minotaur steal Gold directly now ("steal gold, not convert" — project owner's
+    // explicit request) — 2x Balance.PlunderPerUnit/MinotaurPlunderPerUnit preserves the
+    // same total value these two used to steal as Wood+Fire (see Balance's own doc).
     UnitKind.Goblin -> I18nText.combine(
       spawnedByLine(BuildingKind.Cave, faction(UnitKind.Goblin)),
-      plunderLine(
-        List(Resource.Wood -> Balance.PlunderPerUnit, Resource.Fire -> Balance.PlunderPerUnit),
-        faction(UnitKind.Goblin),
-        asGold = true
-      )
+      plunderLine(List(Resource.Gold -> 2 * Balance.PlunderPerUnit), faction(UnitKind.Goblin))
     ),
     UnitKind.Minotaur -> I18nText.combine(
       spawnedByLine(BuildingKind.Labyrinth, faction(UnitKind.Minotaur)),
-      plunderLine(
-        List(Resource.Wood -> Balance.MinotaurPlunderPerUnit, Resource.Fire -> Balance.MinotaurPlunderPerUnit),
-        faction(UnitKind.Minotaur),
-        asGold = true
-      )
+      plunderLine(List(Resource.Gold -> 2 * Balance.MinotaurPlunderPerUnit), faction(UnitKind.Minotaur))
     ),
     UnitKind.Paladin -> I18nText.combine(spawnedByLine(BuildingKind.Church, faction(UnitKind.Paladin)), paladinAuraLine),
     UnitKind.Wolf -> wolfBody,
@@ -468,28 +463,24 @@ object EntityText:
     en = s"Spawned by ${EntityNames.buildingLink(from, building, Lang.En)}."
   )
 
-  // The amounts/resources listed here are what's drained from the VICTIM (Balance's own
-  // per-unit plunder table, unchanged since before Resource.Gold existed) — what the
-  // ATTACKER'S own maze is credited (CreatureSpec.plunderAsGold/BattleEngine.
-  // creditPlunder) differs by kind: Elf (asGold = false) gains the real resource itself,
-  // Goblin/Minotaur (asGold = true) gain the equivalent in Gold instead. Either way the
-  // credit is the FULL nominal amount below, never reduced by how much the opponent
-  // actually had on hand ("you always win res, even if the opponent does not have them" —
-  // project owner's explicit request) — only the victim's own loss is capped at that.
-  private def plunderLine(amounts: List[(Resource, Double)], from: Faction, asGold: Boolean): I18nText =
-    val frLinks = amounts.map { case (res, amount) => s"${decimal(amount)} ${EntityNames.resourceLink(from, res, Lang.Fr)}" }
-    val enLinks = amounts.map { case (res, amount) => s"${decimal(amount)} ${EntityNames.resourceLink(from, res, Lang.En)}" }
-    val payoutFr =
-      if asGold then
-        s"reçoit l'équivalent en ${EntityNames.resourceName(Resource.Gold, Lang.Fr)} (en totalité), pas la ressource pillée elle-même"
-      else "reçoit exactement cette ressource, en totalité"
-    val payoutEn =
-      if asGold then
-        s"receives the equivalent in ${EntityNames.resourceName(Resource.Gold, Lang.En)} (in full), not the plundered resource itself"
-      else "receives exactly that resource in full"
+  // What's listed here is drained from the VICTIM *and* credited to the ATTACKER — a
+  // genuine transfer, the same resource on both ends (Elf: real Wood, Goblin/Minotaur:
+  // real Gold — CreatureSpecs.all/BattleEngine.creditPlunder), never a conversion into
+  // some other currency. resourceLink assumes a real wiki page (crashes on Gold, which
+  // has none — see EntityNames' doc), so Gold is displayed with the plain resourceName
+  // instead. The credit is always the FULL nominal amount below, never reduced by how
+  // much the opponent actually had on hand ("you always win res, even if the opponent
+  // does not have them" — project owner's explicit request) — only the victim's own loss
+  // is capped at that.
+  private def resourceDisplay(from: Faction, res: Resource, lang: Lang): String =
+    if res == Resource.Gold then EntityNames.resourceName(res, lang) else EntityNames.resourceLink(from, res, lang)
+
+  private def plunderLine(amounts: List[(Resource, Double)], from: Faction): I18nText =
+    val frLinks = amounts.map { case (res, amount) => s"${decimal(amount)} ${resourceDisplay(from, res, Lang.Fr)}" }
+    val enLinks = amounts.map { case (res, amount) => s"${decimal(amount)} ${resourceDisplay(from, res, Lang.En)}" }
     I18nText(
-      fr = s"Pille ${frLinks.mkString(" et ")} à l'adversaire ; son propriétaire $payoutFr, même si " +
-        "l'adversaire n'en a pas assez en stock.",
-      en = s"Plunders ${enLinks.mkString(" and ")} from the opponent; its owner $payoutEn, even if " +
-        "the opponent doesn't have enough in stock."
+      fr = s"Pille ${frLinks.mkString(" et ")} à l'adversaire ; son propriétaire reçoit exactement cette " +
+        "ressource, en totalité, même si l'adversaire n'en a pas assez en stock.",
+      en = s"Plunders ${enLinks.mkString(" and ")} from the opponent; its owner receives exactly that " +
+        "resource in full, even if the opponent doesn't have enough in stock."
     )

@@ -9,4 +9,4 @@ cost in shadow: 60
 
 Spawns no unit. Deals 3 damage per second to any unit standing on one of its 4 adjacent cells.
 
-Whenever a unit dies on one of those 4 cells (no matter what killed it), the Passing Gate recovers 3% of THAT unit's own resource value (whatever it would itself have plundered), converted to Gold.
+Whenever a unit dies on one of those 4 cells (no matter what killed it), the Passing Gate recovers 3% of the total cost of the building that produced that unit, in Gold — so even a unit with no plunder ability of its own still yields some.

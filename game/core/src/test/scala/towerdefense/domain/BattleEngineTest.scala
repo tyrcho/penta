@@ -160,31 +160,27 @@ class BattleEngineTest extends munit.FunSuite:
     assertEquals(buildingCount(thirdTick.ai), 2)
   }
 
-  test("a goblin pillaging the player drains the player's real resources but credits the AI in Gold, uncapped") {
+  test("a goblin pillaging the player steals Gold directly, capped for the player but not for the AI") {
     val goalPos = GridConfig.cellCenter(GridConfig.goalCell._1, GridConfig.goalCell._2)
     val incomingGoblin =
       Creature(1, goalPos, Balance.GoblinMaxHp, Balance.GoblinMaxHp, speedPerMs = 0.0, UnitKind.Goblin)
     val battle = BattleState(
-      // Wood set below the nominal plunder amount on purpose, to prove the attacker's
+      // Gold set below the nominal plunder amount on purpose, to prove the attacker's
       // credit isn't capped by it — "you always win res, even if the opponent does not
       // have them" (project owner's explicit request).
-      player = withResources(wood = 0.5, fire = 5.0).copy(creatures = List(incomingGoblin)),
+      player = withResources().copy(resources = Map(Resource.Gold -> 0.5), creatures = List(incomingGoblin)),
       ai = withResources() // isolates the plunder-credit effect from production
     )
     val result = BattleEngine.tick(battle, deltaMs = 1.0)
-    // The victim's own loss is still capped at what they actually had.
-    assertEquals(result.player.resources(Resource.Wood), 0.0)
-    assertEquals(result.player.resources(Resource.Fire), 5.0 - Balance.PlunderPerUnit)
-    // The attacker's payout is Gold instead of Wood/Fire (CreatureSpec.plunderAsGold), and
-    // the FULL nominal amount — 2 * PlunderPerUnit — even though the player only had 0.5
-    // Wood to actually lose. The tally (resourcesPlundered) is the same uncapped sum.
-    assertEquals(result.ai.resources(Resource.Wood), 0.0)
-    assertEquals(result.ai.resources(Resource.Fire), 0.0)
-    assertEquals(result.ai.resources(Resource.Gold), 2 * Balance.PlunderPerUnit)
-    assertEquals(result.ai.resourcesPlundered, 2 * Balance.PlunderPerUnit)
+    // The victim's own loss is capped at what they actually had.
+    assertEqualsDouble(result.player.resources.getOrElse(Resource.Gold, 0.0), 0.0, 1e-9)
+    // Goblin steals Gold directly ("steal gold, not convert" — project owner's explicit
+    // request) — the FULL nominal 2 * PlunderPerUnit, not just the 0.5 the player had.
+    assertEqualsDouble(result.ai.resources.getOrElse(Resource.Gold, 0.0), 2 * Balance.PlunderPerUnit, 1e-9)
+    assertEqualsDouble(result.ai.resourcesPlundered, 2 * Balance.PlunderPerUnit, 1e-9)
   }
 
-  test("a minotaur pillaging the player drains the player's real resources but credits the AI in Gold, uncapped") {
+  test("a minotaur pillaging the player steals Gold directly, capped for the player but not for the AI") {
     val goalPos = GridConfig.cellCenter(GridConfig.goalCell._1, GridConfig.goalCell._2)
     val incomingMinotaur = Creature(
       1,
@@ -195,18 +191,15 @@ class BattleEngineTest extends munit.FunSuite:
       UnitKind.Minotaur
     )
     val battle = BattleState(
-      player = withResources(wood = 5.0, fire = 50.0).copy(creatures = List(incomingMinotaur)),
+      player = withResources().copy(resources = Map(Resource.Gold -> 5.0), creatures = List(incomingMinotaur)),
       ai = withResources() // isolates the plunder-credit effect from production
     )
     val result = BattleEngine.tick(battle, deltaMs = 1.0)
-    assertEquals(result.player.resources(Resource.Wood), 0.0) // capped: only 5 Wood available
-    assertEquals(result.player.resources(Resource.Fire), 50.0 - Balance.MinotaurPlunderPerUnit)
-    assertEquals(result.ai.resources(Resource.Wood), 0.0)
-    assertEquals(result.ai.resources(Resource.Fire), 0.0)
-    // Uncapped: the full nominal 2 * MinotaurPlunderPerUnit, not just the 5 Wood the player
+    assertEqualsDouble(result.player.resources.getOrElse(Resource.Gold, 0.0), 0.0, 1e-9) // capped: only 5 Gold available
+    // Uncapped: the full nominal 2 * MinotaurPlunderPerUnit, not just the 5 Gold the player
     // actually had to lose.
-    assertEquals(result.ai.resources(Resource.Gold), 2 * Balance.MinotaurPlunderPerUnit)
-    assertEquals(result.ai.resourcesPlundered, 2 * Balance.MinotaurPlunderPerUnit)
+    assertEqualsDouble(result.ai.resources.getOrElse(Resource.Gold, 0.0), 2 * Balance.MinotaurPlunderPerUnit, 1e-9)
+    assertEqualsDouble(result.ai.resourcesPlundered, 2 * Balance.MinotaurPlunderPerUnit, 1e-9)
   }
 
   test("an elf pillaging the player drains the player's real Wood and credits the AI real Wood too, uncapped") {
@@ -219,7 +212,7 @@ class BattleEngineTest extends munit.FunSuite:
     )
     val result = BattleEngine.tick(battle, deltaMs = 1.0)
     assertEquals(result.player.resources(Resource.Wood), 0.0) // capped: only 0.1 available
-    // Elf pays out real Wood, not Gold (CreatureSpec.plunderAsGold is false) — and the full
+    // Elf pays out real Wood, not Gold (CreatureSpecs.all(Elf).plunder) — and the full
     // nominal PlunderPerUnit, not the 0.1 the player actually had to lose.
     assertEquals(result.ai.resources(Resource.Wood), Balance.PlunderPerUnit)
     assertEquals(result.ai.resources.getOrElse(Resource.Gold, 0.0), 0.0)
