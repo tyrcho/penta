@@ -178,10 +178,13 @@ object TooltipText:
   // A specific lab's further-leveling-up option — folded into the same upgrade-button
   // tooltip machinery as an ordinary tier-upgrade (Grove -> Forest, Labo Fondamental -> a
   // specific lab), not a separate "Research" affordance — see GameApp's
-  // upgradeOptionsInfo/levelUpOptionFor.
-  def levelUpLabel(nextLevel: Int, maxLevel: Int, costText: String, effect: String, lang: Lang): String =
-    val word = if lang == Lang.Fr then "Améliorer (niveau" else "Upgrade (level"
-    s"$word $nextLevel/$maxLevel) ($costText) → $effect"
+  // upgradeOptionsInfo/levelUpOptionFor. Deliberately just "Améliorer (cost)", same shape
+  // as upgradeLabel's "Améliorer en $name (cost)" — the next level's number/effect is
+  // already fully spelled out one line up, in the tooltip-upgrade-preview text right above
+  // this button (GameApp.buildingHoverText on the previewed maze), so repeating "niveau
+  // X/Y (+Z%)" here a second time was pure duplication, not new information.
+  def levelUpLabel(costText: String, lang: Lang): String =
+    if lang == Lang.Fr then s"Améliorer ($costText)" else s"Upgrade ($costText)"
 
   def levelText(level: Int, maxLevel: Int, effect: Option[String], lang: Lang): String =
     if level <= 0 then (if lang == Lang.Fr then s"niveau 0/$maxLevel (aucun bonus)" else s"level 0/$maxLevel (no bonus yet)")

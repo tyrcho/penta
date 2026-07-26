@@ -10,6 +10,7 @@ import towerdefense.domain.*
 import towerdefense.domain.geometry.Vec2
 import towerdefense.domain.i18n.*
 import towerdefense.pixi.*
+import towerdefense.sim.MatchLog
 
 private case class ViewTransform(scale: Double, offsetX: Double, offsetY: Double)
 
@@ -51,6 +52,12 @@ private val UnitPreviewDurationMs = 1000.0
 // live at a time (same "module-level mutable state" shape GameSpeed's own paused/
 // multiplier fields use). Set from LangPersistence at startup, flipped by wireLangButton.
 private var currentLang: Lang = Lang.Fr
+
+// A plain incrementing counter (not wall-clock time, not affected by GameSpeed's pause/
+// fast-forward) purely so browser-console log lines can cite a tick number, same as the
+// sim module's own transcripts (MatchLog, whose tick parameter is Int) — makes it
+// possible to correlate two log lines as "the same tick" without needing a timestamp.
+private var tickCounter: Int = 0
 
 // Saves/restores the language choice across page refreshes — deliberately its own tiny
 // localStorage key rather than folded into Persistence's save blob, since the language is
@@ -580,14 +587,22 @@ def onReady(app: Application, textures: js.Dictionary[Texture]): Unit =
       case Mode.Spectating(leftIdx, rightIdx) =>
         (AiStrategy.ladder(rightIdx)._2, Some(AiStrategy.ladder(leftIdx)._2))
       case Mode.Playing => (AiStrategy.ladder(aiLevelIndex)._2, None)
-    battle = BattleEngine.tick(
+    tickCounter += 1
+    val (steppedBattle, tickEvents) = BattleEngine.tickDetailed(
       battle,
       speed.effectiveDeltaMs(t.deltaMS),
       aiStrategy = tickAiStrategy,
       playerStrategy = tickPlayerStrategy
     )
+    // Every build/upgrade/destroy/plunder/corruption/research/death event this tick,
+    // straight to the browser console (F12) — same MatchLog formatting `sim/run --log`
+    // writes to a file, now cheap enough to leave on permanently since it only ever
+    // prints on an actual state change, never once per idle tick.
+    MatchLog.diff(tickCounter, battle, steppedBattle, tickEvents).foreach(dom.console.log(_))
+    battle = steppedBattle
     if wasUnresolved then
       battle.outcome.foreach { outcome =>
+        dom.console.log(MatchLog.finalLine(tickCounter, outcome))
         mode match
           case Mode.Playing =>
             outcome match
@@ -2011,7 +2026,7 @@ private def levelUpOptionFor(b: Building, maze: MazeState): Option[(BuildingKind
       Some(
         (
           b.kind,
-          TooltipText.levelUpLabel(nextLevel, Balance.MaxResearchLevel, costText, labLevelEffectSummary(b.kind, nextLevel), currentLang),
+          TooltipText.levelUpLabel(costText, currentLang),
           Placement.canAfford(maze.resources, cost),
           preview
         )

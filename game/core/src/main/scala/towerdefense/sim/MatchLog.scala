@@ -3,10 +3,17 @@ package towerdefense.sim
 import towerdefense.domain.*
 
 // Pure formatting/diffing logic for a plain-text, one-line-per-event match transcript —
-// no I/O here, `Simulator.run`'s `--log` flag owns the file writing. Plain text, not
-// JSON: the project has no JSON library anywhere (core/sim are dependency-free besides
-// munit), and a line-based transcript is just as readable to a human or an LLM agent
-// reviewing it for strategic mistakes, arguably more so since it needs no parsing step.
+// no I/O here, callers own where the lines actually go (a PrintWriter for `Simulator.run`'s
+// `--log` flag, the browser console for GameApp's live ticker). Plain text, not JSON: the
+// project has no JSON library anywhere (core/sim are dependency-free besides munit), and a
+// line-based transcript is just as readable to a human or an LLM agent reviewing it for
+// strategic mistakes, arguably more so since it needs no parsing step.
+//
+// Lives in `core` (package kept as `towerdefense.sim` — packages aren't module-bound in
+// Scala, so `sim`'s own callers need no changes), not `sim`, specifically so it cross-
+// compiles to JS too: GameApp.scala (the live browser game) uses the exact same diffing
+// logic to log every build/plunder/corruption/death/research event straight to the
+// browser console as it happens, instead of a second, drifting implementation.
 //
 // Builds/upgrades/destroys are found by diffing each maze's `buildings` list by id
 // between two consecutive BattleState snapshots: Placement.tryUpgradeBuilding keeps the
