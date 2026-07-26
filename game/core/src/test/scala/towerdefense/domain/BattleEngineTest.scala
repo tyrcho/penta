@@ -56,6 +56,33 @@ class BattleEngineTest extends munit.FunSuite:
     assertEquals(tree.spawnCountdownMs, Balance.TreeCloneIntervalMs)
   }
 
+  test("an Elf spawns with bonus HP from every other living Elf already in the maze it's raiding") {
+    val grove = Building(100, col = 5, row = 5, BuildingKind.Grove, Balance.ElfSpawnIntervalMs)
+    val existingElves = (1 to 3)
+      .map(i => Creature(i.toLong, GridConfig.cellCenter(0, 0), Balance.ElfMaxHp, Balance.ElfMaxHp, Balance.ElfSpeedPerMs, UnitKind.Elf))
+      .toList
+    val battle = BattleState(
+      player = withResources().copy(buildings = List(grove)),
+      ai = withResources().copy(creatures = existingElves, nextId = 100L)
+    )
+    val result = BattleEngine.tick(battle, deltaMs = Balance.ElfSpawnIntervalMs)
+    val existingIds = existingElves.map(_.id).toSet
+    val newElf = result.ai.creatures.find(c => !existingIds.contains(c.id)).get
+    assertEquals(newElf.kind, UnitKind.Elf)
+    assertEqualsDouble(newElf.maxHp, Balance.ElfMaxHp * (1.0 + 3 * Balance.ElfHpBonusPerAlly), 1e-9)
+    assertEqualsDouble(newElf.hp, newElf.maxHp, 1e-9)
+  }
+
+  test("a lone Elf with no other allies in the maze it's raiding spawns at plain ElfMaxHp") {
+    val grove = Building(100, col = 5, row = 5, BuildingKind.Grove, Balance.ElfSpawnIntervalMs)
+    val battle = BattleState(
+      player = withResources().copy(buildings = List(grove)),
+      ai = withResources()
+    )
+    val result = BattleEngine.tick(battle, deltaMs = Balance.ElfSpawnIntervalMs)
+    assertEqualsDouble(result.ai.creatures.head.maxHp, Balance.ElfMaxHp, 1e-9)
+  }
+
   test("the AI builds something once it can afford one, on either side (symmetric)") {
     val battle = BattleState.initial
     val result = BattleEngine.tick(battle, deltaMs = 1.0)

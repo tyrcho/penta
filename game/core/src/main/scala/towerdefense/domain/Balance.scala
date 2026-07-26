@@ -29,6 +29,12 @@ object Balance:
   val ElfMaxHp: Double = 5.0
   val ElfSpeedPerMs: Double = 0.05 // POC default: 50 px/s
 
+  // "Swarm tactics" — not from the vault's own numbers (project owner's explicit
+  // request): an Elf gains bonus HP for every other living Elf already in the maze it's
+  // raiding, fixed once at spawn time (see BattleEngine.spawnCreature) — same "computed
+  // once, not continuously" precedent as Tree's own clone-size scaling below.
+  val ElfHpBonusPerAlly: Double = 0.02
+
   val WolfMaxHp: Double = 30.0 // Loup.md: "PV: 40"
   val WolfSpeedPerMs: Double = ElfSpeedPerMs * 1.5 // Loup.md: "1.5x plus vite que les unites standard"
   // Loup.md: "augmente la vitesse de deplacement des unites a 2 cases de 50%" — a
@@ -102,6 +108,20 @@ object Balance:
   // ressources de chaque type" (10 Wood + 10 Fire) total value, now taken as Gold.
   val MinotaurPlunderPerUnit: Double = 10.0
 
+  // Antre du Dragon.md (new, tier 3 — "no resource production at all", like Labyrinth):
+  // costlier than Labyrinth, its own value is purely the Dragon it spawns.
+  val DragonsLairCostWood: Double = 20.0
+  val DragonsLairCostFire: Double = 80.0
+  val DragonSpawnIntervalMs: Double = 30_000.0 // rarer than Cave/Labyrinth's units — not spammable
+
+  // A glass-cannon raider (project owner's explicit request): unlike Goblin/Minotaur's
+  // modest theft, Dragon's plunder alone is meant to secure — or come very close to
+  // securing — the Chaos plunder victory (ChaosVictoryPlunderTarget = 50) on a single
+  // successful run, balanced by low HP and needing to actually survive the trip.
+  val DragonMaxHp: Double = 18.0
+  val DragonSpeedPerMs: Double = ElfSpeedPerMs * 1.5 // +50% — same pace as Wolf/Vampire
+  val DragonPlunderGold: Double = 40.0
+
   // ── Loi ──────────────────────────────────────────────────────────────────
   val EgliseCostWood: Double = 20.0 // Eglise.md: "cout en bois: 40"
   val EgliseCostLight: Double = 40.0 // Eglise.md: "cout en lumiere: 20"
@@ -146,6 +166,20 @@ object Balance:
   // CombatEngine.applyDamageSources' isLargeKill).
   val LoyalesKillGoldReward: Double = 1.0
   val LoyalesLargeKillGoldReward: Double = 2.0
+
+  // Caserne.md (new, tier 1): Church/Watchtower/Angel are all priced above Grove/Cave's
+  // own tier-1 range — this fills Loi's missing cheap entry-tier slot.
+  val BarracksCostWood: Double = 5.0
+  val BarracksCostLight: Double = 10.0
+  val LightPerSecPerBarracks: Double = 0.2
+  val SoldierSpawnIntervalMs: Double = 8_000.0
+
+  val SoldierMaxHp: Double = 10.0
+  val SoldierSpeedPerMs: Double = ElfSpeedPerMs
+  // "Rang serre" (Close Ranks) — a Soldier takes reduced aura damage only while at least
+  // one other living Soldier is on or adjacent to its cell (conditional, unlike Paladin's
+  // unconditional shield — see CombatEngine.soldierPairedIds/applyDamageSources).
+  val SoldierCloseRanksDamageReductionPerSec: Double = 1.0
 
   // ── Mort (Death) ─────────────────────────────────────────────────────────
   val TombCostWood: Double = 5.0 // Tombe.md: "cout en bois: 5"
@@ -259,6 +293,13 @@ object Balance:
   // this against that kind's own researchLevels entry), not LaboFondamental's own size
   // (always the unscaled base, i.e. level 0). Level 5 (the max) is 50% bigger than level 0.
   val LaboSizeGrowthPerResearchLevel: Double = 0.10
+
+  // Champ de Stase.md (new, tier 2): produces more Crystal than LaboFondamental, and
+  // slows enemy units adjacent to it by half — mirrors Angel's own slow exactly (see
+  // CombatEngine.effectiveSpeedPerMs), just from a different faction/building.
+  val StasisFieldCostCrystal: Double = 20.0
+  val CrystalPerSecPerStasisField: Double = 0.4
+  val StasisSlowFraction: Double = 0.5
 
   // Five labs, one per other faction (Note sur les laboratoires.md: "un seul laboratoire de
   // chaque type" — see Placement's maxOnePerKind check), each producing Crystal and

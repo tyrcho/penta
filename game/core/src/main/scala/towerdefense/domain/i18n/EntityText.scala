@@ -63,6 +63,9 @@ object EntityText:
     ),
     BuildingKind.Labyrinth ->
       I18nText.combine(spawnLine(UnitKind.Minotaur, Balance.MinotaurSpawnIntervalMs, faction(BuildingKind.Labyrinth))),
+    // No production at all — like Labyrinth, its value is purely the Dragon it spawns.
+    BuildingKind.DragonsLair ->
+      I18nText.combine(spawnLine(UnitKind.Dragon, Balance.DragonSpawnIntervalMs, faction(BuildingKind.DragonsLair))),
     BuildingKind.Church -> I18nText.combine(
       produceLine(Resource.Light, Balance.LightPerSecPerEglise, faction(BuildingKind.Church)),
       spawnLine(UnitKind.Paladin, Balance.PaladinSpawnIntervalMs, faction(BuildingKind.Church))
@@ -74,6 +77,10 @@ object EntityText:
     BuildingKind.Angel -> I18nText.combine(
       produceLine(Resource.Light, Balance.LightPerSecPerAngel, faction(BuildingKind.Angel)),
       angelAbilityLine
+    ),
+    BuildingKind.Barracks -> I18nText.combine(
+      produceLine(Resource.Light, Balance.LightPerSecPerBarracks, faction(BuildingKind.Barracks)),
+      spawnLine(UnitKind.Soldier, Balance.SoldierSpawnIntervalMs, faction(BuildingKind.Barracks))
     ),
     BuildingKind.Tomb -> I18nText.combine(
       produceLine(Resource.Shadow, Balance.ShadowPerSecPerTomb, faction(BuildingKind.Tomb)),
@@ -89,6 +96,10 @@ object EntityText:
     ),
     BuildingKind.PassingGate -> passingGateBody,
     BuildingKind.LaboFondamental -> laboFondamentalBody,
+    BuildingKind.StasisField -> I18nText.combine(
+      produceLine(Resource.Crystal, Balance.CrystalPerSecPerStasisField, faction(BuildingKind.StasisField)),
+      stasisAbilityLine
+    ),
     BuildingKind.LaboNaturel -> specificLabBody(BuildingKind.LaboNaturel, Balance.CrystalPerSecPerLaboNaturel),
     BuildingKind.LaboSombre -> specificLabBody(BuildingKind.LaboSombre, Balance.CrystalPerSecPerLaboSombre),
     BuildingKind.LaboDeRecherche -> specificLabBody(BuildingKind.LaboDeRecherche, Balance.CrystalPerSecPerLaboDeRecherche),
@@ -126,6 +137,13 @@ object EntityText:
       s"unités adjacentes, et ralentit leur vitesse de déplacement de ${percentPoints(Balance.AngelSlowFraction * 100)}.",
     en = s"Spawns no unit. Deals ${decimal(Balance.AngelDamagePerSec)} damage per second to adjacent " +
       s"units, and slows their movement speed by ${percentPoints(Balance.AngelSlowFraction * 100)}."
+  )
+
+  private def stasisAbilityLine: I18nText = I18nText(
+    fr = s"N'envoie aucune unité. Ralentit la vitesse de déplacement des unités adjacentes de " +
+      s"${percentPoints(Balance.StasisSlowFraction * 100)}.",
+    en = s"Spawns no unit. Slows the movement speed of adjacent units by " +
+      s"${percentPoints(Balance.StasisSlowFraction * 100)}."
   )
 
   private def passingGateBody: I18nText =
@@ -297,7 +315,8 @@ object EntityText:
   val unitBodies: Map[UnitKind, I18nText] = Map(
     UnitKind.Elf -> I18nText.combine(
       spawnedByLine(BuildingKind.Grove, faction(UnitKind.Elf)),
-      plunderLine(List(Resource.Wood -> Balance.PlunderPerUnit), faction(UnitKind.Elf))
+      plunderLine(List(Resource.Wood -> Balance.PlunderPerUnit), faction(UnitKind.Elf)),
+      elfSwarmTacticsLine
     ),
     // Goblin/Minotaur steal Gold directly now ("steal gold, not convert" — project owner's
     // explicit request) — 2x Balance.PlunderPerUnit/MinotaurPlunderPerUnit preserves the
@@ -310,7 +329,16 @@ object EntityText:
       spawnedByLine(BuildingKind.Labyrinth, faction(UnitKind.Minotaur)),
       plunderLine(List(Resource.Gold -> 2 * Balance.MinotaurPlunderPerUnit), faction(UnitKind.Minotaur))
     ),
+    UnitKind.Dragon -> I18nText.combine(
+      spawnedByLine(BuildingKind.DragonsLair, faction(UnitKind.Dragon)),
+      dragonSpeedLine,
+      plunderLine(List(Resource.Gold -> Balance.DragonPlunderGold), faction(UnitKind.Dragon))
+    ),
     UnitKind.Paladin -> I18nText.combine(spawnedByLine(BuildingKind.Church, faction(UnitKind.Paladin)), paladinAuraLine),
+    UnitKind.Soldier -> I18nText.combine(
+      spawnedByLine(BuildingKind.Barracks, faction(UnitKind.Soldier)),
+      soldierCloseRanksLine
+    ),
     UnitKind.Wolf -> wolfBody,
     UnitKind.Tree -> treeBody,
     UnitKind.Zombie -> I18nText.combine(
@@ -321,6 +349,30 @@ object EntityText:
     UnitKind.Vampire -> vampireBody,
     UnitKind.Necromancer -> necromancerBody,
     UnitKind.Soul -> soulBody
+  )
+
+  private def elfSwarmTacticsLine: I18nText =
+    val bonus = percentPoints(Balance.ElfHpBonusPerAlly * 100)
+    I18nText(
+      fr = s"« Tactique de meute » : gagne $bonus de PV en plus pour chaque autre Elfe déjà présent dans le " +
+        "labyrinthe adverse qu'il s'apprête à envahir, fixé une fois pour toutes à sa création.",
+      en = s"\"Swarm tactics\": gains $bonus extra HP for every other Elf already in the opposing maze it's " +
+        "about to raid, fixed once and for all when it's spawned."
+    )
+
+  private def dragonSpeedLine: I18nText =
+    val speedMultiplier = decimal(Balance.DragonSpeedPerMs / Balance.ElfSpeedPerMs)
+    I18nText(
+      fr = s"Se déplace vite (${speedMultiplier}x la vitesse standard) mais a peu de PV — un pilleur fragile " +
+        "mais redoutable.",
+      en = s"Moves fast (${speedMultiplier}x standard speed) but has few HP — a fragile but fearsome raider."
+    )
+
+  private def soldierCloseRanksLine: I18nText = I18nText(
+    fr = s"« Rang serré » : subit ${decimal(Balance.SoldierCloseRanksDamageReductionPerSec)} dégâts de moins " +
+      "par seconde tant qu'un autre Soldat se trouve sur sa case ou une case adjacente.",
+    en = s"\"Close ranks\": takes ${decimal(Balance.SoldierCloseRanksDamageReductionPerSec)} less damage per " +
+      "second while another Soldier is on or adjacent to its cell."
   )
 
   private def paladinAuraLine: I18nText =

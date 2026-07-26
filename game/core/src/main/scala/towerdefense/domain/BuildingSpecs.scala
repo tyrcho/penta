@@ -72,6 +72,13 @@ object BuildingSpecs:
       produces = Map.empty,
       spawns = Some(UnitKind.Minotaur -> Balance.MinotaurSpawnIntervalMs)
     ),
+    // Antre du Dragon.md: Chaos's tier-3 building — no resource production at all, its
+    // value is purely the glass-cannon Dragon it spawns (see CreatureSpecs).
+    BuildingKind.DragonsLair -> BuildingSpec(
+      cost = Map(Resource.Wood -> Balance.DragonsLairCostWood, Resource.Fire -> Balance.DragonsLairCostFire),
+      produces = Map.empty,
+      spawns = Some(UnitKind.Dragon -> Balance.DragonSpawnIntervalMs)
+    ),
     BuildingKind.Church -> BuildingSpec(
       cost = Map(Resource.Wood -> Balance.EgliseCostWood, Resource.Light -> Balance.EgliseCostLight),
       produces = Map(Resource.Light -> Balance.LightPerSecPerEglise),
@@ -89,6 +96,13 @@ object BuildingSpecs:
       cost = Map(Resource.Light -> Balance.AngelCostLight),
       produces = Map(Resource.Light -> Balance.LightPerSecPerAngel),
       spawns = None
+    ),
+    // Caserne.md: Loi's tier-1 building — a genuinely cheap entry point, below Church's
+    // own price, spawning the cheap/fragile Soldat (see CreatureSpecs).
+    BuildingKind.Barracks -> BuildingSpec(
+      cost = Map(Resource.Wood -> Balance.BarracksCostWood, Resource.Light -> Balance.BarracksCostLight),
+      produces = Map(Resource.Light -> Balance.LightPerSecPerBarracks),
+      spawns = Some(UnitKind.Soldier -> Balance.SoldierSpawnIntervalMs)
     ),
     BuildingKind.Tomb -> BuildingSpec(
       cost = Map(Resource.Wood -> Balance.TombCostWood, Resource.Shadow -> Balance.TombCostShadow),
@@ -120,6 +134,15 @@ object BuildingSpecs:
     BuildingKind.LaboFondamental -> BuildingSpec(
       cost = Map(Resource.Crystal -> Balance.LaboFondamentalCostCrystal),
       produces = Map(Resource.Crystal -> Balance.CrystalPerSecPerLaboFondamental),
+      spawns = None
+    ),
+    // Champ de Stase.md: Science's tier-2 building — no unit spawn, produces more Crystal
+    // than LaboFondamental, and slows adjacent enemy creatures (see CombatEngine's
+    // stasisCells handling in effectiveSpeedPerMs) — a separate, additive building, not
+    // part of the LaboFondamental upgrade chain.
+    BuildingKind.StasisField -> BuildingSpec(
+      cost = Map(Resource.Crystal -> Balance.StasisFieldCostCrystal),
+      produces = Map(Resource.Crystal -> Balance.CrystalPerSecPerStasisField),
       spawns = None
     ),
     // buildableDirectly = false for all five: reached only by upgrading a LaboFondamental

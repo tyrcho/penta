@@ -6,19 +6,20 @@ package towerdefense.domain
 // Both sides can build any directly-buildable BuildingKind — see CLAUDE.md, "the game
 // is symmetric" — Forest/Jungle (and, since the Science redesign, the five specific labs)
 // are reached only via maybeUpgrade, never listed here.
-// Tried by descending wood cost (Stonehenge 150 > Church 20 = BlackCastle 20 >
-// Labyrinth 10 = Watchtower 10 = DeathHouse 10 > Grove 5 = Tomb 5 >
-// Cave 0 = Angel 0 = PassingGate 0 = LaboFondamental 0): each one's wood cost dominates
-// every cheaper building's, so trying it later would make it unreachable — by the time
-// its wood cost is affordable, the cheaper buildings' wood costs always are too (their
-// non-wood requirements are independent currencies and don't create the same trap). Angel
-// costs only Light, PassingGate costs Shadow+Light, and LaboFondamental costs only Crystal
-// (no Wood at all, unlike Grove/Tomb's shared-Wood trap — see the NOTE below), so all three
-// sit in the zero-wood tier alongside Cave, ordered among them arbitrarily but stably. Cave
-// joined this tier in the same rebalance that made Grove/Tomb tie at 5. Every same-wood-cost
-// tie breaks by list position — arbitrary but stable. Kept as an explicit list, not derived
-// by sorting BuildingSpecs at runtime — a re-derived sort risks silently flipping a tie
-// with no test to catch it.
+// Tried by descending wood cost (Stonehenge 150 > Church 20 = BlackCastle 20 =
+// DragonsLair 20 > Labyrinth 10 = Watchtower 10 = DeathHouse 10 > Grove 5 = Tomb 5 =
+// Barracks 5 > Cave 0 = Angel 0 = PassingGate 0 = LaboFondamental 0 = StasisField 0):
+// each one's wood cost dominates every cheaper building's, so trying it later would make
+// it unreachable — by the time its wood cost is affordable, the cheaper buildings' wood
+// costs always are too (their non-wood requirements are independent currencies and don't
+// create the same trap). Angel costs only Light, PassingGate costs Shadow+Light,
+// LaboFondamental and StasisField both cost only Crystal (no Wood at all, unlike
+// Grove/Tomb's shared-Wood trap — see the NOTE below), so all sit in the zero-wood tier
+// alongside Cave, ordered among them arbitrarily but stably. Cave joined this tier in the
+// same rebalance that made Grove/Tomb tie at 5. Every same-wood-cost tie breaks by list
+// position — arbitrary but stable. Kept as an explicit list, not derived by sorting
+// BuildingSpecs at runtime — a re-derived sort risks silently flipping a tie with no test
+// to catch it.
 // NOTE: at the 5-wood tier, Grove's cost (Wood only) is now a strict subset of Tomb's
 // (Wood + Shadow) — so whenever Tomb is affordable, Grove always is too, and being first
 // in that tier, Grove always wins. Under this strategy specifically, Tomb is effectively
@@ -32,15 +33,18 @@ object LinearStrategy extends AiStrategy:
     BuildingKind.Stonehenge,
     BuildingKind.Church,
     BuildingKind.BlackCastle,
+    BuildingKind.DragonsLair,
     BuildingKind.Labyrinth,
     BuildingKind.Watchtower,
     BuildingKind.DeathHouse,
     BuildingKind.Grove,
     BuildingKind.Tomb,
+    BuildingKind.Barracks,
     BuildingKind.Cave,
     BuildingKind.Angel,
     BuildingKind.PassingGate,
-    BuildingKind.LaboFondamental
+    BuildingKind.LaboFondamental,
+    BuildingKind.StasisField
   )
 
   def maybeBuild(state: MazeState, opponent: MazeState): MazeState =

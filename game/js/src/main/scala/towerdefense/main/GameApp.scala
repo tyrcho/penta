@@ -202,6 +202,14 @@ private object AssetPaths:
   // Portail.md: an original placeholder graphic (no external asset pack) — see
   // LICENSE-passing-gate.txt.
   val PassingGateIcon = "./assets/passing-gate.png"
+  // New Chaos/Loi/Science content (Antre du Dragon/Caserne/Champ de Stase) — static
+  // icons, not animated walk cycles, same "no dedicated pack" placeholder shape as the
+  // Mort/Science icons above (see game-icon-art skill for how these were authored).
+  val DragonsLairIcon = "./assets/dragons-lair.png"
+  val BarracksIcon = "./assets/barracks.png"
+  val StasisFieldIcon = "./assets/stasis-field.png"
+  val Dragon = "./assets/dragon.png"
+  val Soldier = "./assets/soldier.png"
   val Flames =
     List("./assets/flame1.png", "./assets/flame2.png", "./assets/flame3.png", "./assets/flame4.png")
   val Wolf = List("./assets/wolf/run-0.png", "./assets/wolf/run-1.png", "./assets/wolf/run-2.png")
@@ -236,7 +244,8 @@ private object AssetPaths:
     List(
       Grove, Forest, Jungle, CaveRock, LabyrintheIcon, EgliseIcon, WatchtowerIcon, AngelIcon, Minotaur, Paladin,
       TombIcon, BlackCastleIcon, Vampire, LaboFondamentalIcon, LaboNaturelIcon, LaboSombreIcon,
-      LaboDeRechercheIcon, LaboDeLaLoiIcon, LaboDuChaosIcon, DeathHouseIcon, StonehengeIcon, PassingGateIcon
+      LaboDeRechercheIcon, LaboDeLaLoiIcon, LaboDuChaosIcon, DeathHouseIcon, StonehengeIcon, PassingGateIcon,
+      DragonsLairIcon, BarracksIcon, StasisFieldIcon, Dragon, Soldier
     ) ++ GoblinFrames.values.flatten ++ ElfFrames.values.flatten ++ Flames ++ Wolf ++
       ZombieFrames.values.flatten ++ NecromancerFrames ++ SoulFrames ++ NecromancerSummonFrames ++
       TreeFrames.values.flatten
@@ -288,7 +297,10 @@ private object BuildingVisuals:
     BuildingKind.LaboDuChaos -> BuildingVisual(AssetPaths.LaboDuChaosIcon, GridConfig.cellSize * 0.8, None),
     BuildingKind.DeathHouse -> BuildingVisual(AssetPaths.DeathHouseIcon, GridConfig.cellSize * 1.1, None),
     BuildingKind.Stonehenge -> BuildingVisual(AssetPaths.StonehengeIcon, GridConfig.cellSize * 1.1, None),
-    BuildingKind.PassingGate -> BuildingVisual(AssetPaths.PassingGateIcon, GridConfig.cellSize * 1.0, None)
+    BuildingKind.PassingGate -> BuildingVisual(AssetPaths.PassingGateIcon, GridConfig.cellSize * 1.0, None),
+    BuildingKind.DragonsLair -> BuildingVisual(AssetPaths.DragonsLairIcon, GridConfig.cellSize * 1.1, None),
+    BuildingKind.Barracks -> BuildingVisual(AssetPaths.BarracksIcon, GridConfig.cellSize * 0.9, None),
+    BuildingKind.StasisField -> BuildingVisual(AssetPaths.StasisFieldIcon, GridConfig.cellSize * 0.9, None)
   )
 
 // DOM id suffix per kind (index.html's #build-<slug> buttons and #<prefix>-<slug>
@@ -315,6 +327,9 @@ private def domSlug(kind: BuildingKind): String = kind match
   case BuildingKind.LaboDeRecherche => "labo-de-recherche"
   case BuildingKind.LaboDeLaLoi     => "labo-de-la-loi"
   case BuildingKind.LaboDuChaos     => "labo-du-chaos"
+  case BuildingKind.DragonsLair     => "dragons-lair"
+  case BuildingKind.Barracks        => "barracks"
+  case BuildingKind.StasisField     => "stasis-field"
 
 // A human-readable, localized name for a building kind — same table core's doc generator
 // reads (EntityNames), so a kind is never named two different ways between the vault
@@ -1074,14 +1089,17 @@ private def applyStaticLabels(): Unit =
     "stonehenge" -> BuildingKind.Stonehenge,
     "cave" -> BuildingKind.Cave,
     "labyrinth" -> BuildingKind.Labyrinth,
+    "dragonsLair" -> BuildingKind.DragonsLair,
     "church" -> BuildingKind.Church,
     "watchtower" -> BuildingKind.Watchtower,
     "angel" -> BuildingKind.Angel,
+    "barracks" -> BuildingKind.Barracks,
     "tomb" -> BuildingKind.Tomb,
     "blackCastle" -> BuildingKind.BlackCastle,
     "deathHouse" -> BuildingKind.DeathHouse,
     "passingGate" -> BuildingKind.PassingGate,
-    "laboFondamental" -> BuildingKind.LaboFondamental
+    "laboFondamental" -> BuildingKind.LaboFondamental,
+    "stasisField" -> BuildingKind.StasisField
   )
   elementsWithAttr("data-i18n-alt").foreach { el =>
     val key = el.getAttribute("data-i18n-alt")
@@ -1425,7 +1443,8 @@ private def syncCreatures(
       case UnitKind.Necromancer =>
         angle.foreach(a => g.rotation = a)
         applyNecromancerAnimation(sprites, c.id, g, isSummoning = c.frozenMs > 0, necromancerFrames, necromancerSummonFrames)
-      case UnitKind.Minotaur | UnitKind.Paladin | UnitKind.Wolf | UnitKind.Vampire | UnitKind.Soul =>
+      case UnitKind.Minotaur | UnitKind.Paladin | UnitKind.Wolf | UnitKind.Vampire | UnitKind.Soul | UnitKind.Dragon |
+          UnitKind.Soldier =>
         angle.foreach(a => g.rotation = a)
       case UnitKind.Goblin =>
         applyFacing(sprites, c.id, g, angle, goblinFrames)
@@ -1546,6 +1565,12 @@ private def newCreatureSprite(
     val s = newAnimatedSprite(treeFrames("front"), GridConfig.cellSize * 1.0 * sizeFraction)
     wireHover(s, target, setHovered)
     addTo(world, s)
+  case UnitKind.Dragon =>
+    // Single static icon, same treatment as Minotaur/Paladin/Vampire — a fast,
+    // fragile glass-cannon raider, so a modest (not oversized) sprite.
+    newHoverSprite(world, textures(AssetPaths.Dragon), GridConfig.cellSize * 1.0, target, setHovered)
+  case UnitKind.Soldier =>
+    newHoverSprite(world, textures(AssetPaths.Soldier), GridConfig.cellSize * 0.8, target, setHovered)
 
 // Which of the 4 walk-cycle frame sets to show, from the enemy's facing angle
 // (Pixi's y-axis points down, so "front" = walking toward the viewer, i.e. down).
@@ -1777,7 +1802,9 @@ private def unitPreviewContainer(
   case UnitKind.Soul        => newAnimatedSprite(soulFrames, GridConfig.cellSize * 0.55)
   // Always the full-size original — only Stonehenge (a building) ever triggers this
   // preview, and the original Tree it spawns always starts at sizeFraction 1.0.
-  case UnitKind.Tree => newAnimatedSprite(treeFrames("front"), GridConfig.cellSize * 1.0)
+  case UnitKind.Tree    => newAnimatedSprite(treeFrames("front"), GridConfig.cellSize * 1.0)
+  case UnitKind.Dragon  => newSprite(textures(AssetPaths.Dragon), GridConfig.cellSize * 1.0)
+  case UnitKind.Soldier => newSprite(textures(AssetPaths.Soldier), GridConfig.cellSize * 0.8)
 
 private def spawnUnitPreview(
     world: Container,

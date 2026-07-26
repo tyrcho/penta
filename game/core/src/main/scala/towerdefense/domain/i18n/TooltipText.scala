@@ -111,6 +111,11 @@ object TooltipText:
     val secs = NumberFormat.seconds(intervalMs)
     I18nText(fr = s"invoque une Âme toutes les ${secs}s", en = s"invokes a Soul every ${secs}s")
 
+  private def closeRanks(reductionPerSec: Double): I18nText = I18nText(
+    fr = s"subit ${decimal(reductionPerSec)} dégâts/sec en moins si un autre Soldat est à proximité",
+    en = s"takes ${decimal(reductionPerSec)} less dmg/s when another Soldier is nearby"
+  )
+
   private def clones(intervalMs: Double, minSizePercent: Double): I18nText =
     val secs = NumberFormat.seconds(intervalMs)
     I18nText(
@@ -129,7 +134,9 @@ object TooltipText:
     // explicit request), 2x the shared per-unit constant (see Balance's own doc).
     UnitKind.Goblin -> plunders(List(Resource.Gold -> 2 * Balance.PlunderPerUnit)),
     UnitKind.Minotaur -> plunders(List(Resource.Gold -> 2 * Balance.MinotaurPlunderPerUnit)),
+    UnitKind.Dragon -> plunders(List(Resource.Gold -> Balance.DragonPlunderGold)),
     UnitKind.Paladin -> (noPlunder ++ shields(Balance.PaladinAuraDamageReductionPerSec)),
+    UnitKind.Soldier -> (noPlunder ++ closeRanks(Balance.SoldierCloseRanksDamageReductionPerSec)),
     UnitKind.Wolf -> (noPlunder ++ speedsUp(Balance.WolfSpeedAuraRangeCells, (Balance.WolfSpeedAuraMultiplier - 1) * 100)),
     UnitKind.Zombie -> (noPlunder ++ corrupts(Balance.ZombieCorruptionPercentPerSec)),
     UnitKind.Vampire ->
@@ -313,6 +320,13 @@ object TooltipText:
         "those cells, in gold"
     )
 
+  private val stasisFieldOwnAbility: I18nText =
+    val slow = decimal(Balance.StasisSlowFraction * 100)
+    I18nText(
+      fr = s" ${upperFirst(spawnsNothing(Lang.Fr))} — ralentit plutôt les unités adjacentes de $slow%",
+      en = s" ${upperFirst(spawnsNothing(Lang.En))} — instead slows adjacent enemies by $slow%"
+    )
+
   private val laboFondamentalOwnAbility: I18nText = I18nText(
     fr = " sans bonus propre. Améliorez-le en un labo spécifique pour débloquer ses niveaux (niveau 1 gratuit, " +
       "puis d'autres améliorations sur place) — un seul labo de chaque type spécifique par maze à la fois",
@@ -330,7 +344,8 @@ object TooltipText:
     BuildingKind.Watchtower -> watchtowerOwnAbility,
     BuildingKind.Angel -> angelOwnAbility,
     BuildingKind.PassingGate -> passingGateOwnAbility,
-    BuildingKind.LaboFondamental -> laboFondamentalOwnAbility
+    BuildingKind.LaboFondamental -> laboFondamentalOwnAbility,
+    BuildingKind.StasisField -> stasisFieldOwnAbility
   )
 
   def buildingOwnAbility(kind: BuildingKind, lang: Lang): String = buildingOwnAbilities.get(kind).fold("")(_(lang))

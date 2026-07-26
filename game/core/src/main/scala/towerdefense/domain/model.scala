@@ -13,7 +13,7 @@ enum Resource derives CanEqual:
 // CombatEngine's corruption mechanic. Science (Recherches*.md) has no unit at all in the
 // vault, only buildings — see BuildingKind's Science cases.
 enum UnitKind derives CanEqual:
-  case Elf, Goblin, Minotaur, Paladin, Wolf, Zombie, Vampire, Necromancer, Soul, Tree
+  case Elf, Goblin, Minotaur, Paladin, Wolf, Zombie, Vampire, Necromancer, Soul, Tree, Dragon, Soldier
 
 // Grove/Forest/Jungle form Nature's upgrade chain (Bosquet.md/Foret.md/Jungle.md) — only
 // Grove is directly buildable; Forest and Jungle are reached by upgrading an existing
@@ -40,7 +40,8 @@ enum UnitKind derives CanEqual:
 // instead, see BuildingSpecs' doc.
 enum BuildingKind derives CanEqual:
   case Grove, Forest, Jungle, Stonehenge, Cave, Labyrinth, Church, Watchtower, Angel, Tomb, BlackCastle,
-    DeathHouse, PassingGate, LaboFondamental, LaboNaturel, LaboSombre, LaboDeRecherche, LaboDeLaLoi, LaboDuChaos
+    DeathHouse, PassingGate, LaboFondamental, LaboNaturel, LaboSombre, LaboDeRecherche, LaboDeLaLoi, LaboDuChaos,
+    DragonsLair, Barracks, StasisField
 
 // A unit currently walking this maze. From this maze owner's point of view it's
 // always hostile — sent by one of the opponent's buildings. See CreatureSpecs for

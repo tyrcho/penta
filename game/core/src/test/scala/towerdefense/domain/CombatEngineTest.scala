@@ -588,6 +588,49 @@ class CombatEngineTest extends munit.FunSuite:
     )
   }
 
+  test("a stasis field slows an adjacent enemy's movement by StasisSlowFraction") {
+    val stasisField = Building(100, col = 5, row = 5, BuildingKind.StasisField, 0.0)
+    val nearbyElf =
+      Creature(1, GridConfig.cellCenter(6, 5), Balance.ElfMaxHp, Balance.ElfMaxHp, Balance.ElfSpeedPerMs, UnitKind.Elf)
+    val state = withResources().copy(creatures = List(nearbyElf), buildings = List(stasisField))
+    val result = CombatEngine.tick(state, deltaMs = 10.0)
+    val slowedElf = result.state.creatures.find(_.id == 1).get
+    val aloneElf =
+      CombatEngine.tick(withResources().copy(creatures = List(nearbyElf)), deltaMs = 10.0).state.creatures.head
+    val slowedDistance = distanceMoved(nearbyElf.pos, slowedElf.pos)
+    val aloneDistance = distanceMoved(nearbyElf.pos, aloneElf.pos)
+    assertEqualsDouble(slowedDistance, aloneDistance * (1.0 - Balance.StasisSlowFraction), 1e-9)
+  }
+
+  test("a stasis field's slow does not reach a creature on a non-adjacent cell") {
+    val stasisField = Building(100, col = 5, row = 5, BuildingKind.StasisField, 0.0)
+    val farElf =
+      Creature(1, GridConfig.cellCenter(0, 0), Balance.ElfMaxHp, Balance.ElfMaxHp, Balance.ElfSpeedPerMs, UnitKind.Elf)
+    val state = withResources().copy(creatures = List(farElf), buildings = List(stasisField))
+    val result = CombatEngine.tick(state, deltaMs = 10.0)
+    val unaffected = result.state.creatures.head
+    val alone = CombatEngine.tick(withResources().copy(creatures = List(farElf)), deltaMs = 10.0).state.creatures.head
+    assertEquals(unaffected.pos, alone.pos)
+  }
+
+  test("a stasis field's slow and an angel's slow stack multiplicatively") {
+    // Elf at (6,5) sits orthogonally adjacent to both the stasis field (5,5) and the
+    // angel (7,5) — one cell to either side, on the same row.
+    val stasisField = Building(100, col = 5, row = 5, BuildingKind.StasisField, 0.0)
+    val angel = Building(101, col = 7, row = 5, BuildingKind.Angel, 0.0)
+    val elf = Creature(1, GridConfig.cellCenter(6, 5), Balance.ElfMaxHp, Balance.ElfMaxHp, Balance.ElfSpeedPerMs, UnitKind.Elf)
+    val state = withResources().copy(creatures = List(elf), buildings = List(stasisField, angel))
+    val result = CombatEngine.tick(state, deltaMs = 10.0)
+    val actualDistance = distanceMoved(elf.pos, result.state.creatures.head.pos)
+    val plainElf = CombatEngine.tick(withResources().copy(creatures = List(elf)), deltaMs = 10.0).state.creatures.head
+    val plainDistance = distanceMoved(elf.pos, plainElf.pos)
+    assertEqualsDouble(
+      actualDistance,
+      plainDistance * (1.0 - Balance.AngelSlowFraction) * (1.0 - Balance.StasisSlowFraction),
+      1e-9
+    )
+  }
+
   test("a passing gate damages an adjacent enemy at its own rate, not Forest's/Angel's") {
     val gate = Building(100, col = 5, row = 5, BuildingKind.PassingGate, 0.0)
     val adjacent =
@@ -1410,6 +1453,30 @@ class CombatEngineTest extends munit.FunSuite:
     // if no Paladin were present (contrast with the Elf in the shield test above, which
     // takes zero damage since the Paladin fully cancels Forest's aura for it).
     assertEquals(byId(1).hp, vampire.hp - Balance.AuraDamagePerSec * (1.0 - Balance.VampireDamageReductionFraction))
+  }
+
+  test("a soldier paired with another nearby soldier takes reduced aura damage (Rang serre)") {
+    val forest = Building(100, col = 5, row = 5, BuildingKind.Forest, Balance.ElfSpawnIntervalMs)
+    val soldierPos = GridConfig.cellCenter(6, 5)
+    val allyPos = GridConfig.cellCenter(6, 6) // orthogonally adjacent to soldierPos
+    val soldier = Creature(1, soldierPos, Balance.SoldierMaxHp, Balance.SoldierMaxHp, speedPerMs = 0.0, UnitKind.Soldier)
+    val ally = Creature(2, allyPos, Balance.SoldierMaxHp, Balance.SoldierMaxHp, speedPerMs = 0.0, UnitKind.Soldier)
+    val state = withResources().copy(creatures = List(soldier, ally), buildings = List(forest))
+    val result = CombatEngine.tick(state, deltaMs = 1000.0)
+    val byId = result.state.creatures.map(c => c.id -> c).toMap
+    assertEquals(
+      byId(1).hp,
+      soldier.hp - math.max(0.0, Balance.AuraDamagePerSec - Balance.SoldierCloseRanksDamageReductionPerSec)
+    )
+  }
+
+  test("a lone soldier with no nearby ally takes full aura damage") {
+    val forest = Building(100, col = 5, row = 5, BuildingKind.Forest, Balance.ElfSpawnIntervalMs)
+    val soldier =
+      Creature(1, GridConfig.cellCenter(6, 5), Balance.SoldierMaxHp, Balance.SoldierMaxHp, speedPerMs = 0.0, UnitKind.Soldier)
+    val state = withResources().copy(creatures = List(soldier), buildings = List(forest))
+    val result = CombatEngine.tick(state, deltaMs = 1000.0)
+    assertEquals(result.state.creatures.head.hp, soldier.hp - Balance.AuraDamagePerSec)
   }
 
   test("a zombie reaching the goal is reported as an arrival, but plunders nothing") {

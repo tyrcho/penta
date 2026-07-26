@@ -1,0 +1,75 @@
+<svg id="art" viewBox="0 0 400 400" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="drBodyFill" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#ff8a4a"/>
+      <stop offset="55%" stop-color="#e5461f"/>
+      <stop offset="100%" stop-color="#8f1c10"/>
+    </linearGradient>
+    <linearGradient id="drWingFill" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#7a2318"/>
+      <stop offset="100%" stop-color="#3a0f0a"/>
+    </linearGradient>
+  </defs>
+
+  <!-- tail, thin and whip-like — emphasizes speed over bulk -->
+  <path d="M212,300 Q270,320 292,286 Q310,258 296,238"
+        fill="none" stroke="#1c0603" stroke-width="16" stroke-linecap="round"/>
+  <path d="M212,300 Q270,320 292,286 Q310,258 296,238"
+        fill="none" stroke="url(#drBodyFill)" stroke-width="10" stroke-linecap="round"/>
+  <path d="M292,232 L308,224 L302,242 L316,240 L296,254 Z" fill="#e5461f" stroke="#1c0603" stroke-width="5" stroke-linejoin="round"/>
+
+  <!-- far wing (behind body, bat-like membrane) -->
+  <path d="M186,168 Q120,140 74,168 Q112,168 132,186 Q96,186 70,210 Q112,204 140,222 Q170,214 186,196 Z"
+        fill="url(#drWingFill)" stroke="#1c0603" stroke-width="7" stroke-linejoin="round"/>
+
+  <!-- hind leg -->
+  <path d="M198,286 Q186,314 158,318 Q178,300 182,278 Z" fill="#8f1c10" stroke="#1c0603" stroke-width="7" stroke-linejoin="round"/>
+  <!-- front leg -->
+  <path d="M254,282 Q252,312 224,320 Q240,298 240,274 Z" fill="#c73a1a" stroke="#1c0603" stroke-width="7" stroke-linejoin="round"/>
+
+  <!-- body: lean, wiry serpentine torso — narrower than a typical dragon, emphasizing
+       speed over bulk (Balance.DragonMaxHp is low, closer to Elf/Goblin than Minotaur) -->
+  <path d="M144,244
+           Q132,212 156,186
+           Q172,168 196,168
+           Q226,166 246,190
+           Q264,210 258,240
+           Q252,268 220,280
+           Q186,290 160,272
+           Q140,258 144,244 Z"
+        fill="url(#drBodyFill)" stroke="#1c0603" stroke-width="9" stroke-linejoin="round"/>
+
+  <!-- belly plates, lighter, flat cel-shaded -->
+  <path d="M174,262 Q198,276 222,262 Q228,246 220,232 Q198,242 180,232 Q170,244 174,262 Z"
+        fill="#ffd79a" opacity="0.85"/>
+  <path d="M184,232 Q200,238 214,232 M180,246 Q200,254 218,246"
+        fill="none" stroke="#c98a3a" stroke-width="4" opacity="0.6" stroke-linecap="round"/>
+
+  <!-- near wing (in front, bigger, bat membrane with claw tips) -->
+  <path d="M210,196 Q250,140 320,132 Q288,168 296,196 Q330,182 350,204 Q306,206 288,228 Q320,232 330,258
+           Q288,246 262,222 Q238,224 218,210 Z"
+        fill="url(#drWingFill)" stroke="#1c0603" stroke-width="8" stroke-linejoin="round"/>
+  <path d="M296,196 Q310,180 320,132" fill="none" stroke="#1c0603" stroke-width="5" opacity="0.6"/>
+  <path d="M288,228 Q306,214 350,204" fill="none" stroke="#1c0603" stroke-width="5" opacity="0.6"/>
+
+  <!-- back spikes, small and sleek (not bulky) -->
+  <path d="M172,166 L162,144 L184,158 M198,158 L192,134 L212,152 M224,160 L224,136 L242,158"
+        fill="none" stroke="#1c0603" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M172,166 L162,144 L184,158 Z M198,158 L192,134 L212,152 Z M224,160 L224,136 L242,158 Z"
+        fill="#e5461f"/>
+
+  <!-- head: narrow, angular snout (agile predator, not a bulky brute) -->
+  <path d="M118,232 Q86,224 68,240 Q84,252 96,250 Q88,262 96,272 Q112,262 122,250 Q142,254 152,238 Q138,220 118,232 Z"
+        fill="url(#drBodyFill)" stroke="#1c0603" stroke-width="8" stroke-linejoin="round"/>
+  <!-- jaw highlight -->
+  <path d="M90,244 Q76,242 70,240 Q80,250 94,250 Z" fill="#ffd79a" opacity="0.6"/>
+  <!-- small teeth -->
+  <path d="M78,242 L84,250 L90,242 Z M96,244 L100,252 L106,244 Z" fill="#fff6e0" stroke="#1c0603" stroke-width="2"/>
+
+  <!-- glowing eye — fierce, alert -->
+  <path d="M112,228 Q124,218 136,226 Q128,238 116,238 Q108,234 112,228 Z" fill="#ffe14d" stroke="#5c1a0a" stroke-width="3"/>
+  <ellipse cx="124" cy="230" rx="3" ry="5" fill="#3a0f04"/>
+
+  <!-- small brow horn -->
+  <path d="M126,214 L118,196 L138,210 Z" fill="#8f1c10" stroke="#1c0603" stroke-width="6" stroke-linejoin="round"/>
+</svg>

@@ -99,6 +99,12 @@ object EntityNames:
       I18nText("Labyrinthe.md", "Labyrinth.md"),
       "labyrinthe.png"
     ),
+    BuildingKind.DragonsLair -> BuildingKindInfo(
+      Faction.Chaos,
+      I18nText("Antre du Dragon", "Dragon's Lair"),
+      I18nText("Antre du Dragon.md", "Dragon's Lair.md"),
+      "dragons-lair.png"
+    ),
     BuildingKind.Church -> BuildingKindInfo(
       Faction.Loi,
       I18nText("Église", "Church"),
@@ -116,6 +122,12 @@ object EntityNames:
       I18nText("Ange", "Angel"),
       I18nText("Ange.md", "Angel.md"),
       "angel.png"
+    ),
+    BuildingKind.Barracks -> BuildingKindInfo(
+      Faction.Loi,
+      I18nText("Caserne", "Barracks"),
+      I18nText("Caserne.md", "Barracks.md"),
+      "barracks.png"
     ),
     BuildingKind.Tomb -> BuildingKindInfo(
       Faction.Mort,
@@ -146,6 +158,12 @@ object EntityNames:
       I18nText("Labo Fondamental", "Base Lab"),
       I18nText("Labo Fondamental.md", "Base Lab.md"),
       "labo-fondamental.png"
+    ),
+    BuildingKind.StasisField -> BuildingKindInfo(
+      Faction.Science,
+      I18nText("Champ de Stase", "Stasis Field"),
+      I18nText("Champ de Stase.md", "Stasis Field.md"),
+      "stasis-field.png"
     ),
     BuildingKind.LaboNaturel -> BuildingKindInfo(
       Faction.Science,
@@ -200,7 +218,9 @@ object EntityNames:
       I18nText("Minotaure.md", "Minotaur.md"),
       "minotaur.png"
     ),
+    UnitKind.Dragon -> UnitKindInfo(Faction.Chaos, I18nText("Dragon", "Dragon"), I18nText("Dragon.md", "Dragon.md"), "dragon.png"),
     UnitKind.Paladin -> UnitKindInfo(Faction.Loi, I18nText("Paladin", "Paladin"), I18nText("Paladin.md", "Paladin.md"), "paladin.png"),
+    UnitKind.Soldier -> UnitKindInfo(Faction.Loi, I18nText("Soldat", "Soldier"), I18nText("Soldat.md", "Soldier.md"), "soldier.png"),
     UnitKind.Zombie -> UnitKindInfo(
       Faction.Mort,
       I18nText("Zombie", "Zombie"),

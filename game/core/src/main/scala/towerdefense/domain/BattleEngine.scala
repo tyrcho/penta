@@ -169,6 +169,15 @@ object BattleEngine:
     // not 0 — it doesn't fire instantly the moment it's spawned. Inert (0.0) for every
     // other kind, which has no CreatureSpec.spawns at all.
     val initialCountdown = spec.spawns.map(_._2).getOrElse(0.0)
+    // "Swarm tactics" (project owner's explicit request): an Elf's HP is boosted by every
+    // OTHER living Elf already in the maze it's about to raid, fixed once here at spawn
+    // time — same "computed once, not continuously" precedent as Tree's own clone-size
+    // scaling in CombatEngine.advanceCreatureSummons. Every other kind is unaffected.
+    val maxHp =
+      if kind == UnitKind.Elf then
+        val allyElfCount = state.creatures.count(_.kind == UnitKind.Elf)
+        spec.maxHp * (1.0 + allyElfCount * Balance.ElfHpBonusPerAlly)
+      else spec.maxHp
     val creature =
-      Creature(state.nextId, spawnPos, spec.maxHp, spec.maxHp, spec.speedPerMs, kind, spawnCountdownMs = initialCountdown)
+      Creature(state.nextId, spawnPos, maxHp, maxHp, spec.speedPerMs, kind, spawnCountdownMs = initialCountdown)
     state.copy(creatures = creature :: state.creatures, nextId = state.nextId + 1)

@@ -1,0 +1,60 @@
+<svg id="art" viewBox="0 0 400 400" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="soArmorFill" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#8fa8c4"/>
+      <stop offset="100%" stop-color="#546f92"/>
+    </linearGradient>
+    <linearGradient id="soTunicFill" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#3a5a8c"/>
+      <stop offset="100%" stop-color="#243a5c"/>
+    </linearGradient>
+  </defs>
+
+  <!-- spear, held plain and upright — simpler weapon than Paladin's implied sword+shield -->
+  <line x1="290" y1="70" x2="290" y2="330" stroke="#8a6a42" stroke-width="12" stroke-linecap="round"/>
+  <path d="M290,42 L272,88 L308,88 Z" fill="#c7ced4" stroke="#20344a" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M290,42 L282,88 L290,88 Z" fill="#eef3f6" opacity="0.6"/>
+
+  <!-- legs, plain trousers and boots -->
+  <path d="M168,300 L162,354 Q160,364 172,364 L190,364 Q198,364 198,356 L196,300 Z"
+        fill="#243a5c" stroke="#12203a" stroke-width="7" stroke-linejoin="round"/>
+  <path d="M232,300 L238,354 Q240,364 228,364 L210,364 Q202,364 202,356 L204,300 Z"
+        fill="#243a5c" stroke="#12203a" stroke-width="7" stroke-linejoin="round"/>
+  <path d="M160,356 L192,356 L192,366 Q192,372 184,372 L168,372 Q160,372 160,364 Z"
+        fill="#5c452c" stroke="#12203a" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M240,356 L208,356 L208,366 Q208,372 216,372 L232,372 Q240,372 240,364 Z"
+        fill="#5c452c" stroke="#12203a" stroke-width="6" stroke-linejoin="round"/>
+
+  <!-- torso, simple padded tunic under a modest breastplate — humbler than Paladin's full plate -->
+  <path d="M150,220 Q150,190 200,186 Q250,190 250,220 L254,300 Q200,314 146,300 Z"
+        fill="url(#soTunicFill)" stroke="#12203a" stroke-width="8" stroke-linejoin="round"/>
+  <path d="M164,214 Q200,204 236,214 L240,270 Q200,282 160,270 Z"
+        fill="url(#soArmorFill)" stroke="#20344a" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M164,214 Q200,204 236,214 L237,232 Q200,222 163,232 Z" fill="#c7ced4" opacity="0.5"/>
+  <!-- simple chest strap, no ornate emblem (unlike Paladin/Angel iconography) -->
+  <path d="M172,214 L188,270 M228,214 L212,270" stroke="#20344a" stroke-width="5" opacity="0.5" stroke-linecap="round"/>
+
+  <!-- near arm, gripping the spear -->
+  <path d="M244,224 Q272,232 282,264 Q286,282 274,292 Q262,282 258,262 Q250,244 232,236 Z"
+        fill="url(#soArmorFill)" stroke="#20344a" stroke-width="7" stroke-linejoin="round"/>
+  <!-- far arm, relaxed at side -->
+  <path d="M156,224 Q134,240 130,270 Q128,288 142,294 Q150,272 152,252 Q158,236 168,230 Z"
+        fill="url(#soArmorFill)" stroke="#20344a" stroke-width="7" stroke-linejoin="round"/>
+
+  <!-- simple round shoulder guards -->
+  <circle cx="160" cy="222" r="20" fill="url(#soArmorFill)" stroke="#20344a" stroke-width="6"/>
+  <circle cx="240" cy="222" r="20" fill="url(#soArmorFill)" stroke="#20344a" stroke-width="6"/>
+
+  <!-- head with a plain open helmet (no visor/wings — modest compared to Paladin) -->
+  <path d="M170,170 Q168,132 200,126 Q232,132 230,170 Q232,190 200,196 Q168,190 170,170 Z"
+        fill="#e8c49a" stroke="#5c3719" stroke-width="7" stroke-linejoin="round"/>
+  <path d="M166,168 Q164,120 200,112 Q236,120 234,168 Q236,150 234,140 Q222,116 200,116 Q178,116 166,140 Q164,150 166,168 Z"
+        fill="url(#soArmorFill)" stroke="#20344a" stroke-width="7" stroke-linejoin="round"/>
+  <path d="M170,140 Q178,120 200,116 Q182,126 174,146 Z" fill="#c7ced4" opacity="0.6"/>
+  <!-- simple noseguard -->
+  <rect x="194" y="140" width="12" height="34" rx="4" fill="#546f92" stroke="#20344a" stroke-width="4"/>
+
+  <!-- plain, alert eyes -->
+  <ellipse cx="185" cy="164" rx="6" ry="8" fill="#20344a"/>
+  <ellipse cx="215" cy="164" rx="6" ry="8" fill="#20344a"/>
+</svg>

@@ -84,7 +84,19 @@ object CreatureSpecs:
       spawns = Some(UnitKind.Tree -> Balance.TreeCloneIntervalMs),
       spawnFreezeMs = Balance.TreeCloneFreezeMs,
       spawnAtNextCell = true
-    )
+    ),
+    // Antre du Dragon.md: a glass-cannon raider — fast, fragile, and its plunder alone is
+    // meant to secure (or nearly secure) the Chaos plunder victory in one successful run,
+    // same Gold-theft shape as Goblin/Minotaur, just at a much higher magnitude.
+    UnitKind.Dragon -> CreatureSpec(
+      Balance.DragonMaxHp,
+      Balance.DragonSpeedPerMs,
+      plunder = Map(Resource.Gold -> Balance.DragonPlunderGold)
+    ),
+    // Caserne.md gives it no plunder ability — its value is surviving combat via "Rang
+    // serre" (see CombatEngine.soldierPairedIds/applyDamageSources), a combat ability
+    // that stays outside this spec, same as Paladin/Wolf's own abilities above.
+    UnitKind.Soldier -> CreatureSpec(Balance.SoldierMaxHp, Balance.SoldierSpeedPerMs, plunder = Map.empty)
   )
 
   // Which building "made" each unit kind — used by CombatEngine.applyPassingGateHarvest to
@@ -107,5 +119,7 @@ object CreatureSpecs:
     UnitKind.Vampire -> BuildingKind.BlackCastle,
     UnitKind.Necromancer -> BuildingKind.DeathHouse,
     UnitKind.Soul -> BuildingKind.DeathHouse,
-    UnitKind.Tree -> BuildingKind.Stonehenge
+    UnitKind.Tree -> BuildingKind.Stonehenge,
+    UnitKind.Dragon -> BuildingKind.DragonsLair,
+    UnitKind.Soldier -> BuildingKind.Barracks
   )

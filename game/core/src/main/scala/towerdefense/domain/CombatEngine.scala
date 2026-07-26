@@ -86,8 +86,11 @@ object CombatEngine:
   ): (MazeState, Map[Resource, Double], Map[Resource, Double], List[UnitKind]) =
     val blocked = state.buildingCells
     val angelCells = state.buildings.filter(_.kind == BuildingKind.Angel).map(b => (b.col, b.row)).toSet
+    val stasisCells = state.buildings.filter(_.kind == BuildingKind.StasisField).map(b => (b.col, b.row)).toSet
     val (remaining, arrived) =
-      state.creatures.map(stepCreature(_, state.creatures, blocked, angelCells, deltaMs)).partitionMap(identity)
+      state.creatures
+        .map(stepCreature(_, state.creatures, blocked, angelCells, stasisCells, deltaMs))
+        .partitionMap(identity)
     val plundered = arrived
       .flatMap(c => CreatureSpecs.all(c.kind).plunder)
       .groupMapReduce(_._1)(_._2)(_ + _)
@@ -111,6 +114,7 @@ object CombatEngine:
       allCreatures: List[Creature],
       blocked: Set[(Int, Int)],
       angelCells: Set[(Int, Int)],
+      stasisCells: Set[(Int, Int)],
       deltaMs: Double
   ): Either[Creature, Creature] =
     if creature.frozenMs > 0 then Left(creature.copy(frozenMs = math.max(0.0, creature.frozenMs - deltaMs)))
@@ -120,18 +124,19 @@ object CombatEngine:
       else
         Pathfinding.shortestPath(currentCell, GridConfig.goalCell, blocked) match
           case None => Left(creature) // no route right now (shouldn't happen, placement guards this)
-          case Some(path) => Left(advanceTowards(creature, allCreatures, angelCells, path, deltaMs))
+          case Some(path) => Left(advanceTowards(creature, allCreatures, angelCells, stasisCells, path, deltaMs))
 
   private def advanceTowards(
       creature: Creature,
       allCreatures: List[Creature],
       angelCells: Set[(Int, Int)],
+      stasisCells: Set[(Int, Int)],
       path: List[(Int, Int)],
       deltaMs: Double
   ): Creature =
     val nextCell = if path.size > 1 then path(1) else path.head
     val target = GridConfig.cellCenter(nextCell._1, nextCell._2)
-    val speed = effectiveSpeedPerMs(creature, allCreatures, angelCells)
+    val speed = effectiveSpeedPerMs(creature, allCreatures, angelCells, stasisCells)
     creature.copy(pos = moveToward(creature.pos, target, speed * deltaMs))
 
   // Loup.md: "augmente la vitesse de deplacement des unites a 2 cases de 50%" — any
@@ -142,17 +147,27 @@ object CombatEngine:
   // leur vitesse de deplacement de 25%") is the opposite kind of aura — a *building*
   // debuffing any enemy creature adjacent to it (same adjacency rule as its own damage,
   // see accumulateAuraHits) — and stacks multiplicatively with Wolf's boost rather than
-  // overriding it, since nothing in Ange.md/Loup.md says otherwise.
-  private def effectiveSpeedPerMs(creature: Creature, allCreatures: List[Creature], angelCells: Set[(Int, Int)]): Double =
+  // overriding it, since nothing in Ange.md/Loup.md says otherwise. Champ de Stase
+  // (Science) adds a third, independent slow source on the same adjacency rule as Angel's
+  // (see Balance.StasisSlowFraction's doc), also stacking multiplicatively rather than
+  // overriding.
+  private def effectiveSpeedPerMs(
+      creature: Creature,
+      allCreatures: List[Creature],
+      angelCells: Set[(Int, Int)],
+      stasisCells: Set[(Int, Int)]
+  ): Double =
     val cell = GridConfig.cellOf(creature.pos)
     val boosted = allCreatures.exists(other =>
       other.id != creature.id && other.kind == UnitKind.Wolf &&
         chebyshevDistance(cell, GridConfig.cellOf(other.pos)) <= Balance.WolfSpeedAuraRangeCells
     )
-    val slowed = angelCells.exists(ac => Pathfinding.neighbors(ac).contains(cell))
+    val slowedByAngel = angelCells.exists(ac => Pathfinding.neighbors(ac).contains(cell))
+    val slowedByStasis = stasisCells.exists(sc => Pathfinding.neighbors(sc).contains(cell))
     val boostMultiplier = if boosted then Balance.WolfSpeedAuraMultiplier else 1.0
-    val slowMultiplier = if slowed then 1.0 - Balance.AngelSlowFraction else 1.0
-    creature.speedPerMs * boostMultiplier * slowMultiplier
+    val angelSlowMultiplier = if slowedByAngel then 1.0 - Balance.AngelSlowFraction else 1.0
+    val stasisSlowMultiplier = if slowedByStasis then 1.0 - Balance.StasisSlowFraction else 1.0
+    creature.speedPerMs * boostMultiplier * angelSlowMultiplier * stasisSlowMultiplier
 
   private def moveToward(pos: Vec2, target: Vec2, maxDist: Double): Vec2 =
     val delta = target - pos
@@ -236,6 +251,7 @@ object CombatEngine:
 
     val damageByCreature = mergeSum(fromForests, fromTowers)
     val shielded = paladinShieldedIds(state.creatures)
+    val paired = soldierPairedIds(state.creatures)
     val damaged = state.creatures.map { c =>
       val raw = damageByCreature.getOrElse(c.id, 0.0)
       // Vampire.md: "Reduit les degats qu'il subit de 50% (mais n'est pas protege par
@@ -246,9 +262,16 @@ object CombatEngine:
         if c.kind != UnitKind.Vampire && shielded.contains(c.id) then
           math.max(0.0, raw - Balance.PaladinAuraDamageReductionPerSec)
         else raw
-      val taken =
-        if c.kind == UnitKind.Vampire then afterShield * (1.0 - Balance.VampireDamageReductionFraction)
+      // "Rang serre" (Caserne.md) — a Soldier takes reduced damage only while paired
+      // with another living Soldier (see soldierPairedIds), unlike Paladin's unconditional
+      // self-shield above.
+      val afterCloseRanks =
+        if c.kind == UnitKind.Soldier && paired.contains(c.id) then
+          math.max(0.0, afterShield - Balance.SoldierCloseRanksDamageReductionPerSec)
         else afterShield
+      val taken =
+        if c.kind == UnitKind.Vampire then afterCloseRanks * (1.0 - Balance.VampireDamageReductionFraction)
+        else afterCloseRanks
       c.copy(hp = c.hp - taken)
     }
     val dead = damaged.filter(_.hp <= 0)
@@ -391,6 +414,21 @@ object CombatEngine:
       creatures.filter(_.kind == UnitKind.Paladin).map(c => GridConfig.cellOf(c.pos))
     val shieldedCells = paladinCells.flatMap(c => c :: Pathfinding.neighbors(c)).toSet
     creatures.filter(c => shieldedCells.contains(GridConfig.cellOf(c.pos))).map(_.id).toSet
+
+  // Caserne.md's "Rang serre" — unlike Paladin's shield (any creature standing near a
+  // Paladin benefits), this only protects Soldiers, and only while another living Soldier
+  // is itself nearby — a pairwise condition on the Soldiers themselves, not a one-way aura
+  // from a fixed source kind.
+  private def soldierPairedIds(creatures: List[Creature]): Set[Long] =
+    val soldiers = creatures.filter(_.kind == UnitKind.Soldier)
+    soldiers
+      .filter { s =>
+        val cell = GridConfig.cellOf(s.pos)
+        val nearby = (cell :: Pathfinding.neighbors(cell)).toSet
+        soldiers.exists(other => other.id != s.id && nearby.contains(GridConfig.cellOf(other.pos)))
+      }
+      .map(_.id)
+      .toSet
 
   // Zombie.md/Vampire.md/Ame.md's corruption rates — Corruption.md: "Les unites de cette
   // faction corrompent les batiments qu'elles touchent", no restriction to particular

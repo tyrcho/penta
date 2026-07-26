@@ -1,0 +1,97 @@
+<svg id="art" viewBox="0 0 400 400" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <radialGradient id="dlFireGlow" cx="50%" cy="52%" r="55%">
+      <stop offset="0%" stop-color="#ffdd7a"/>
+      <stop offset="30%" stop-color="#ff6a1a"/>
+      <stop offset="70%" stop-color="#c81f1f"/>
+      <stop offset="100%" stop-color="#2a0605"/>
+    </radialGradient>
+    <radialGradient id="dlOuterGlow" cx="50%" cy="48%" r="55%">
+      <stop offset="0%" stop-color="#ff3b1a" stop-opacity="0.85"/>
+      <stop offset="100%" stop-color="#ff3b1a" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="dlRockFill" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#7a4038"/>
+      <stop offset="100%" stop-color="#4a221e"/>
+    </linearGradient>
+  </defs>
+
+  <!-- ground shadow -->
+  <ellipse cx="200" cy="366" rx="155" ry="20" fill="#000000" opacity="0.22"/>
+
+  <!-- dirt mound -->
+  <path d="M46,360 Q40,322 88,317 Q78,300 120,294 Q142,266 200,272 Q262,264 288,294 Q324,297 318,320 Q360,326 354,360 Z"
+        fill="#5c281c" stroke="#1e0b08" stroke-width="7" stroke-linejoin="round"/>
+  <path d="M68,344 Q118,334 168,342" fill="none" stroke="#3f1a11" stroke-width="5" stroke-linecap="round" opacity="0.7"/>
+  <path d="M232,346 Q282,336 322,344" fill="none" stroke="#3f1a11" stroke-width="5" stroke-linecap="round" opacity="0.7"/>
+
+  <!-- outer glow bleeding onto the whole lair -->
+  <circle cx="200" cy="220" r="150" fill="url(#dlOuterGlow)"/>
+
+  <!-- twin horn-like rock spires flanking the entrance, more imposing than Cave/Labyrinth -->
+  <path d="M60,300 Q30,250 48,190 Q56,150 92,128 Q78,180 88,230 Q94,270 110,296 Q82,304 60,300 Z"
+        fill="url(#dlRockFill)" stroke="#1e0b08" stroke-width="8" stroke-linejoin="round"/>
+  <path d="M340,300 Q370,250 352,190 Q344,150 308,128 Q322,180 312,230 Q306,270 290,296 Q318,304 340,300 Z"
+        fill="url(#dlRockFill)" stroke="#1e0b08" stroke-width="8" stroke-linejoin="round"/>
+  <path d="M70,220 Q60,180 92,140 Q80,185 88,225 Z" fill="#a3564a" opacity="0.5"/>
+  <path d="M330,220 Q340,180 308,140 Q320,185 312,225 Z" fill="#3a1712" opacity="0.5"/>
+
+  <!-- main rock mass, blobby jagged boulder cluster -->
+  <path d="M90,304
+           Q52,296 55,254
+           Q28,232 55,196
+           Q42,152 92,138
+           Q98,96 152,92
+           Q172,54 224,60
+           Q272,50 300,90
+           Q338,92 340,138
+           Q368,158 350,200
+           Q378,228 344,262
+           Q356,296 306,306
+           Q262,326 200,318
+           Q138,330 90,304 Z"
+        fill="url(#dlRockFill)" stroke="#1e0b08" stroke-width="9" stroke-linejoin="round"/>
+
+  <!-- rock shading (darker patch, right side) -->
+  <path d="M282,108 Q344,130 348,192 Q360,228 328,260 Q344,292 300,304 Q262,316 222,310
+           Q270,272 282,220 Q298,158 282,108 Z"
+        fill="#30110d" opacity="0.55"/>
+  <!-- rock highlight (top-left) -->
+  <path d="M108,150 Q124,102 172,86 Q210,70 240,76 Q198,88 166,120 Q134,146 122,178 Q112,168 108,150 Z"
+        fill="#a3695e" opacity="0.5"/>
+
+  <!-- jagged spike ridge along the top, dragon-esque -->
+  <path d="M140,96 L152,64 L166,98 L182,58 L198,96 L216,56 L232,96 L248,66 L262,100"
+        fill="none" stroke="#1e0b08" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M140,96 L152,64 L166,98 L182,58 L198,96 L216,56 L232,96 L248,66 L262,100 L262,110 L140,110 Z"
+        fill="#5c281c"/>
+
+  <!-- cave mouth glow halo -->
+  <path d="M120,308 Q100,232 142,178 Q170,138 200,138 Q230,138 258,178 Q300,232 280,308
+           Q240,336 200,336 Q160,336 120,308 Z"
+        fill="url(#dlFireGlow)" opacity="0.95"/>
+
+  <!-- lair mouth (wide jagged maw, bigger and hungrier than Cave's) -->
+  <path d="M142,308
+           L130,268 L146,254 L132,222 L150,208 L140,180
+           Q164,144 200,142
+           Q236,144 260,180
+           L250,208 L268,222 L254,254 L270,268
+           L258,308
+           Q230,328 200,328
+           Q170,328 142,308 Z"
+        fill="#0c0403" stroke="#1e0b08" stroke-width="7" stroke-linejoin="round"/>
+
+  <!-- ember particles drifting up -->
+  <circle cx="150" cy="150" r="6" fill="#ffb347" opacity="0.85"/>
+  <circle cx="250" cy="140" r="5" fill="#ff8a3d" opacity="0.8"/>
+  <circle cx="200" cy="110" r="4" fill="#ffd27a" opacity="0.8"/>
+
+  <!-- twin dragon eyes glowing deep in the dark, larger/fiercer than Cave's goblin eyes -->
+  <path d="M162,244 Q172,228 188,238 Q180,254 166,258 Q158,252 162,244 Z" fill="#ffe14d"/>
+  <path d="M238,244 Q228,228 212,238 Q220,254 234,258 Q242,252 238,244 Z" fill="#ffe14d"/>
+  <path d="M162,244 Q172,228 188,238 Q180,254 166,258 Q158,252 162,244 Z" fill="none" stroke="#5c1a0a" stroke-width="3"/>
+  <path d="M238,244 Q228,228 212,238 Q220,254 234,258 Q242,252 238,244 Z" fill="none" stroke="#5c1a0a" stroke-width="3"/>
+  <ellipse cx="176" cy="246" rx="3" ry="6" fill="#3a0f04"/>
+  <ellipse cx="224" cy="246" rx="3" ry="6" fill="#3a0f04"/>
+</svg>

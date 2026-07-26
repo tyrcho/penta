@@ -96,7 +96,7 @@ object SpendingPolicy:
   private val natureBuildingKinds: Set[BuildingKind] =
     Set(BuildingKind.Grove, BuildingKind.Forest, BuildingKind.Jungle, BuildingKind.Stonehenge)
   private val chaosBuildingKinds: Set[BuildingKind] =
-    Set(BuildingKind.Cave, BuildingKind.Labyrinth)
+    Set(BuildingKind.Cave, BuildingKind.Labyrinth, BuildingKind.DragonsLair)
   private val mortBuildingKinds: Set[BuildingKind] =
     Set(BuildingKind.Tomb, BuildingKind.BlackCastle, BuildingKind.DeathHouse)
 
