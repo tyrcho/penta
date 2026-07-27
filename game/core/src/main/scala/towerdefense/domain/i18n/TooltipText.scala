@@ -260,6 +260,10 @@ object TooltipText:
     if lang == Lang.Fr then s"${decimal(dmgPerSec)} dégâts/sec aux ennemis adjacents, ralentis de ${decimal(slowPercent)}%"
     else s"${decimal(dmgPerSec)} dmg/s to adjacent enemies, slows them ${decimal(slowPercent)}%"
 
+  def adjacentSlow(slowPercent: Double, lang: Lang): String =
+    if lang == Lang.Fr then s"ralentit les ennemis adjacents de ${decimal(slowPercent)}%"
+    else s"slows adjacent enemies by ${decimal(slowPercent)}%"
+
   def rangedDamage(dmgPerSec: Double, rangeCells: Int, lang: Lang): String =
     if lang == Lang.Fr then s"${decimal(dmgPerSec)} dégâts/sec à l'ennemi le plus proche jusqu'à $rangeCells cases"
     else s"${decimal(dmgPerSec)} dmg/s to the nearest enemy within $rangeCells cells"
