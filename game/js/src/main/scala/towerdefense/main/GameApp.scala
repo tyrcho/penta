@@ -2355,8 +2355,15 @@ private def spendingIcon(res: Resource): String = res match
   case Resource.Crystal => "💎"
   case Resource.Gold    => "🪙" // unreachable — see spendingResources' own doc
 
+// Biggest-spend-first — both the pie's wedge order and the tooltip's line order derive
+// from this same list, so "read top to bottom" and "read clockwise from 12 o'clock"
+// agree with each other instead of falling back to Resource.values' arbitrary declaration
+// order.
 private def spendingBreakdown(maze: MazeState): List[(Resource, Double)] =
-  spendingResources.map(res => res -> maze.resourcesSpent.getOrElse(res, 0.0)).filter(_._2 > 0.0)
+  spendingResources
+    .map(res => res -> maze.resourcesSpent.getOrElse(res, 0.0))
+    .filter(_._2 > 0.0)
+    .sortBy(-_._2)
 
 // A thin divider between adjacent wedges (never before the first or after the last, so a
 // single-resource pie has none at all) — a conic-gradient has no wedge-border/stroke
@@ -2401,9 +2408,9 @@ private def spendingTooltipText(maze: MazeState): String =
     amounts
       .map { case (res, amount) =>
         val pct = NumberFormat.decimal(amount / total * 100.0)
-        s"${amount.toInt} ${spendingIcon(res)} ${Ui.spentLabel(currentLang)} ($pct% ${Ui.ofLabel(currentLang)} ${total.toInt})"
+        s"${amount.toInt} ${spendingIcon(res)} ${Ui.spentLabel(currentLang)} ($pct% ${Ui.ofLabel(currentLang)} ${total.toInt})\n"
       }
-      .mkString("\n")
+      .mkString
 
 // The donut lives in the DOM (not the canvas), and its content is static between hovers
 // (unlike a canvas sprite's live-updating tooltip) — same shape as a build button's own

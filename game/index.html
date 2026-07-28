@@ -298,6 +298,11 @@
       pointer-events: none;
       z-index: 3;
     }
+    /* #tooltip-text is set via .textContent, which otherwise collapses embedded "\n"
+       characters into plain spaces — pre-line honors them as real line breaks (e.g. the
+       spending pie's one-line-per-resource breakdown, GameApp.spendingTooltipText) while
+       still wrapping/collapsing runs of spaces normally, unlike pre/pre-wrap. */
+    #tooltip-text { white-space: pre-line; }
     #tooltip.visible { display: block; }
     #tooltip-destroy {
       display: none;
