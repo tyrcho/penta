@@ -548,6 +548,7 @@ def onReady(app: Application, textures: js.Dictionary[Texture]): Unit =
     choice => mode == Mode.Playing && canAfford(battle.player, choice),
     active => hoveringButton = active
   )
+  wireSpendingDonutTooltips(active => hoveringButton = active, () => battle)
   wireSpeedControls(speed)
   wireNewGameButton(() => resetGame())
   wireFullscreenButton()
@@ -2331,13 +2332,17 @@ private def updateMazePanel(prefix: String, maze: MazeState, opponent: MazeState
 private val spendingResources: List[Resource] =
   List(Resource.Wood, Resource.Fire, Resource.Light, Resource.Shadow, Resource.Crystal)
 
-private def spendingColorVar(res: Resource): String = res match
-  case Resource.Wood    => "var(--color-wood)"
-  case Resource.Fire    => "var(--color-fire)"
-  case Resource.Light   => "var(--color-light)"
-  case Resource.Shadow  => "var(--color-shadow)"
-  case Resource.Crystal => "var(--color-crystal)"
-  case Resource.Gold    => "var(--color-gold)" // unreachable — see spendingResources' own doc
+// Deliberately more saturated than each resource's own --color-* stat var, which is tuned
+// for small inline numbers, not a big color-coded chart — Light's pale #fde68a and
+// Shadow's pale #c4b5fd in particular read as washed-out at wedge size, so the chart gets
+// its own brighter palette instead of reusing the header row's.
+private def spendingColor(res: Resource): String = res match
+  case Resource.Wood    => "#eab308"
+  case Resource.Fire    => "#f97316"
+  case Resource.Light   => "#fde047"
+  case Resource.Shadow  => "#8b5cf6"
+  case Resource.Crystal => "#06b6d4"
+  case Resource.Gold    => "#d4af37" // unreachable — see spendingResources' own doc
 
 // Same emoji every other stat row already uses for this resource (index.html) — repeated
 // here rather than scraped from the DOM since the tooltip text below is built as one
@@ -2350,33 +2355,70 @@ private def spendingIcon(res: Resource): String = res match
   case Resource.Crystal => "💎"
   case Resource.Gold    => "🪙" // unreachable — see spendingResources' own doc
 
+private def spendingBreakdown(maze: MazeState): List[(Resource, Double)] =
+  spendingResources.map(res => res -> maze.resourcesSpent.getOrElse(res, 0.0)).filter(_._2 > 0.0)
+
+// A thin divider between adjacent wedges (never before the first or after the last, so a
+// single-resource pie has none at all) — a conic-gradient has no wedge-border/stroke
+// concept of its own, so this just reserves a small fixed slice of the circle's own
+// degrees for a plain border-colored line instead, shrinking every real wedge equally to
+// make room.
+private val spendingDividerDeg = 3.0
+
 // A wedge per resource this maze has ever spent something on, sized proportionally to its
 // share of the lifetime total (index.html's .spending-donut, painted via a conic-gradient
 // set here since the wedge boundaries are live data). A maze that hasn't spent anything
 // yet (very start of a match) gets a flat neutral circle instead of a divide-by-zero.
 private def updateSpendingDonut(prefix: String, maze: MazeState): Unit =
   val el = document.getElementById(s"$prefix-spending-donut").asInstanceOf[dom.html.Element]
-  val amounts = spendingResources.map(res => res -> maze.resourcesSpent.getOrElse(res, 0.0)).filter(_._2 > 0.0)
+  val amounts = spendingBreakdown(maze)
   val total = amounts.map(_._2).sum
-  if total <= 0.0 then
-    el.style.background = "var(--color-border)"
-    el.title = ""
+  if total <= 0.0 then el.style.background = "var(--color-border)"
   else
-    var cumulative = 0.0
-    val segments = amounts.map { case (res, amount) =>
-      val startPct = cumulative / total * 100.0
-      cumulative += amount
-      val endPct = cumulative / total * 100.0
-      s"${spendingColorVar(res)} ${NumberFormat.decimal(startPct)}% ${NumberFormat.decimal(endPct)}%"
+    val dividerDegTotal = spendingDividerDeg * (amounts.size - 1)
+    val degPerUnit = (360.0 - dividerDegTotal) / total
+    var cumulativeDeg = 0.0
+    val segments = amounts.zipWithIndex.flatMap { case ((res, amount), i) =>
+      val divider =
+        if i == 0 then Nil
+        else
+          val dividerStart = cumulativeDeg
+          cumulativeDeg += spendingDividerDeg
+          List(s"var(--color-border) ${NumberFormat.decimal(dividerStart)}deg ${NumberFormat.decimal(cumulativeDeg)}deg")
+      val wedgeStart = cumulativeDeg
+      cumulativeDeg += amount * degPerUnit
+      divider :+ s"${spendingColor(res)} ${NumberFormat.decimal(wedgeStart)}deg ${NumberFormat.decimal(cumulativeDeg)}deg"
     }
     el.style.background = s"conic-gradient(${segments.mkString(", ")})"
-    // "<amount> <icon> spent (<percent>% of <total>)", one line per resource.
-    el.title = amounts
+
+// "<amount> <icon> spent (<percent>% of <total>)", one line per resource — empty while
+// nothing's been spent yet, same as updateSpendingDonut's own neutral-circle fallback.
+private def spendingTooltipText(maze: MazeState): String =
+  val amounts = spendingBreakdown(maze)
+  val total = amounts.map(_._2).sum
+  if total <= 0.0 then ""
+  else
+    amounts
       .map { case (res, amount) =>
         val pct = NumberFormat.decimal(amount / total * 100.0)
         s"${amount.toInt} ${spendingIcon(res)} ${Ui.spentLabel(currentLang)} ($pct% ${Ui.ofLabel(currentLang)} ${total.toInt})"
       }
       .mkString("\n")
+
+// The donut lives in the DOM (not the canvas), and its content is static between hovers
+// (unlike a canvas sprite's live-updating tooltip) — same shape as a build button's own
+// tooltip (wireButtonTooltip's own doc), reusing that exact mechanism instead of a second
+// one: a plain per-tick `title` attribute doesn't reliably show in practice, since
+// updateSpendingDonut rewrites this element every tick and most browsers reset the
+// hover-delay timer whenever an attribute changes underneath the cursor.
+private def wireSpendingDonutTooltips(setHoveringButton: Boolean => Unit, latestBattle: () => BattleState): Unit =
+  List(
+    "player" -> ((b: BattleState) => b.player),
+    "ai" -> ((b: BattleState) => b.ai)
+  ).foreach { case (prefix, mazeOf) =>
+    val el = document.getElementById(s"$prefix-spending-donut")
+    wireButtonTooltip(el, () => spendingTooltipText(mazeOf(latestBattle())), setHoveringButton)
+  }
 
 // Visual companion to the "current/target" text above — lets you compare at a glance
 // how close each maze is to winning via the same (opponent-relative) condition. Escalates
