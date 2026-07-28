@@ -80,6 +80,16 @@ object Ui:
     case Lang.Fr => "Dépenses"
     case Lang.En => "Spending"
 
+  // The two words the spending donut's hover tooltip is built from (GameApp.
+  // updateSpendingDonut) — "<amount> <icon> spent (<percent>% of <total>)".
+  def spentLabel(lang: Lang): String = lang match
+    case Lang.Fr => "dépensé"
+    case Lang.En => "spent"
+
+  def ofLabel(lang: Lang): String = lang match
+    case Lang.Fr => "de"
+    case Lang.En => "of"
+
   def won(lang: Lang): String = lang match
     case Lang.Fr => "GAGNÉ"
     case Lang.En => "WON"

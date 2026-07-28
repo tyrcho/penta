@@ -2339,6 +2339,17 @@ private def spendingColorVar(res: Resource): String = res match
   case Resource.Crystal => "var(--color-crystal)"
   case Resource.Gold    => "var(--color-gold)" // unreachable — see spendingResources' own doc
 
+// Same emoji every other stat row already uses for this resource (index.html) — repeated
+// here rather than scraped from the DOM since the tooltip text below is built as one
+// plain string, not a mix of DOM nodes.
+private def spendingIcon(res: Resource): String = res match
+  case Resource.Wood    => "🪵"
+  case Resource.Fire    => "🔥"
+  case Resource.Light   => "💡"
+  case Resource.Shadow  => "🌑"
+  case Resource.Crystal => "💎"
+  case Resource.Gold    => "🪙" // unreachable — see spendingResources' own doc
+
 // A wedge per resource this maze has ever spent something on, sized proportionally to its
 // share of the lifetime total (index.html's .spending-donut, painted via a conic-gradient
 // set here since the wedge boundaries are live data). A maze that hasn't spent anything
@@ -2359,8 +2370,13 @@ private def updateSpendingDonut(prefix: String, maze: MazeState): Unit =
       s"${spendingColorVar(res)} ${NumberFormat.decimal(startPct)}% ${NumberFormat.decimal(endPct)}%"
     }
     el.style.background = s"conic-gradient(${segments.mkString(", ")})"
-    el.title = amounts.map { case (res, amount) => s"${EntityNames.resourceName(res, currentLang)}: ${amount.toInt}" }
-      .mkString(", ")
+    // "<amount> <icon> spent (<percent>% of <total>)", one line per resource.
+    el.title = amounts
+      .map { case (res, amount) =>
+        val pct = NumberFormat.decimal(amount / total * 100.0)
+        s"${amount.toInt} ${spendingIcon(res)} ${Ui.spentLabel(currentLang)} ($pct% ${Ui.ofLabel(currentLang)} ${total.toInt})"
+      }
+      .mkString("\n")
 
 // Visual companion to the "current/target" text above — lets you compare at a glance
 // how close each maze is to winning via the same (opponent-relative) condition. Escalates

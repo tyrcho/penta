@@ -217,29 +217,17 @@
     .stat.progress.critical { color: #be123c; }
     .progress-bar-fill.critical, .stat.progress.critical { animation: progress-pulse 0.9s ease-in-out infinite; }
     @keyframes progress-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
-    /* Lifetime resource-spending breakdown (MazeState.resourcesSpent) — one donut per
+    /* Lifetime resource-spending breakdown (MazeState.resourcesSpent) — one solid pie per
        side, wedges colored the same as every other Wood/Fire/Light/Shadow/Crystal stat
        above so a wedge reads as "that resource" at a glance. `background` (the actual
-       conic-gradient) is set inline per-tick by GameApp.updateSpendingDonut, since the
-       wedge boundaries are live data, not something CSS alone can express. The hole is a
-       plain centered ::after circle painted the row's own surface color — cheaper than an
-       SVG ring and (unlike a CSS mask) needs no vendor-prefixed property. */
+       conic-gradient) and `title` (the per-resource breakdown) are set inline per-tick by
+       GameApp.updateSpendingDonut, since both are live data, not something CSS alone can
+       express. */
     .spending-donut {
-      position: relative;
-      width: 1.8rem;
-      height: 1.8rem;
+      width: 2.4rem;
+      height: 2.4rem;
       border-radius: 50%;
       flex-shrink: 0;
-    }
-    .spending-donut::after {
-      content: "";
-      position: absolute;
-      top: 0.45rem;
-      left: 0.45rem;
-      width: 0.9rem;
-      height: 0.9rem;
-      border-radius: 50%;
-      background: var(--color-surface);
     }
     #game-container {
       flex: 1;
@@ -433,7 +421,7 @@
          Gold wedge of its own. Same no-victory-progress shape as the Gold row above. -->
     <div class="concept-row">
       <div class="stat-line">
-        <span class="concept-name" data-i18n="spending" title="Spending">📊</span>
+        <span class="concept-name" data-i18n="spending" title="Spending"></span>
         <div class="concept-side player-side">
           <div class="spending-donut" id="player-spending-donut"></div>
         </div>
