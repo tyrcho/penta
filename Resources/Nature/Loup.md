@@ -2,6 +2,9 @@
 type: unite
 faction: "[Nature](Nature.md)"
 PV: "30"
+tier: 3
+produit par: "[Jungle](Jungle.md)"
+vitesse (cases/sec): 1.5
 ---
 
 ![Loup](../../game/assets/wolf-reference.png)

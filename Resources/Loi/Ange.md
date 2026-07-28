@@ -1,7 +1,10 @@
 ---
 type: batiment
 faction: "[Loi](Loi.md)"
+tier: 3
 cout en lumiere: 50
+produit en lumiere: 0.5
+degats par seconde: 5
 ---
 
 ![Ange](../../game/assets/angel.png)

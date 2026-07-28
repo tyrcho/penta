@@ -1,8 +1,11 @@
 ---
 type: batiment
 faction: "[Science](Science.md)"
+tier: 2
 cout en feu: 5
 cout en crystal: 10
+produit en crystal: 0.2
+amelioration de: "[Labo Fondamental](Labo%20Fondamental.md)"
 ---
 
 ![Labo du Chaos](../../game/assets/labo-du-chaos.png)

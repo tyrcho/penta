@@ -1,8 +1,10 @@
 ---
 type: building
 faction: "[Death](../../Resources/Mort/Mort.md)"
+tier: 2
 cost in wood: 10
 cost in shadow: 40
+produces in shadow: 0.5
 ---
 
 ![House of Death](../../game/assets/death-house.png)

@@ -2,6 +2,10 @@
 type: unite
 faction: "[Nature](Nature.md)"
 PV: "5"
+tier: 1
+produit par: "[Bosquet](Bosquet.md)"
+vitesse (cases/sec): 1
+pillage en bois: 1
 ---
 
 ![Elfe](../../game/assets/elf/front-walk-00.png)

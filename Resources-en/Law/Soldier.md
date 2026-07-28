@@ -2,6 +2,9 @@
 type: unit
 faction: "[Law](../../Resources/Loi/Loi.md)"
 HP: "10"
+tier: 1
+produced by: "[Barracks](Barracks.md)"
+speed (cells/sec): 1
 ---
 
 ![Soldier](../../game/assets/soldier.png)

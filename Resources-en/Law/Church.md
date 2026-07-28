@@ -1,8 +1,10 @@
 ---
 type: building
 faction: "[Law](../../Resources/Loi/Loi.md)"
+tier: 3
 cost in wood: 20
 cost in light: 40
+produces in light: 0.3
 ---
 
 ![Church](../../game/assets/eglise.png)

@@ -1,8 +1,10 @@
 ---
 type: building
 faction: "[Death](../../Resources/Mort/Mort.md)"
+tier: 3
 cost in light: 30
 cost in shadow: 60
+damage per second: 3
 ---
 
 ![Passing Gate](../../game/assets/passing-gate.png)

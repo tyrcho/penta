@@ -2,6 +2,9 @@
 type: unite
 faction: "[Nature](Nature.md)"
 PV: "100"
+tier: 3
+produit par: "[Stonehenge](Stonehenge.md)"
+vitesse (cases/sec): 0.5
 ---
 
 ![Arbre Animé](../../game/assets/tree/front-walk-00.png)

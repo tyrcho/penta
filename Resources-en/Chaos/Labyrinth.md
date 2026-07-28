@@ -1,6 +1,7 @@
 ---
 type: building
 faction: "[Chaos](../../Resources/Chaos/Chaos.md)"
+tier: 2
 cost in wood: 10
 cost in fire: 50
 ---

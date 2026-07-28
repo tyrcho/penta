@@ -1,8 +1,11 @@
 ---
 type: batiment
 faction: "[Loi](Loi.md)"
+tier: 2
 cout en bois: 10
 cout en lumiere: 20
+produit en lumiere: 0.3
+degats par seconde: 10
 ---
 
 ![Tour de guet](../../game/assets/watchtower.png)

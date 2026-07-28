@@ -1,7 +1,9 @@
 ---
 type: batiment
 faction: "[Science](Science.md)"
+tier: 2
 cout en crystal: 20
+produit en crystal: 0.4
 ---
 
 ![Champ de Stase](../../game/assets/stasis-field.png)

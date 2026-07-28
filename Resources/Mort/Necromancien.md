@@ -2,6 +2,9 @@
 type: unite
 faction: "[Mort](Mort.md)"
 PV: "40"
+tier: 2
+produit par: "[Maison de la Mort](Maison%20de%20la%20Mort.md)"
+vitesse (cases/sec): 0.5
 ---
 
 ![Nécromancien](../../game/assets/necromancer/walk.gif)

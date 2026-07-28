@@ -1,8 +1,10 @@
 ---
 type: batiment
 faction: "[Mort](Mort.md)"
+tier: 1
 cout en bois: 5
 cout en ombre: 10
+produit en ombre: 0.2
 ---
 
 ![Tombe](../../game/assets/tomb.png)

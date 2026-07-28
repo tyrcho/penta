@@ -1,7 +1,11 @@
 ---
 type: batiment
 faction: "[Nature](Nature.md)"
+tier: 3
 cout en bois: 50
+produit en bois: 1
+degats par seconde: 2
+amelioration de: "[Forêt](Foret.md)"
 ---
 
 ![Jungle](../../game/assets/jungle.png)

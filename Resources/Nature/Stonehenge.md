@@ -1,6 +1,7 @@
 ---
 type: batiment
 faction: "[Nature](Nature.md)"
+tier: 3
 cout en bois: 150
 ---
 

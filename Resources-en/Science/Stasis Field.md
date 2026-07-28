@@ -1,7 +1,9 @@
 ---
 type: building
 faction: "[Science](../../Resources/Science/Science.md)"
+tier: 2
 cost in crystal: 20
+produces in crystal: 0.4
 ---
 
 ![Stasis Field](../../game/assets/stasis-field.png)

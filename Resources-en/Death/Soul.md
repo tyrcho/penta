@@ -2,6 +2,9 @@
 type: unit
 faction: "[Death](../../Resources/Mort/Mort.md)"
 HP: "10"
+tier: 2
+produced by: "[House of Death](House%20of%20Death.md)"
+speed (cells/sec): 1
 ---
 
 ![Soul](../../game/assets/soul/walk-00.png)

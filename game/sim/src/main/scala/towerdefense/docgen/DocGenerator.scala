@@ -57,6 +57,12 @@ object DocGenerator:
 
   private def yamlQuoted(s: String): String = "\"" + s.replace("\"", "\\\"") + "\""
 
+  // A YAML flow-sequence of quoted strings ("ameliore vers" can have up to 5 targets —
+  // LaboFondamental's own upgradeOptions entry — so a scalar value won't do), always used
+  // even for a single-target chain (Grove -> Forest) so the property's type never
+  // depends on how many targets a given building happens to have.
+  private def yamlList(items: List[String]): String = "[" + items.map(yamlQuoted).mkString(", ") + "]"
+
   private val costKeys: Map[Resource, I18nText] = Map(
     Resource.Wood -> I18nText("cout en bois", "cost in wood"),
     Resource.Fire -> I18nText("cout en feu", "cost in fire"),
@@ -65,10 +71,35 @@ object DocGenerator:
     Resource.Crystal -> I18nText("cout en crystal", "cost in crystal")
   )
 
+  private val producesKeys: Map[Resource, I18nText] = Map(
+    Resource.Wood -> I18nText("produit en bois", "produces in wood"),
+    Resource.Fire -> I18nText("produit en feu", "produces in fire"),
+    Resource.Light -> I18nText("produit en lumiere", "produces in light"),
+    Resource.Shadow -> I18nText("produit en ombre", "produces in shadow"),
+    Resource.Crystal -> I18nText("produit en crystal", "produces in crystal")
+  )
+
+  // Gold is the only resource a unit ever plunders that no building ever produces
+  // (Goblin/Minotaur/Dragon steal it directly — see CreatureSpecs) — producesKeys above
+  // has no Gold entry for exactly that reason, but plunderKeys needs one.
+  private val plunderKeys: Map[Resource, I18nText] = Map(
+    Resource.Wood -> I18nText("pillage en bois", "plunder in wood"),
+    Resource.Fire -> I18nText("pillage en feu", "plunder in fire"),
+    Resource.Light -> I18nText("pillage en lumiere", "plunder in light"),
+    Resource.Shadow -> I18nText("pillage en ombre", "plunder in shadow"),
+    Resource.Crystal -> I18nText("pillage en crystal", "plunder in crystal"),
+    Resource.Gold -> I18nText("pillage en or", "plunder in gold")
+  )
+
   private val buildingTypeValue = I18nText("batiment", "building")
   private val unitTypeValue = I18nText("unite", "unit")
   private val resourceTypeValue = I18nText("ressource", "resource")
   private val hpKey = I18nText("PV", "HP")
+  private val dpsKey = I18nText("degats par seconde", "damage per second")
+  private val upgradeFromKey = I18nText("amelioration de", "upgrade of")
+  private val upgradeToKey = I18nText("ameliore vers", "upgrades to")
+  private val spawnedByKey = I18nText("produit par", "produced by") // matches the vault's own existing body prose (e.g. Gobelin.md: "Produit par [Cave]")
+  private val speedKey = I18nText("vitesse (cases/sec)", "speed (cells/sec)")
 
   private def frontmatter(fields: List[(String, String)]): String =
     val body = fields.map { case (k, v) => s"$k: $v" }.mkString("\n")
@@ -86,9 +117,22 @@ object DocGenerator:
     val costFields = Resource.values.toList.flatMap(res =>
       spec.cost.get(res).filter(_ > 0.0).map(amount => costKeys(res)(lang) -> NumberFormat.decimal(amount))
     )
+    val producesFields = Resource.values.toList.flatMap(res =>
+      spec.produces.get(res).filter(_ > 0.0).map(amount => producesKeys(res)(lang) -> NumberFormat.decimal(amount))
+    )
+    val dpsField = Option.when(spec.dps > 0.0)(dpsKey(lang) -> NumberFormat.decimal(spec.dps))
+    val upgradeFromField = BuildingSpecs.upgradeFrom.get(kind).map(source =>
+      upgradeFromKey(lang) -> yamlQuoted(EntityNames.buildingLink(info.faction, source, lang))
+    )
+    val upgradeToField = BuildingSpecs.upgradeOptions.get(kind).map(targets =>
+      upgradeToKey(lang) -> yamlList(targets.map(EntityNames.buildingLink(info.faction, _, lang)))
+    )
     val fm = frontmatter(
-      List("type" -> buildingTypeValue(lang), "faction" -> yamlQuoted(EntityNames.factionLink(info.faction, lang))) ++
-        costFields
+      List(
+        "type" -> buildingTypeValue(lang),
+        "faction" -> yamlQuoted(EntityNames.factionLink(info.faction, lang)),
+        "tier" -> spec.tier.toString
+      ) ++ costFields ++ producesFields ++ dpsField.toList ++ upgradeFromField.toList ++ upgradeToField.toList
     )
     val imageLine = s"![${info.name(lang)}](../../game/assets/${info.asset})"
     s"$fm\n$imageLine\n\n${EntityText.buildingBody(kind, lang)}\n"
@@ -98,12 +142,23 @@ object DocGenerator:
   private def unitPage(kind: UnitKind, lang: Lang): String =
     val info = EntityNames.unitInfo(kind)
     val spec = CreatureSpecs.all(kind)
+    val spawningBuilding = CreatureSpecs.spawningBuilding(kind)
+    val plunderFields = Resource.values.toList.flatMap(res =>
+      spec.plunder.get(res).filter(_ > 0.0).map(amount => plunderKeys(res)(lang) -> NumberFormat.decimal(amount))
+    )
+    // speedPerMs is px/ms; GridConfig.cellSize (px/cell) converts it to the same
+    // cells/sec unit the vault's own hand-written prose already uses (e.g. Ame.md:
+    // "vitesse normale (1 case/sec)") — see GridConfig.cellSize's doc.
+    val cellsPerSec = spec.speedPerMs * 1000.0 / GridConfig.cellSize
     val fm = frontmatter(
       List(
         "type" -> unitTypeValue(lang),
         "faction" -> yamlQuoted(EntityNames.factionLink(info.faction, lang)),
-        hpKey(lang) -> yamlQuoted(NumberFormat.decimal(spec.maxHp))
-      )
+        hpKey(lang) -> yamlQuoted(NumberFormat.decimal(spec.maxHp)),
+        "tier" -> spec.tier.toString,
+        spawnedByKey(lang) -> yamlQuoted(EntityNames.buildingLink(info.faction, spawningBuilding, lang)),
+        speedKey(lang) -> NumberFormat.decimal(cellsPerSec)
+      ) ++ plunderFields
     )
     val imageLine = s"![${info.name(lang)}](../../game/assets/${info.asset})"
     s"$fm\n$imageLine\n\n${EntityText.unitBody(kind, lang)}\n"

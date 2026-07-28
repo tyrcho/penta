@@ -1,8 +1,11 @@
 ---
 type: building
 faction: "[Science](../../Resources/Science/Science.md)"
+tier: 2
 cost in shadow: 5
 cost in crystal: 10
+produces in crystal: 0.2
+upgrade of: "[Base Lab](Base%20Lab.md)"
 ---
 
 ![Shadow Lab](../../game/assets/labo-sombre.png)

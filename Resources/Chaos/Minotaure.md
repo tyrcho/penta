@@ -2,6 +2,10 @@
 type: unite
 faction: "[Chaos](Chaos.md)"
 PV: "50"
+tier: 2
+produit par: "[Labyrinthe](Labyrinthe.md)"
+vitesse (cases/sec): 1
+pillage en or: 20
 ---
 
 ![Minotaure](../../game/assets/minotaur.png)

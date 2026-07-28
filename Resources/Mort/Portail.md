@@ -1,8 +1,10 @@
 ---
 type: batiment
 faction: "[Mort](Mort.md)"
+tier: 3
 cout en lumiere: 30
 cout en ombre: 60
+degats par seconde: 3
 ---
 
 ![Portail](../../game/assets/passing-gate.png)

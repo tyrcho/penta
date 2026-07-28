@@ -2,6 +2,9 @@
 type: unit
 faction: "[Nature](../../Resources/Nature/Nature.md)"
 HP: "100"
+tier: 3
+produced by: "[Stonehenge](Stonehenge.md)"
+speed (cells/sec): 0.5
 ---
 
 ![Animated Tree](../../game/assets/tree/front-walk-00.png)

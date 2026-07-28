@@ -2,6 +2,9 @@
 type: unite
 faction: "[Loi](Loi.md)"
 PV: "50"
+tier: 3
+produit par: "[Église](Eglise.md)"
+vitesse (cases/sec): 1
 ---
 
 ![Paladin](../../game/assets/paladin.png)

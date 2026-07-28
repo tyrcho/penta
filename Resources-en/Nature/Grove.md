@@ -1,7 +1,10 @@
 ---
 type: building
 faction: "[Nature](../../Resources/Nature/Nature.md)"
+tier: 1
 cost in wood: 5
+produces in wood: 0.2
+upgrades to: ["[Forest](Forest.md)"]
 ---
 
 ![Grove](../../game/assets/grove.png)

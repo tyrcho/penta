@@ -2,6 +2,10 @@
 type: unit
 faction: "[Nature](../../Resources/Nature/Nature.md)"
 HP: "5"
+tier: 1
+produced by: "[Grove](Grove.md)"
+speed (cells/sec): 1
+plunder in wood: 1
 ---
 
 ![Elf](../../game/assets/elf/front-walk-00.png)

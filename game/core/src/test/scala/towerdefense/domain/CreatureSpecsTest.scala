@@ -17,3 +17,10 @@ class CreatureSpecsTest extends munit.FunSuite:
       assert(cost > 0.0, s"$kind's spawning building ($building) has a zero total cost: $cost")
     }
   }
+
+  test("a unit's tier always matches its spawning building's own tier") {
+    UnitKind.values.foreach { kind =>
+      val building = CreatureSpecs.spawningBuilding(kind)
+      assertEquals(CreatureSpecs.all(kind).tier, BuildingSpecs.all(building).tier)
+    }
+  }

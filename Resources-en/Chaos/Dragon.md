@@ -2,6 +2,10 @@
 type: unit
 faction: "[Chaos](../../Resources/Chaos/Chaos.md)"
 HP: "18"
+tier: 3
+produced by: "[Dragon's Lair](Dragon's%20Lair.md)"
+speed (cells/sec): 1.5
+plunder in gold: 40
 ---
 
 ![Dragon](../../game/assets/dragon.png)

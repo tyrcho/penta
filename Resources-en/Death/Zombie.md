@@ -2,6 +2,9 @@
 type: unit
 faction: "[Death](../../Resources/Mort/Mort.md)"
 HP: "15"
+tier: 1
+produced by: "[Tomb](Tomb.md)"
+speed (cells/sec): 0.5
 ---
 
 ![Zombie](../../game/assets/zombie/walk.gif)

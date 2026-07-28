@@ -1,6 +1,7 @@
 ---
 type: batiment
 faction: "[Chaos](Chaos.md)"
+tier: 3
 cout en bois: 20
 cout en feu: 80
 ---

@@ -2,6 +2,9 @@
 type: unite
 faction: "[Loi](Loi.md)"
 PV: "10"
+tier: 1
+produit par: "[Caserne](Caserne.md)"
+vitesse (cases/sec): 1
 ---
 
 ![Soldat](../../game/assets/soldier.png)

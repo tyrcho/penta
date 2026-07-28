@@ -2,6 +2,10 @@
 type: unit
 faction: "[Chaos](../../Resources/Chaos/Chaos.md)"
 HP: "50"
+tier: 2
+produced by: "[Labyrinth](Labyrinth.md)"
+speed (cells/sec): 1
+plunder in gold: 20
 ---
 
 ![Minotaur](../../game/assets/minotaur.png)

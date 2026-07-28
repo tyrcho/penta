@@ -2,6 +2,9 @@
 type: unite
 faction: "[Mort](Mort.md)"
 PV: "10"
+tier: 2
+produit par: "[Maison de la Mort](Maison%20de%20la%20Mort.md)"
+vitesse (cases/sec): 1
 ---
 
 ![Âme](../../game/assets/soul/walk-00.png)

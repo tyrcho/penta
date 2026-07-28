@@ -2,6 +2,9 @@
 type: unite
 faction: "[Mort](Mort.md)"
 PV: "50"
+tier: 3
+produit par: "[Château Noir](Chateau%20Noir.md)"
+vitesse (cases/sec): 1.5
 ---
 
 ![Vampire](../../game/assets/vampire.png)

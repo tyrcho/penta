@@ -186,10 +186,10 @@ object CombatEngine:
   private[domain] val auraBuildingKinds: Set[BuildingKind] =
     Set(BuildingKind.Forest, BuildingKind.Jungle, BuildingKind.Angel, BuildingKind.PassingGate)
 
-  private def auraDamagePerSecFor(kind: BuildingKind): Double = kind match
-    case BuildingKind.Angel       => Balance.AngelDamagePerSec
-    case BuildingKind.PassingGate => Balance.PassingGateDamagePerSec
-    case _                        => Balance.AuraDamagePerSec
+  // Sourced from BuildingSpecs.all(kind).dps (itself set from these same Balance constants
+  // per kind) rather than re-matching on kind here, so the vault's generated "dps"
+  // frontmatter (DocGenerator) can never drift from what actually deals damage in a match.
+  private def auraDamagePerSecFor(kind: BuildingKind): Double = BuildingSpecs.all(kind).dps
 
   // Two independent damage sources, combined before Paladin shielding is applied once to
   // the total (not once per source) — Forest/Jungle deal passive damage-over-time to
@@ -236,7 +236,7 @@ object CombatEngine:
       else acc
     }
     val fromTowers = towersTicked.foldLeft(Map.empty[Long, Double]) { case (acc, (w, fires)) =>
-      if fires then accumulateWatchtowerHit(w, state.creatures, Balance.WatchtowerDamagePerSec, acc) else acc
+      if fires then accumulateWatchtowerHit(w, state.creatures, BuildingSpecs.all(BuildingKind.Watchtower).dps, acc) else acc
     }
     // Angel-only subset of forestsTicked's own aura sources — fromForests above mixes
     // Nature (Forest/Jungle), Loi (Angel), and Mort (PassingGate) damage together for the

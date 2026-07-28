@@ -1,8 +1,11 @@
 ---
 type: building
 faction: "[Law](../../Resources/Loi/Loi.md)"
+tier: 2
 cost in wood: 10
 cost in light: 20
+produces in light: 0.3
+damage per second: 10
 ---
 
 ![Watchtower](../../game/assets/watchtower.png)

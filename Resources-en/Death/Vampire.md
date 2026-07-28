@@ -2,6 +2,9 @@
 type: unit
 faction: "[Death](../../Resources/Mort/Mort.md)"
 HP: "50"
+tier: 3
+produced by: "[Black Castle](Black%20Castle.md)"
+speed (cells/sec): 1.5
 ---
 
 ![Vampire](../../game/assets/vampire.png)

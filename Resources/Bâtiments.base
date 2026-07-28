@@ -8,13 +8,24 @@ views:
     order:
       - file.name
       - faction
+      - tier
       - cout en bois
       - cout en feu
       - cout en lumiere
       - cout en ombre
       - cout en crystal
+      - produit en bois
+      - produit en feu
+      - produit en lumiere
+      - produit en ombre
+      - produit en crystal
+      - degats par seconde
+      - amelioration de
+      - ameliore vers
     sort:
       - property: faction
+        direction: ASC
+      - property: tier
         direction: ASC
       - property: file.name
         direction: ASC

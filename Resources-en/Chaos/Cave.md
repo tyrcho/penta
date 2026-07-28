@@ -1,7 +1,9 @@
 ---
 type: building
 faction: "[Chaos](../../Resources/Chaos/Chaos.md)"
+tier: 1
 cost in fire: 10
+produces in fire: 0.2
 ---
 
 ![Cave](../../game/assets/cave.png)

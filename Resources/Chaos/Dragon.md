@@ -2,6 +2,10 @@
 type: unite
 faction: "[Chaos](Chaos.md)"
 PV: "18"
+tier: 3
+produit par: "[Antre du Dragon](Antre%20du%20Dragon.md)"
+vitesse (cases/sec): 1.5
+pillage en or: 40
 ---
 
 ![Dragon](../../game/assets/dragon.png)

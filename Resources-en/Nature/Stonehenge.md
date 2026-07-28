@@ -1,6 +1,7 @@
 ---
 type: building
 faction: "[Nature](../../Resources/Nature/Nature.md)"
+tier: 3
 cost in wood: 150
 ---
 

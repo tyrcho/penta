@@ -8,9 +8,20 @@ views:
     order:
       - file.name
       - faction
+      - tier
       - PV
+      - vitesse (cases/sec)
+      - produit par
+      - pillage en bois
+      - pillage en feu
+      - pillage en lumiere
+      - pillage en ombre
+      - pillage en crystal
+      - pillage en or
     sort:
       - property: faction
+        direction: ASC
+      - property: tier
         direction: ASC
       - property: file.name
         direction: ASC

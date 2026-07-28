@@ -2,6 +2,9 @@
 type: unit
 faction: "[Nature](../../Resources/Nature/Nature.md)"
 HP: "30"
+tier: 3
+produced by: "[Jungle](Jungle.md)"
+speed (cells/sec): 1.5
 ---
 
 ![Wolf](../../game/assets/wolf-reference.png)

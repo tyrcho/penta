@@ -1,7 +1,10 @@
 ---
 type: building
 faction: "[Law](../../Resources/Loi/Loi.md)"
+tier: 3
 cost in light: 50
+produces in light: 0.5
+damage per second: 5
 ---
 
 ![Angel](../../game/assets/angel.png)

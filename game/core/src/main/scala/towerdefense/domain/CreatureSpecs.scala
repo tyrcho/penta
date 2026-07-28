@@ -16,17 +16,21 @@ package towerdefense.domain
 // position, e.g. a Soul appearing on top of its Necromancer) for every kind except Tree,
 // which clones itself one cell further along its own path instead (Arbre Anime.md — see
 // CombatEngine.advanceCreatureSummons's nextPathCellCenter).
+// tier: not its own design value — always its spawning building's own tier (see
+// BuildingSpecs.all's doc), since a unit's "power level" is really what its spawning
+// building paid for, not a separately-tuned number.
 case class CreatureSpec(
     maxHp: Double,
     speedPerMs: Double,
     plunder: Map[Resource, Double],
     spawns: Option[(UnitKind, Double)] = None,
     spawnFreezeMs: Double = 0.0,
-    spawnAtNextCell: Boolean = false
+    spawnAtNextCell: Boolean = false,
+    tier: Int = 0
 )
 
 object CreatureSpecs:
-  val all: Map[UnitKind, CreatureSpec] = Map(
+  private val baseAll: Map[UnitKind, CreatureSpec] = Map(
     UnitKind.Elf -> CreatureSpec(
       Balance.ElfMaxHp,
       Balance.ElfSpeedPerMs,
@@ -123,3 +127,6 @@ object CreatureSpecs:
     UnitKind.Dragon -> BuildingKind.DragonsLair,
     UnitKind.Soldier -> BuildingKind.Barracks
   )
+
+  val all: Map[UnitKind, CreatureSpec] =
+    baseAll.map { case (kind, spec) => kind -> spec.copy(tier = BuildingSpecs.all(spawningBuilding(kind)).tier) }

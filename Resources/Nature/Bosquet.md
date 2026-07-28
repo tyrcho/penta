@@ -1,7 +1,10 @@
 ---
 type: batiment
 faction: "[Nature](Nature.md)"
+tier: 1
 cout en bois: 5
+produit en bois: 0.2
+ameliore vers: ["[Forêt](Foret.md)"]
 ---
 
 ![Bosquet](../../game/assets/grove.png)

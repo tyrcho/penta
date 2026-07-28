@@ -1,7 +1,10 @@
 ---
 type: batiment
 faction: "[Science](Science.md)"
+tier: 1
 cout en crystal: 10
+produit en crystal: 0.2
+ameliore vers: ["[Labo Naturel](Labo%20Naturel.md)", "[Labo Sombre](Labo%20Sombre.md)", "[Labo de Recherche](Labo%20de%20Recherche.md)", "[Labo de la Loi](Labo%20de%20la%20Loi.md)", "[Labo du Chaos](Labo%20du%20Chaos.md)"]
 ---
 
 ![Labo Fondamental](../../game/assets/labo-fondamental.png)

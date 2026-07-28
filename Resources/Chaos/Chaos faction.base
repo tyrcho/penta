@@ -8,12 +8,29 @@ views:
     order:
       - type
       - file.name
+      - tier
       - PV
+      - vitesse (cases/sec)
+      - produit par
+      - pillage en bois
+      - pillage en feu
+      - pillage en lumiere
+      - pillage en ombre
+      - pillage en crystal
+      - pillage en or
       - cout en bois
       - cout en feu
       - cout en lumiere
       - cout en ombre
       - cout en crystal
+      - produit en bois
+      - produit en feu
+      - produit en lumiere
+      - produit en ombre
+      - produit en crystal
+      - degats par seconde
+      - amelioration de
+      - ameliore vers
     sort:
       - property: type
         direction: ASC
