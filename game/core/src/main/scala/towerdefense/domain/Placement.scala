@@ -145,7 +145,8 @@ object Placement:
       _ <- Either.cond(canAfford(state.resources, cost), (), PlacementError.InsufficientResources)
     yield state.copy(
       resources = debit(state.resources, cost),
-      researchLevels = state.researchLevels.updated(labKind, currentLevel + 1)
+      researchLevels = state.researchLevels.updated(labKind, currentLevel + 1),
+      resourcesSpent = accumulateSpend(state.resourcesSpent, cost)
     )
 
   // Resource.Gold is a universal joker: it covers whatever's still missing after spending
@@ -204,6 +205,7 @@ object Placement:
     state.copy(
       buildings = building :: state.buildings,
       resources = debit(state.resources, cost),
+      resourcesSpent = accumulateSpend(state.resourcesSpent, cost),
       nextId = state.nextId + 1
     )
 
@@ -240,8 +242,16 @@ object Placement:
     state.copy(
       buildings = upgraded :: state.buildings.filterNot(_.id == building.id),
       resources = debit(state.resources, cost),
-      researchLevels = researchLevels
+      researchLevels = researchLevels,
+      resourcesSpent = accumulateSpend(state.resourcesSpent, cost)
     )
+
+  // Adds `cost` on top of a maze's running lifetime resourcesSpent tally (MazeState's own
+  // doc), keyed by what the cost actually names — deliberately independent of debit below,
+  // which is the one that decides how much of that same payment actually came out of Gold
+  // vs the named resource; that split never reaches this tally.
+  private def accumulateSpend(spent: Map[Resource, Double], cost: Map[Resource, Double]): Map[Resource, Double] =
+    cost.foldLeft(spent) { case (acc, (res, amount)) => acc.updated(res, acc.getOrElse(res, 0.0) + amount) }
 
   // Mirrors canAfford's own joker math per resource: spend as much of the named resource
   // as is on hand first, then draw any remaining shortfall from Gold — never negative on

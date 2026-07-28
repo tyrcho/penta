@@ -76,6 +76,10 @@ object Ui:
     case Lang.Fr => "Fondamentale"
     case Lang.En => "Fondamentale"
 
+  def spendingLabel(lang: Lang): String = lang match
+    case Lang.Fr => "Dépenses"
+    case Lang.En => "Spending"
+
   def won(lang: Lang): String = lang match
     case Lang.Fr => "GAGNÉ"
     case Lang.En => "WON"

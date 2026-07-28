@@ -1073,6 +1073,7 @@ private def applyStaticLabels(): Unit =
     "corrupted" -> Ui.corruptedLabel(currentLang),
     "victory" -> Ui.victoryLabel(currentLang),
     "fondamentale" -> Ui.fondamentaleLabel(currentLang),
+    "spending" -> Ui.spendingLabel(currentLang),
     "nature" -> Ui.natureTitle(currentLang),
     "chaos" -> Ui.chaosTitle(currentLang),
     "loi" -> Ui.loiTitle(currentLang),
@@ -2322,6 +2323,44 @@ private def updateMazePanel(prefix: String, maze: MazeState, opponent: MazeState
   document.getElementById(s"$prefix-fondamentale").textContent =
     s"$fondamentaleReady/$fondamentaleTotal L$fondamentaleLevel"
   updateProgressBar(s"$prefix-fondamentale-bar", fondamentaleReady, fondamentaleTotal)
+  updateSpendingDonut(prefix, maze)
+
+// The 5 named resources a cost can ever actually name (see MazeState.resourcesSpent's own
+// doc — Gold is a payment method, never a spend category of its own, so it's deliberately
+// absent from this list).
+private val spendingResources: List[Resource] =
+  List(Resource.Wood, Resource.Fire, Resource.Light, Resource.Shadow, Resource.Crystal)
+
+private def spendingColorVar(res: Resource): String = res match
+  case Resource.Wood    => "var(--color-wood)"
+  case Resource.Fire    => "var(--color-fire)"
+  case Resource.Light   => "var(--color-light)"
+  case Resource.Shadow  => "var(--color-shadow)"
+  case Resource.Crystal => "var(--color-crystal)"
+  case Resource.Gold    => "var(--color-gold)" // unreachable — see spendingResources' own doc
+
+// A wedge per resource this maze has ever spent something on, sized proportionally to its
+// share of the lifetime total (index.html's .spending-donut, painted via a conic-gradient
+// set here since the wedge boundaries are live data). A maze that hasn't spent anything
+// yet (very start of a match) gets a flat neutral circle instead of a divide-by-zero.
+private def updateSpendingDonut(prefix: String, maze: MazeState): Unit =
+  val el = document.getElementById(s"$prefix-spending-donut").asInstanceOf[dom.html.Element]
+  val amounts = spendingResources.map(res => res -> maze.resourcesSpent.getOrElse(res, 0.0)).filter(_._2 > 0.0)
+  val total = amounts.map(_._2).sum
+  if total <= 0.0 then
+    el.style.background = "var(--color-border)"
+    el.title = ""
+  else
+    var cumulative = 0.0
+    val segments = amounts.map { case (res, amount) =>
+      val startPct = cumulative / total * 100.0
+      cumulative += amount
+      val endPct = cumulative / total * 100.0
+      s"${spendingColorVar(res)} ${NumberFormat.decimal(startPct)}% ${NumberFormat.decimal(endPct)}%"
+    }
+    el.style.background = s"conic-gradient(${segments.mkString(", ")})"
+    el.title = amounts.map { case (res, amount) => s"${EntityNames.resourceName(res, currentLang)}: ${amount.toInt}" }
+      .mkString(", ")
 
 // Visual companion to the "current/target" text above — lets you compare at a glance
 // how close each maze is to winning via the same (opponent-relative) condition. Escalates

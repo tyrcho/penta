@@ -217,6 +217,30 @@
     .stat.progress.critical { color: #be123c; }
     .progress-bar-fill.critical, .stat.progress.critical { animation: progress-pulse 0.9s ease-in-out infinite; }
     @keyframes progress-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+    /* Lifetime resource-spending breakdown (MazeState.resourcesSpent) — one donut per
+       side, wedges colored the same as every other Wood/Fire/Light/Shadow/Crystal stat
+       above so a wedge reads as "that resource" at a glance. `background` (the actual
+       conic-gradient) is set inline per-tick by GameApp.updateSpendingDonut, since the
+       wedge boundaries are live data, not something CSS alone can express. The hole is a
+       plain centered ::after circle painted the row's own surface color — cheaper than an
+       SVG ring and (unlike a CSS mask) needs no vendor-prefixed property. */
+    .spending-donut {
+      position: relative;
+      width: 1.8rem;
+      height: 1.8rem;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+    .spending-donut::after {
+      content: "";
+      position: absolute;
+      top: 0.45rem;
+      left: 0.45rem;
+      width: 0.9rem;
+      height: 0.9rem;
+      border-radius: 50%;
+      background: var(--color-surface);
+    }
     #game-container {
       flex: 1;
       overflow: hidden;
@@ -400,6 +424,22 @@
         <div class="progress-pair"></div>
         <div class="concept-side ai-side">
           <span class="stat gold" data-i18n="gold" title="Gold">🪙<span id="ai-gold">0</span><span class="rate" id="ai-gold-rate"></span></span>
+        </div>
+      </div>
+    </div>
+    <!-- Lifetime resource-spending breakdown (MazeState.resourcesSpent) — Gold spent
+         counts as whatever named resource it substituted for (see the domain doc), so
+         each donut only ever has up to 5 wedges (Wood/Fire/Light/Shadow/Crystal), never a
+         Gold wedge of its own. Same no-victory-progress shape as the Gold row above. -->
+    <div class="concept-row">
+      <div class="stat-line">
+        <span class="concept-name" data-i18n="spending" title="Spending">📊</span>
+        <div class="concept-side player-side">
+          <div class="spending-donut" id="player-spending-donut"></div>
+        </div>
+        <div class="progress-pair"></div>
+        <div class="concept-side ai-side">
+          <div class="spending-donut" id="ai-spending-donut"></div>
         </div>
       </div>
     </div>

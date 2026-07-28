@@ -57,6 +57,7 @@ private object Persistence:
       enemies = js.Array(m.creatures.map(encodeCreature)*),
       buildings = js.Array(m.buildings.map(encodeBuilding)*),
       resources = encodeResources(m.resources),
+      resourcesSpent = encodeResourcesSpent(m.resourcesSpent),
       resourcesPlundered = m.resourcesPlundered,
       buildingsCorrupted = m.buildingsCorrupted,
       researchLevels = encodeResearchLevels(m.researchLevels),
@@ -79,6 +80,17 @@ private object Persistence:
       shadow = r.getOrElse(Resource.Shadow, 0.0),
       crystal = r.getOrElse(Resource.Crystal, 0.0),
       gold = r.getOrElse(Resource.Gold, 0.0)
+    )
+
+  // No Gold field — resourcesSpent (MazeState's own doc) is keyed by what a cost named,
+  // and no cost ever names Gold itself (it's a payment method, not a resource category).
+  private def encodeResourcesSpent(r: Map[Resource, Double]): js.Dynamic =
+    js.Dynamic.literal(
+      wood = r.getOrElse(Resource.Wood, 0.0),
+      fire = r.getOrElse(Resource.Fire, 0.0),
+      light = r.getOrElse(Resource.Light, 0.0),
+      shadow = r.getOrElse(Resource.Shadow, 0.0),
+      crystal = r.getOrElse(Resource.Crystal, 0.0)
     )
 
   private def encodeCreature(c: Creature): js.Dynamic =
@@ -156,6 +168,7 @@ private object Persistence:
       creatures = decodeArray(d.enemies, decodeCreature),
       buildings = buildings,
       resources = decodeResources(d),
+      resourcesSpent = decodeResourcesSpent(d.resourcesSpent),
       resourcesPlundered = asDouble(d.resourcesPlundered),
       // Pre-Mort saves have no buildingsCorrupted field — default to 0.0, same fallback
       // shape as Shadow/Crystal's decodeResources migration above.
@@ -198,6 +211,20 @@ private object Persistence:
         // in-progress game just never had any (one-time migration quirk, same shape as
         // Shadow/Crystal's own fallback above when THEY were added).
         Resource.Gold -> (if js.isUndefined(r.gold) then 0.0 else asDouble(r.gold))
+      )
+
+  // Pre-spending-breakdown saves have no resourcesSpent field at all — every named
+  // resource defaults to 0.0 (an in-progress game resumes with no lifetime spend history,
+  // same "just start the tally from here" fallback as buildingsCorrupted's own migration).
+  private def decodeResourcesSpent(d: js.Dynamic): Map[Resource, Double] =
+    if js.isUndefined(d) then Map.empty
+    else
+      Map(
+        Resource.Wood -> asDouble(d.wood),
+        Resource.Fire -> asDouble(d.fire),
+        Resource.Light -> asDouble(d.light),
+        Resource.Shadow -> asDouble(d.shadow),
+        Resource.Crystal -> asDouble(d.crystal)
       )
 
   // Pre-refactor saves have 5 separate building arrays (forests/caves/labyrinths/eglises/

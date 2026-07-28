@@ -94,6 +94,35 @@ class PlacementTest extends munit.FunSuite:
     assertEquals(result.resources(Resource.Fire), richState.resources(Resource.Fire) - Balance.CaveCostFire)
   }
 
+  test("placing a grove records its cost in resourcesSpent under Wood") {
+    val (col, row) = emptyCell
+    val result = Placement.tryPlaceBuilding(richState, BuildingKind.Grove, col, row).toOption.get
+    assertEquals(result.resourcesSpent(Resource.Wood), Balance.GroveCostWood)
+  }
+
+  test("paying entirely out of Gold still credits the spend to the named resource, not to Gold") {
+    val (col, row) = emptyCell
+    val goldOnly = withResources(gold = 1_000.0)
+    val result = Placement.tryPlaceBuilding(goldOnly, BuildingKind.Grove, col, row).toOption.get
+    assertEquals(result.resourcesSpent(Resource.Wood), Balance.GroveCostWood)
+    assertEquals(result.resourcesSpent.get(Resource.Gold), None)
+  }
+
+  test("resourcesSpent accumulates across placements, it isn't overwritten by the latest one") {
+    val (col1, row1) = emptyCell
+    val (col2, row2) = (6, 6)
+    val afterFirst = Placement.tryPlaceBuilding(richState, BuildingKind.Grove, col1, row1).toOption.get
+    val afterSecond = Placement.tryPlaceBuilding(afterFirst, BuildingKind.Grove, col2, row2).toOption.get
+    assertEquals(afterSecond.resourcesSpent(Resource.Wood), Balance.GroveCostWood * 2.0)
+  }
+
+  test("upgrading a building adds its own cost to resourcesSpent, on top of the original placement's") {
+    val (col, row) = emptyCell
+    val placed = Placement.tryPlaceBuilding(richState, BuildingKind.Grove, col, row).toOption.get
+    val upgraded = Placement.tryUpgradeBuilding(placed, col, row).toOption.get
+    assertEquals(upgraded.resourcesSpent(Resource.Wood), Balance.GroveCostWood + Balance.ForestUpgradeCostWood)
+  }
+
   test("rejects a labyrinthe without enough wood or fire") {
     val (col, row) = emptyCell
     assertEquals(
@@ -584,6 +613,14 @@ class PlacementTest extends munit.FunSuite:
       withNaturel.resources(Resource.Crystal) - result.resources(Resource.Crystal),
       spec.baseCost(Resource.Crystal) * 3.0
     )
+  }
+
+  test("researching adds its cost to resourcesSpent too, on top of whatever built the lab") {
+    val withNaturel = withLab(richState, BuildingKind.LaboNaturel, 1, 1)
+    val spentBeforeResearch = withNaturel.resourcesSpent.getOrElse(Resource.Crystal, 0.0)
+    val result = Placement.tryResearch(withNaturel, BuildingKind.LaboNaturel).toOption.get
+    val spec = ResearchSpecs.all(BuildingKind.LaboNaturel)
+    assertEquals(result.resourcesSpent(Resource.Crystal), spentBeforeResearch + spec.baseCost(Resource.Crystal) * 3.0)
   }
 
   test("each further research level still costs triple the previous one") {
