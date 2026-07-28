@@ -1,0 +1,16 @@
+views:
+  - type: table
+    name: Table
+    filters:
+      and:
+        - file.inFolder("Resources")
+        - type == "unite"
+    order:
+      - file.name
+      - faction
+      - PV
+    sort:
+      - property: faction
+        direction: ASC
+      - property: file.name
+        direction: ASC

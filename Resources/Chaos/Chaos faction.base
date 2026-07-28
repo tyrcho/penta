@@ -1,0 +1,21 @@
+views:
+  - type: table
+    name: Table
+    filters:
+      and:
+        - file.inFolder("Resources/Chaos")
+        - type
+    order:
+      - type
+      - file.name
+      - PV
+      - cout en bois
+      - cout en feu
+      - cout en lumiere
+      - cout en ombre
+      - cout en crystal
+    sort:
+      - property: type
+        direction: ASC
+      - property: file.name
+        direction: ASC

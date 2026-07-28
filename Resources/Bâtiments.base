@@ -1,0 +1,20 @@
+views:
+  - type: table
+    name: Table
+    filters:
+      and:
+        - file.inFolder("Resources")
+        - type == "batiment"
+    order:
+      - file.name
+      - faction
+      - cout en bois
+      - cout en feu
+      - cout en lumiere
+      - cout en ombre
+      - cout en crystal
+    sort:
+      - property: faction
+        direction: ASC
+      - property: file.name
+        direction: ASC
