@@ -19,9 +19,11 @@ views:
       - pillage en crystal
       - pillage en or
     sort:
-      - property: faction
-        direction: ASC
       - property: tier
+        direction: DESC
+      - property: faction
         direction: ASC
       - property: file.name
         direction: ASC
+    columnSize:
+      note.tier: 85
