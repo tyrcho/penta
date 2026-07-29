@@ -8,6 +8,24 @@
 # — the rest of this repo is an Obsidian vault, but its notes get the same
 # formatting pass as game/'s docs. A formatter fix re-stages the file; a
 # lint issue markdownlint can't auto-fix blocks the commit.
+#
+# Three more checks, only when Scala files are staged:
+#   - WartRemover (build.sbt's banOptionGetWarts) via `sbt compile` — banned
+#     Option/Either/Try #get sites fail the actual compile, so this reuses
+#     the compiler, not a separate lint pass.
+#   - scripts/check-method-length.py — scalastyle can't parse this codebase
+#     at all (see that script's own doc), so this stands in for its
+#     method-length rule specifically.
+#   - jscpd (Copy/Paste Detector, run via `npx`, no local install needed) —
+#     scoped by .jscpd.json at the repo root; catches duplicated Scala
+#     production code (tests are excluded, see .jscpd.json). NOT the vault's
+#     .base files: the 5 per-faction Bases views are near-identical by
+#     necessity (Obsidian's Bases format has no include/anchor mechanism
+#     across files), so flagging that duplication would either block every
+#     commit forever or require deleting the very views that were asked for
+#     — see .jscpd.json's own doc.
+# All three block the commit on a finding — there's no auto-fix for any of
+# them, unlike scalafmt/markdownlint above.
 set -euo pipefail
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
@@ -35,6 +53,33 @@ if [ -n "$scala_files" ]; then
   else
     echo "pre-commit: scalafmt not found (cs install scalafmt) — skipping Scala formatting" >&2
   fi
+
+  echo "pre-commit: checking method length (scripts/check-method-length.py)..."
+  if ! python3 "$GAME_DIR/scripts/check-method-length.py" $scala_files; then
+    echo "pre-commit: method(s) above the length limit (see above)." >&2
+    fail=1
+  fi
+
+  sbt_bin="$(command -v sbt || true)"
+  if [ -n "$sbt_bin" ]; then
+    echo "pre-commit: compiling with WartRemover's Option/Either/Try #get ban..."
+    if ! (cd "$GAME_DIR" && "$sbt_bin" --batch "coreJVM/compile" "js/compile" "sim/compile"); then
+      echo "pre-commit: compile failed — see WartRemover errors above (or a real compile error)." >&2
+      fail=1
+    fi
+  else
+    echo "pre-commit: sbt not found — skipping WartRemover" >&2
+  fi
+fi
+
+echo "pre-commit: checking for duplicated code (jscpd)..."
+if command -v npx >/dev/null 2>&1; then
+  if ! npx --yes jscpd --config "$REPO_ROOT/.jscpd.json" "$GAME_DIR/core" "$GAME_DIR/js" "$GAME_DIR/sim"; then
+    echo "pre-commit: jscpd found duplicated code (see above)." >&2
+    fail=1
+  fi
+else
+  echo "pre-commit: npx not found — skipping jscpd" >&2
 fi
 
 if [ -n "$md_files" ]; then

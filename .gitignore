@@ -27,3 +27,4 @@ LICENSE.txt
 .gitattributes
 node_modules/
 public/
+__pycache__/

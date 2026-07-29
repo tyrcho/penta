@@ -1,0 +1,16 @@
+{
+  "reporters": ["console"],
+  "ignore": [
+    "**/target/**",
+    "**/.quartz-engine/**",
+    "**/docs/**",
+    "**/public/**",
+    "**/src/test/**"
+  ],
+  "format": ["scala"],
+  "minLines": 10,
+  "minTokens": 50,
+  "absolute": true,
+  "gitignore": true,
+  "threshold": 1
+}
