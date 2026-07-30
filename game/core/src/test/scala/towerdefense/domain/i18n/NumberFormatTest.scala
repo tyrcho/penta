@@ -7,7 +7,9 @@ class NumberFormatTest extends munit.FunSuite:
     assertEquals(NumberFormat.decimal(40.0), "40")
   }
 
-  test("decimal keeps a genuine large whole-number cost exact, not rounded to 2 significant digits") {
+  test(
+    "decimal keeps a genuine large whole-number cost exact, not rounded to 2 significant digits"
+  ) {
     // ResearchSpec.costAtLevel spirals well past 2 significant digits by level 4/5
     // (5 * 3^3 = 135, 5 * 3^4 = 405) — these are exact Doubles (no floating-point noise),
     // so they must print exactly, not as the misleadingly-rounded "140"/"410".

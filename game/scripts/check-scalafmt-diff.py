@@ -50,7 +50,17 @@ def staged_touched_lines(path: str) -> set[int] | None:
 def reformat_touched_ranges(path: str) -> list[tuple[int, int]]:
     """[start, end) 1-based line ranges (in the file's *current* content) that scalafmt
     would rewrite right now, or [] if scalafmt itself failed (parse error, not found,
-    etc.) — not this script's job to diagnose a broken scalafmt run."""
+    etc.) — not this script's job to diagnose a broken scalafmt run.
+
+    A pure "insert" opcode (scalafmt wants to add line(s) — e.g. a required blank line —
+    without touching any existing line) has i1 == i2 by difflib's own definition, since no
+    original lines are consumed. That collapses to an empty [start, end) range under the
+    plain (i1+1, i2+1) formula used for replace/delete, so it could never overlap anything
+    and was previously dropped by the `i1 != i2` filter entirely — silently letting a real
+    pure-insertion reformat pass this check. Anchored instead to the pair of current-file
+    lines immediately surrounding the insertion point (i1, i1+2), so it overlaps the
+    touched set whenever either neighboring line was part of this commit's diff.
+    """
     with open(path, encoding="utf-8") as f:
         current_lines = f.read().splitlines()
     game_relative = os.path.relpath(os.path.abspath(path), GAME_DIR)
@@ -61,7 +71,12 @@ def reformat_touched_ranges(path: str) -> list[tuple[int, int]]:
         return []
     formatted_lines = formatted.stdout.splitlines()
     matcher = difflib.SequenceMatcher(None, current_lines, formatted_lines, autojunk=False)
-    return [(i1 + 1, i2 + 1) for tag, i1, i2, _, _ in matcher.get_opcodes() if tag != "equal" and i1 != i2]
+    ranges = []
+    for tag, i1, i2, _, _ in matcher.get_opcodes():
+        if tag == "equal":
+            continue
+        ranges.append((i1, i1 + 2) if i1 == i2 else (i1 + 1, i2 + 1))
+    return ranges
 
 
 def main(paths: list[str]) -> int:

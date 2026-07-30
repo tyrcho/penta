@@ -344,7 +344,13 @@ object CombatEngine:
         if c.kind == UnitKind.Vampire then
           afterCloseRanks * (1.0 - Balance.VampireDamageReductionFraction)
         else afterCloseRanks
-      c.copy(hp = c.hp - taken)
+      val remaining = c.hp - taken
+      // Camp de Guerre's Orc (Balance.OrcMaxHp's doc): its first lethal hit clamps it to
+      // 1 HP instead of killing it, exactly once — checked here (after every other damage
+      // modifier) so it applies to the FINAL remaining HP regardless of source.
+      if c.kind == UnitKind.Orc && !c.hasCheatedDeath && remaining <= 0.0 then
+        c.copy(hp = 1.0, hasCheatedDeath = true)
+      else c.copy(hp = remaining)
     }
 
   // Recherches loyales.md has nothing to say about this (added at the project owner's
@@ -788,7 +794,7 @@ object CombatEngine:
   // resources are ticked, every single tick, since Gold was added to the enum.
   def engendreBoost(state: MazeState, resource: Resource): Double =
     engendreSource.get(resource) match
-      case None => 0.0
+      case None         => 0.0
       case Some(source) =>
         val sourceBuildingCount =
           state.buildings.count(b =>
@@ -844,7 +850,7 @@ object CombatEngine:
           if b.constructionRemainingMs > 0.0 then (b :: acc, counts)
           else
             BuildingSpecs.all(b.kind).spawns match
-              case None => (b :: acc, counts)
+              case None                             => (b :: acc, counts)
               case Some((unitKind, baseIntervalMs)) =>
                 val intervalMs = effectiveInterval(b.kind, baseIntervalMs)
                 val remaining = b.spawnCountdownMs - deltaMs

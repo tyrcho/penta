@@ -38,7 +38,10 @@ class MazeTemplateTest extends munit.FunSuite:
     val walls = MazeTemplate.comb(cols, rows).toSet
     assert(Pathfinding.isReachable(spawn, goal, walls))
     val length = Pathfinding.shortestPath(spawn, goal, walls).map(_.length).get
-    assert(length > openBoardLength * 2, s"expected a much longer path than $openBoardLength, got $length")
+    assert(
+      length > openBoardLength * 2,
+      s"expected a much longer path than $openBoardLength, got $length"
+    )
   }
 
   test("combVertical: approved shape") {
@@ -63,7 +66,10 @@ class MazeTemplateTest extends munit.FunSuite:
     val walls = MazeTemplate.combVertical(cols, rows).toSet
     assert(Pathfinding.isReachable(spawn, goal, walls))
     val length = Pathfinding.shortestPath(spawn, goal, walls).map(_.length).get
-    assert(length > openBoardLength * 2, s"expected a much longer path than $openBoardLength, got $length")
+    assert(
+      length > openBoardLength * 2,
+      s"expected a much longer path than $openBoardLength, got $length"
+    )
   }
 
   test("neither template ever touches spawn or goal") {

@@ -7,12 +7,20 @@ package towerdefense.domain
 // Balance.AiBuildCooldownMs) — mirrored fields, not an AI-only concept, so a headless
 // AI-vs-AI battle can throttle both sides identically to how the UI throttles `ai` today.
 // outcome freezes the battle once a side has won.
+// elapsedTicks: how many BattleEngine.tick calls this battle has been through — a plain
+// counter, not tied to deltaMs (which varies per caller: Simulator's headless matches use
+// a fixed 100ms, GameApp uses the real frame delta). Exists for Loi's own victory
+// condition (VictoryConditions.hasWonViaLoi), which only starts comparing each side's Loi
+// building count once a fixed number of ticks has passed — see Balance.
+// LoiVictoryTickThreshold's doc. Stops incrementing once `outcome` is set, same freeze
+// behavior as everything else in BattleState (see tickDetailed's outcome.isDefined guard).
 case class BattleState(
     player: MazeState,
     ai: MazeState,
     aiBuildCooldownMs: Double = 0.0,
     playerBuildCooldownMs: Double = 0.0,
-    outcome: Option[MatchResult] = None
+    outcome: Option[MatchResult] = None,
+    elapsedTicks: Int = 0
 )
 
 object BattleState:
@@ -85,12 +93,20 @@ object BattleEngine:
           )
         case None => (playerResult.state, 0.0)
 
-      val aiCredited = creditCorruption(creditPlunder(aiBuilt, playerResult.plundered), playerResult.corrupted)
-      val playerCredited = creditCorruption(creditPlunder(playerBuilt, aiResult.plundered), aiResult.corrupted)
+      val aiCredited =
+        creditCorruption(creditPlunder(aiBuilt, playerResult.plundered), playerResult.corrupted)
+      val playerCredited =
+        creditCorruption(creditPlunder(playerBuilt, aiResult.plundered), aiResult.corrupted)
       val aiFinal = deliverUnits(aiCredited, playerResult.spawned)
       val playerFinal = deliverUnits(playerCredited, aiResult.spawned)
 
-      val next = BattleState(playerFinal, aiFinal, aiNextCooldown, playerNextCooldown)
+      val next = BattleState(
+        playerFinal,
+        aiFinal,
+        aiNextCooldown,
+        playerNextCooldown,
+        elapsedTicks = battle.elapsedTicks + 1
+      )
       val events = TickEvents(
         playerDeaths = playerResult.deaths,
         aiDeaths = aiResult.deaths,
@@ -137,7 +153,10 @@ object BattleEngine:
     val creditedResources = plundered.foldLeft(state.resources) { case (acc, (res, amount)) =>
       acc.updated(res, acc.getOrElse(res, 0.0) + amount)
     }
-    state.copy(resources = creditedResources, resourcesPlundered = state.resourcesPlundered + plundered.values.sum)
+    state.copy(
+      resources = creditedResources,
+      resourcesPlundered = state.resourcesPlundered + plundered.values.sum
+    )
 
   // A corrupted-to-death building's full cost (Corruption.md) lands in the corrupting
   // creature's owner's economy — the same "attacker's own state gets credited" shape as
@@ -154,8 +173,12 @@ object BattleEngine:
         }
       }
       val goldBonus = corrupted.size * Balance.CorruptionGoldReward
-      val credited = creditedCost.updated(Resource.Gold, creditedCost.getOrElse(Resource.Gold, 0.0) + goldBonus)
-      state.copy(resources = credited, buildingsCorrupted = state.buildingsCorrupted + corrupted.size)
+      val credited =
+        creditedCost.updated(Resource.Gold, creditedCost.getOrElse(Resource.Gold, 0.0) + goldBonus)
+      state.copy(
+        resources = credited,
+        buildingsCorrupted = state.buildingsCorrupted + corrupted.size
+      )
 
   private def deliverUnits(state: MazeState, spawned: Map[UnitKind, Int]): MazeState =
     spawned.foldLeft(state) { case (s, (kind, count)) =>
@@ -179,5 +202,13 @@ object BattleEngine:
         spec.maxHp * (1.0 + allyElfCount * Balance.ElfHpBonusPerAlly)
       else spec.maxHp
     val creature =
-      Creature(state.nextId, spawnPos, maxHp, maxHp, spec.speedPerMs, kind, spawnCountdownMs = initialCountdown)
+      Creature(
+        state.nextId,
+        spawnPos,
+        maxHp,
+        maxHp,
+        spec.speedPerMs,
+        kind,
+        spawnCountdownMs = initialCountdown
+      )
     state.copy(creatures = creature :: state.creatures, nextId = state.nextId + 1)

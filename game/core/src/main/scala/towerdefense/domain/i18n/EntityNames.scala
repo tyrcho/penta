@@ -25,7 +25,12 @@ final case class FactionInfo(
     overviewFrFile: String // e.g. "Nature.md" — the hand-written FR overview page's file name
 )
 
-final case class BuildingKindInfo(faction: Faction, name: I18nText, fileName: I18nText, asset: String)
+final case class BuildingKindInfo(
+    faction: Faction,
+    name: I18nText,
+    fileName: I18nText,
+    asset: String
+)
 
 final case class UnitKindInfo(faction: Faction, name: I18nText, fileName: I18nText, asset: String)
 
@@ -36,7 +41,12 @@ final case class UnitKindInfo(faction: Faction, name: I18nText, fileName: I18nTe
 // wiki page at all (DocGenerator.generate skips any resource with no faction). resourcePath/
 // resourceLink below are therefore never called with Gold — both still assume `.faction`
 // resolves to a real Faction, which only holds for the other 5.
-final case class ResourceKindInfo(faction: Option[Faction], name: I18nText, fileName: I18nText, asset: Option[String])
+final case class ResourceKindInfo(
+    faction: Option[Faction],
+    name: I18nText,
+    fileName: I18nText,
+    asset: Option[String]
+)
 
 // Display names, vault doc paths, and representative images for every Faction/Resource/
 // BuildingKind/UnitKind, in both languages — the single naming source shared by
@@ -104,6 +114,12 @@ object EntityNames:
       I18nText("Antre du Dragon", "Dragon's Lair"),
       I18nText("Antre du Dragon.md", "Dragon's Lair.md"),
       "dragons-lair.png"
+    ),
+    BuildingKind.WarCamp -> BuildingKindInfo(
+      Faction.Chaos,
+      I18nText("Camp de Guerre", "War Camp"),
+      I18nText("Camp de Guerre.md", "War Camp.md"),
+      "war-camp.png"
     ),
     BuildingKind.Church -> BuildingKindInfo(
       Faction.Loi,
@@ -198,8 +214,18 @@ object EntityNames:
   )
 
   val unitInfo: Map[UnitKind, UnitKindInfo] = Map(
-    UnitKind.Elf -> UnitKindInfo(Faction.Nature, I18nText("Elfe", "Elf"), I18nText("Elfe.md", "Elf.md"), "elf/front-walk-00.png"),
-    UnitKind.Wolf -> UnitKindInfo(Faction.Nature, I18nText("Loup", "Wolf"), I18nText("Loup.md", "Wolf.md"), "wolf-reference.png"),
+    UnitKind.Elf -> UnitKindInfo(
+      Faction.Nature,
+      I18nText("Elfe", "Elf"),
+      I18nText("Elfe.md", "Elf.md"),
+      "elf/front-walk-00.png"
+    ),
+    UnitKind.Wolf -> UnitKindInfo(
+      Faction.Nature,
+      I18nText("Loup", "Wolf"),
+      I18nText("Loup.md", "Wolf.md"),
+      "wolf-reference.png"
+    ),
     UnitKind.Tree -> UnitKindInfo(
       Faction.Nature,
       I18nText("Arbre Animé", "Animated Tree"),
@@ -218,23 +244,54 @@ object EntityNames:
       I18nText("Minotaure.md", "Minotaur.md"),
       "minotaur.png"
     ),
-    UnitKind.Dragon -> UnitKindInfo(Faction.Chaos, I18nText("Dragon", "Dragon"), I18nText("Dragon.md", "Dragon.md"), "dragon.png"),
-    UnitKind.Paladin -> UnitKindInfo(Faction.Loi, I18nText("Paladin", "Paladin"), I18nText("Paladin.md", "Paladin.md"), "paladin.png"),
-    UnitKind.Soldier -> UnitKindInfo(Faction.Loi, I18nText("Soldat", "Soldier"), I18nText("Soldat.md", "Soldier.md"), "soldier.png"),
+    UnitKind.Dragon -> UnitKindInfo(
+      Faction.Chaos,
+      I18nText("Dragon", "Dragon"),
+      I18nText("Dragon.md", "Dragon.md"),
+      "dragon.png"
+    ),
+    UnitKind.Orc -> UnitKindInfo(
+      Faction.Chaos,
+      I18nText("Orc", "Orc"),
+      I18nText("Orc.md", "Orc.md"),
+      "orc.png"
+    ),
+    UnitKind.Paladin -> UnitKindInfo(
+      Faction.Loi,
+      I18nText("Paladin", "Paladin"),
+      I18nText("Paladin.md", "Paladin.md"),
+      "paladin.png"
+    ),
+    UnitKind.Soldier -> UnitKindInfo(
+      Faction.Loi,
+      I18nText("Soldat", "Soldier"),
+      I18nText("Soldat.md", "Soldier.md"),
+      "soldier.png"
+    ),
     UnitKind.Zombie -> UnitKindInfo(
       Faction.Mort,
       I18nText("Zombie", "Zombie"),
       I18nText("Zombie.md", "Zombie.md"),
       "zombie/walk.gif"
     ),
-    UnitKind.Vampire -> UnitKindInfo(Faction.Mort, I18nText("Vampire", "Vampire"), I18nText("Vampire.md", "Vampire.md"), "vampire.png"),
+    UnitKind.Vampire -> UnitKindInfo(
+      Faction.Mort,
+      I18nText("Vampire", "Vampire"),
+      I18nText("Vampire.md", "Vampire.md"),
+      "vampire.png"
+    ),
     UnitKind.Necromancer -> UnitKindInfo(
       Faction.Mort,
       I18nText("Nécromancien", "Necromancer"),
       I18nText("Necromancien.md", "Necromancer.md"),
       "necromancer/walk.gif"
     ),
-    UnitKind.Soul -> UnitKindInfo(Faction.Mort, I18nText("Âme", "Soul"), I18nText("Âme.md", "Soul.md"), "soul/walk-00.png")
+    UnitKind.Soul -> UnitKindInfo(
+      Faction.Mort,
+      I18nText("Âme", "Soul"),
+      I18nText("Âme.md", "Soul.md"),
+      "soul/walk-00.png"
+    )
   )
 
   val resourceInfo: Map[Resource, ResourceKindInfo] = Map(
@@ -256,7 +313,12 @@ object EntityNames:
       I18nText("Lumière.md", "Light.md"),
       Some("lumiere-reference.png")
     ),
-    Resource.Shadow -> ResourceKindInfo(Some(Faction.Mort), I18nText("Ombre", "Shadow"), I18nText("Ombre.md", "Shadow.md"), None),
+    Resource.Shadow -> ResourceKindInfo(
+      Some(Faction.Mort),
+      I18nText("Ombre", "Shadow"),
+      I18nText("Ombre.md", "Shadow.md"),
+      None
+    ),
     Resource.Crystal -> ResourceKindInfo(
       Some(Faction.Science),
       I18nText("Crystal", "Crystal"),
@@ -264,7 +326,12 @@ object EntityNames:
       Some("crystal-reference.png")
     ),
     // No faction, no wiki page — see ResourceKindInfo's own doc.
-    Resource.Gold -> ResourceKindInfo(None, I18nText("Or", "Gold"), I18nText("Or.md", "Gold.md"), None)
+    Resource.Gold -> ResourceKindInfo(
+      None,
+      I18nText("Or", "Gold"),
+      I18nText("Or.md", "Gold.md"),
+      None
+    )
   )
 
   def factionName(f: Faction, lang: Lang): String = factionInfo(f).name(lang)
@@ -359,7 +426,13 @@ object EntityNames:
   // (possibly in another faction's folder, same as any other cross-link — see
   // `relativeTo`); an EN page, which has no translated version of that page, falls back
   // to the same FR file across trees (see frFallbackLink).
-  def outOfScopeLink(text: String, from: Faction, target: Faction, frFileName: String, lang: Lang): String =
+  def outOfScopeLink(
+      text: String,
+      from: Faction,
+      target: Faction,
+      frFileName: String,
+      lang: Lang
+  ): String =
     if lang == Lang.Fr then mdLink(text, relativeTo(from, target, frFileName, Lang.Fr))
     else frFallbackLink(text, target, frFileName)
 

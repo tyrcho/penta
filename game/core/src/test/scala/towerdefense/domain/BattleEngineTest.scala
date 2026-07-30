@@ -4,7 +4,11 @@ class BattleEngineTest extends munit.FunSuite:
 
   private def buildingCount(m: MazeState): Int = m.buildings.size
 
-  private def withResources(wood: Double = 0.0, fire: Double = 0.0, light: Double = 0.0): MazeState =
+  private def withResources(
+      wood: Double = 0.0,
+      fire: Double = 0.0,
+      light: Double = 0.0
+  ): MazeState =
     MazeState.initial.copy(
       resources = Map(Resource.Wood -> wood, Resource.Fire -> fire, Resource.Light -> light)
     )
@@ -21,8 +25,11 @@ class BattleEngineTest extends munit.FunSuite:
     assertEquals(result.ai.creatures.head.kind, UnitKind.Elf)
   }
 
-  test("a death house's Necromancer arrives in the opponent's maze with a full Soul-summon countdown") {
-    val deathHouse = Building(100, col = 5, row = 5, BuildingKind.DeathHouse, Balance.NecromancerSpawnIntervalMs)
+  test(
+    "a death house's Necromancer arrives in the opponent's maze with a full Soul-summon countdown"
+  ) {
+    val deathHouse =
+      Building(100, col = 5, row = 5, BuildingKind.DeathHouse, Balance.NecromancerSpawnIntervalMs)
     val battle = BattleState(
       player = withResources().copy(buildings = List(deathHouse)),
       ai = withResources()
@@ -41,7 +48,8 @@ class BattleEngineTest extends munit.FunSuite:
   // Tree stays in its OWNER's maze instead of crossing into the opponent's — Stonehenge's
   // whole point is growing this maze's own forest tally through units, not raiders.
   test("a stonehenge's Tree arrives in the opponent's maze, same as every other spawner") {
-    val stonehenge = Building(100, col = 5, row = 5, BuildingKind.Stonehenge, Balance.StonehengeSpawnIntervalMs)
+    val stonehenge =
+      Building(100, col = 5, row = 5, BuildingKind.Stonehenge, Balance.StonehengeSpawnIntervalMs)
     val battle = BattleState(
       player = withResources().copy(buildings = List(stonehenge)),
       ai = withResources()
@@ -59,7 +67,16 @@ class BattleEngineTest extends munit.FunSuite:
   test("an Elf spawns with bonus HP from every other living Elf already in the maze it's raiding") {
     val grove = Building(100, col = 5, row = 5, BuildingKind.Grove, Balance.ElfSpawnIntervalMs)
     val existingElves = (1 to 3)
-      .map(i => Creature(i.toLong, GridConfig.cellCenter(0, 0), Balance.ElfMaxHp, Balance.ElfMaxHp, Balance.ElfSpeedPerMs, UnitKind.Elf))
+      .map(i =>
+        Creature(
+          i.toLong,
+          GridConfig.cellCenter(0, 0),
+          Balance.ElfMaxHp,
+          Balance.ElfMaxHp,
+          Balance.ElfSpeedPerMs,
+          UnitKind.Elf
+        )
+      )
       .toList
     val battle = BattleState(
       player = withResources().copy(buildings = List(grove)),
@@ -100,7 +117,9 @@ class BattleEngineTest extends munit.FunSuite:
     assertEquals(result.ai.buildings.count(_.kind == BuildingKind.Forest), 0)
   }
 
-  test("the default AiStrategy.maybeDestroy is a no-op, so existing strategies never tear anything down") {
+  test(
+    "the default AiStrategy.maybeDestroy is a no-op, so existing strategies never tear anything down"
+  ) {
     val forest = Building(1, col = 5, row = 5, BuildingKind.Forest, Balance.ElfSpawnIntervalMs)
     // No Wood at all: isolates the destroy no-op check from LinearStrategy's own
     // maybeUpgrade step (which runs unconditionally before maybeBuild/maybeDestroy would
@@ -172,7 +191,9 @@ class BattleEngineTest extends munit.FunSuite:
   // RateLimited (see AiStrategy.buildCooldownMs's doc) lets a strategy's own build/upgrade/
   // research pace be tuned independently of what/where it builds — BattleEngine must
   // actually read the *strategy's* cooldown, not always fall back to the shared constant.
-  test("a RateLimited strategy resets its cooldown to its own buildCooldownMs, not the shared default") {
+  test(
+    "a RateLimited strategy resets its cooldown to its own buildCooldownMs, not the shared default"
+  ) {
     val fast = RateLimited(LinearStrategy, buildCooldownMs = 10.0)
     val battle = BattleState.initial.copy(ai = withResources(wood = 10_000.0, fire = 10_000.0))
     val afterFirstBuild = BattleEngine.tick(battle, deltaMs = 1.0, aiStrategy = fast)
@@ -187,15 +208,25 @@ class BattleEngineTest extends munit.FunSuite:
     assertEquals(buildingCount(thirdTick.ai), 2)
   }
 
-  test("a goblin pillaging the player steals Gold directly, capped for the player but not for the AI") {
+  test(
+    "a goblin pillaging the player steals Gold directly, capped for the player but not for the AI"
+  ) {
     val goalPos = GridConfig.cellCenter(GridConfig.goalCell._1, GridConfig.goalCell._2)
     val incomingGoblin =
-      Creature(1, goalPos, Balance.GoblinMaxHp, Balance.GoblinMaxHp, speedPerMs = 0.0, UnitKind.Goblin)
+      Creature(
+        1,
+        goalPos,
+        Balance.GoblinMaxHp,
+        Balance.GoblinMaxHp,
+        speedPerMs = 0.0,
+        UnitKind.Goblin
+      )
     val battle = BattleState(
       // Gold set below the nominal plunder amount on purpose, to prove the attacker's
       // credit isn't capped by it — "you always win res, even if the opponent does not
       // have them" (project owner's explicit request).
-      player = withResources().copy(resources = Map(Resource.Gold -> 0.5), creatures = List(incomingGoblin)),
+      player = withResources()
+        .copy(resources = Map(Resource.Gold -> 0.5), creatures = List(incomingGoblin)),
       ai = withResources() // isolates the plunder-credit effect from production
     )
     val result = BattleEngine.tick(battle, deltaMs = 1.0)
@@ -203,11 +234,17 @@ class BattleEngineTest extends munit.FunSuite:
     assertEqualsDouble(result.player.resources.getOrElse(Resource.Gold, 0.0), 0.0, 1e-9)
     // Goblin steals Gold directly ("steal gold, not convert" — project owner's explicit
     // request) — the FULL nominal 2 * PlunderPerUnit, not just the 0.5 the player had.
-    assertEqualsDouble(result.ai.resources.getOrElse(Resource.Gold, 0.0), 2 * Balance.PlunderPerUnit, 1e-9)
+    assertEqualsDouble(
+      result.ai.resources.getOrElse(Resource.Gold, 0.0),
+      2 * Balance.PlunderPerUnit,
+      1e-9
+    )
     assertEqualsDouble(result.ai.resourcesPlundered, 2 * Balance.PlunderPerUnit, 1e-9)
   }
 
-  test("a minotaur pillaging the player steals Gold directly, capped for the player but not for the AI") {
+  test(
+    "a minotaur pillaging the player steals Gold directly, capped for the player but not for the AI"
+  ) {
     val goalPos = GridConfig.cellCenter(GridConfig.goalCell._1, GridConfig.goalCell._2)
     val incomingMinotaur = Creature(
       1,
@@ -218,20 +255,32 @@ class BattleEngineTest extends munit.FunSuite:
       UnitKind.Minotaur
     )
     val battle = BattleState(
-      player = withResources().copy(resources = Map(Resource.Gold -> 5.0), creatures = List(incomingMinotaur)),
+      player = withResources()
+        .copy(resources = Map(Resource.Gold -> 5.0), creatures = List(incomingMinotaur)),
       ai = withResources() // isolates the plunder-credit effect from production
     )
     val result = BattleEngine.tick(battle, deltaMs = 1.0)
-    assertEqualsDouble(result.player.resources.getOrElse(Resource.Gold, 0.0), 0.0, 1e-9) // capped: only 5 Gold available
+    assertEqualsDouble(
+      result.player.resources.getOrElse(Resource.Gold, 0.0),
+      0.0,
+      1e-9
+    ) // capped: only 5 Gold available
     // Uncapped: the full nominal 2 * MinotaurPlunderPerUnit, not just the 5 Gold the player
     // actually had to lose.
-    assertEqualsDouble(result.ai.resources.getOrElse(Resource.Gold, 0.0), 2 * Balance.MinotaurPlunderPerUnit, 1e-9)
+    assertEqualsDouble(
+      result.ai.resources.getOrElse(Resource.Gold, 0.0),
+      2 * Balance.MinotaurPlunderPerUnit,
+      1e-9
+    )
     assertEqualsDouble(result.ai.resourcesPlundered, 2 * Balance.MinotaurPlunderPerUnit, 1e-9)
   }
 
-  test("an elf pillaging the player drains the player's real Wood and credits the AI real Wood too, uncapped") {
+  test(
+    "an elf pillaging the player drains the player's real Wood and credits the AI real Wood too, uncapped"
+  ) {
     val goalPos = GridConfig.cellCenter(GridConfig.goalCell._1, GridConfig.goalCell._2)
-    val incomingElf = Creature(1, goalPos, Balance.ElfMaxHp, Balance.ElfMaxHp, speedPerMs = 0.0, UnitKind.Elf)
+    val incomingElf =
+      Creature(1, goalPos, Balance.ElfMaxHp, Balance.ElfMaxHp, speedPerMs = 0.0, UnitKind.Elf)
     val battle = BattleState(
       // Wood set below the nominal plunder amount, same reasoning as the Goblin test above.
       player = withResources(wood = 0.1).copy(creatures = List(incomingElf)),
@@ -246,7 +295,9 @@ class BattleEngineTest extends munit.FunSuite:
     assertEquals(result.ai.resourcesPlundered, Balance.PlunderPerUnit)
   }
 
-  test("a zombie corrupting a building to destruction credits the full cost and tally to the AI, plus a Gold bonus") {
+  test(
+    "a zombie corrupting a building to destruction credits the full cost and tally to the AI, plus a Gold bonus"
+  ) {
     val almostCorrupted = Building(
       1,
       col = 5,
@@ -256,14 +307,25 @@ class BattleEngineTest extends munit.FunSuite:
       corruptionPercent = Balance.CorruptionMaxPercent - Balance.ZombieCorruptionPercentPerSec
     )
     val incomingZombie =
-      Creature(1, GridConfig.cellCenter(6, 5), Balance.ZombieMaxHp, Balance.ZombieMaxHp, 0.0, UnitKind.Zombie)
+      Creature(
+        1,
+        GridConfig.cellCenter(6, 5),
+        Balance.ZombieMaxHp,
+        Balance.ZombieMaxHp,
+        0.0,
+        UnitKind.Zombie
+      )
     val battle = BattleState(
-      player = withResources().copy(buildings = List(almostCorrupted), creatures = List(incomingZombie)),
+      player =
+        withResources().copy(buildings = List(almostCorrupted), creatures = List(incomingZombie)),
       ai = withResources() // isolates the corruption-credit effect from production
     )
     val result = BattleEngine.tick(battle, deltaMs = 1000.0)
     assertEquals(result.player.buildings, Nil)
-    assertEquals(result.player.buildingsCorrupted, 0.0) // this side lost the building, didn't corrupt one
+    assertEquals(
+      result.player.buildingsCorrupted,
+      0.0
+    ) // this side lost the building, didn't corrupt one
     assertEquals(result.ai.resources(Resource.Wood), Balance.GroveCostWood)
     assertEquals(result.ai.resources(Resource.Gold), Balance.CorruptionGoldReward)
     assertEquals(result.ai.buildingsCorrupted, 1.0)
@@ -288,4 +350,40 @@ class BattleEngineTest extends munit.FunSuite:
 
     val frozen = BattleEngine.tick(ticked, deltaMs = 10_000.0)
     assertEquals(frozen, ticked)
+  }
+
+  // Loi's own victory condition (VictoryConditions.hasWonViaLoi) needs to know how many
+  // ticks a match has run, not how much virtual time has elapsed (deltaMs varies per
+  // caller — Simulator uses 100ms, GameApp uses the real frame delta) — a plain per-tick
+  // counter, incremented once per BattleEngine.tick call regardless of deltaMs.
+  test("elapsedTicks starts at 0 and increments by exactly 1 per tick, regardless of deltaMs") {
+    assertEquals(BattleState.initial.elapsedTicks, 0)
+    val once = BattleEngine.tick(BattleState.initial, deltaMs = 250.0)
+    assertEquals(once.elapsedTicks, 1)
+    val twice = BattleEngine.tick(once, deltaMs = 1.0)
+    assertEquals(twice.elapsedTicks, 2)
+  }
+
+  // Same "freeze on outcome" invariant as the forest-victory test above: a decided match
+  // must stop advancing its own tick clock too, not just stop changing buildings/creatures
+  // — otherwise a frozen match replayed for many more ticks (e.g. a UI left open after a
+  // win) would silently drift elapsedTicks far past reality.
+  test("elapsedTicks stops incrementing once the battle is frozen by an outcome") {
+    val forests = (0 until Balance.NatureVictoryForestTarget)
+      .map(i =>
+        Building(
+          i.toLong,
+          col = i % GridConfig.cols,
+          row = 1 + i / GridConfig.cols,
+          BuildingKind.Forest,
+          spawnCountdownMs = Double.MaxValue
+        )
+      )
+      .toList
+    val battle =
+      BattleState(player = MazeState.initial.copy(buildings = forests), ai = MazeState.initial)
+    val ticked = BattleEngine.tick(battle, deltaMs = 1.0)
+    assert(ticked.outcome.isDefined)
+    val frozen = BattleEngine.tick(ticked, deltaMs = 10_000.0)
+    assertEquals(frozen.elapsedTicks, ticked.elapsedTicks)
   }

@@ -26,8 +26,24 @@ import towerdefense.domain.*
 object MatchLog:
 
   def diff(tick: Int, before: BattleState, after: BattleState, events: TickEvents): Seq[String] =
-    sideLines(tick, "a", before.player, after.player, events.playerDeaths, events.playerArrivals, events.playerCorrupted) ++
-      sideLines(tick, "b", before.ai, after.ai, events.aiDeaths, events.aiArrivals, events.aiCorrupted)
+    sideLines(
+      tick,
+      "a",
+      before.player,
+      after.player,
+      events.playerDeaths,
+      events.playerArrivals,
+      events.playerCorrupted
+    ) ++
+      sideLines(
+        tick,
+        "b",
+        before.ai,
+        after.ai,
+        events.aiDeaths,
+        events.aiArrivals,
+        events.aiCorrupted
+      )
 
   private def sideLines(
       tick: Int,
@@ -86,8 +102,14 @@ object MatchLog:
     }
     val destroyed = destroyedIds.map { id =>
       val b = beforeById(id)
-      val refund = BuildingSpecs.all(b.kind).cost.view.mapValues(_ * Balance.DemolishRefundFraction).toMap
-      formatLine(tick, side, "DESTROY", s"${b.kind} (${b.col},${b.row}) refund ${fmtResources(refund)}")
+      val refund =
+        BuildingSpecs.all(b.kind).cost.view.mapValues(_ * Balance.DemolishRefundFraction).toMap
+      formatLine(
+        tick,
+        side,
+        "DESTROY",
+        s"${b.kind} (${b.col},${b.row}) refund ${fmtResources(refund)}"
+      )
     }
     built ++ upgraded ++ destroyed
 
@@ -102,14 +124,32 @@ object MatchLog:
         s"opponent refunded ${fmtResources(corrosion.cost)}"
     )
 
-  private def corruptedTallyLine(tick: Int, side: String, before: MazeState, after: MazeState): Option[String] =
+  private def corruptedTallyLine(
+      tick: Int,
+      side: String,
+      before: MazeState,
+      after: MazeState
+  ): Option[String] =
     val delta = after.buildingsCorrupted - before.buildingsCorrupted
     if delta <= 0.0 then None
-    else Some(formatLine(tick, side, "CORRUPTED_TOTAL", f"+${delta.toInt} (total ${after.buildingsCorrupted.toInt})"))
+    else
+      Some(
+        formatLine(
+          tick,
+          side,
+          "CORRUPTED_TOTAL",
+          s"+${delta.toInt} (total ${after.buildingsCorrupted.toInt})"
+        )
+      )
 
   // Science's research levels (MazeState.researchLevels) aren't in `buildings`, so they
   // need their own diff, one line per lab whose level increased this tick.
-  private def researchLines(tick: Int, side: String, before: MazeState, after: MazeState): Seq[String] =
+  private def researchLines(
+      tick: Int,
+      side: String,
+      before: MazeState,
+      after: MazeState
+  ): Seq[String] =
     ResearchSpecs.orderedLabs.flatMap { lab =>
       val beforeLevel = before.researchLevels.getOrElse(lab, 0)
       val afterLevel = after.researchLevels.getOrElse(lab, 0)
@@ -117,15 +157,28 @@ object MatchLog:
       else Some(formatLine(tick, side, "RESEARCH", s"$lab level $beforeLevel→$afterLevel"))
     }
 
-  private def plunderLine(tick: Int, side: String, before: MazeState, after: MazeState): Option[String] =
+  private def plunderLine(
+      tick: Int,
+      side: String,
+      before: MazeState,
+      after: MazeState
+  ): Option[String] =
     val delta = after.resourcesPlundered - before.resourcesPlundered
     if delta <= 0.0 then None
-    else Some(formatLine(tick, side, "PLUNDER", f"+$delta%.1f (total ${after.resourcesPlundered}%.1f)"))
+    else
+      Some(
+        formatLine(
+          tick,
+          side,
+          "PLUNDER",
+          s"+${fmt1(delta)} (total ${fmt1(after.resourcesPlundered)})"
+        )
+      )
 
   private def deathLine(tick: Int, side: String, death: Death): String =
     val cause = death.cause match
-      case DeathCause.Aura             => "Aura"
-      case DeathCause.Watchtower       => "Watchtower"
+      case DeathCause.Aura              => "Aura"
+      case DeathCause.Watchtower        => "Watchtower"
       case DeathCause.AuraAndWatchtower => "Aura+Watchtower"
     formatLine(tick, side, "DEATH", s"${death.kind} killed by $cause")
 
@@ -153,7 +206,7 @@ object MatchLog:
     val research = ResearchSpecs.orderedLabs
       .flatMap(lab => state.researchLevels.get(lab).filter(_ > 0).map(level => s"$lab:$level"))
       .mkString(",")
-    f"forests $forests/$forestTarget  plunder $plundered%.1f/$plunderTarget  corrupted $corrupted/$corruptionTarget  research [$research]  $resources"
+    s"forests $forests/$forestTarget  plunder ${fmt1(plundered)}/$plunderTarget  corrupted $corrupted/$corruptionTarget  research [$research]  $resources"
 
   def finalLine(tick: Int, outcome: MatchResult): String =
     val winnerSide = outcome match
@@ -168,4 +221,19 @@ object MatchLog:
   // private[sim] (not fully private) so MatchLogTest can build its own expected strings
   // from the same formatting instead of duplicating it by hand.
   private[sim] def fmtResources(resources: Map[Resource, Double]): String =
-    resources.toSeq.sortBy(_._1.ordinal).map { case (res, amt) => f"$res $amt%.1f" }.mkString(" ")
+    resources.toSeq
+      .sortBy(_._1.ordinal)
+      .map { case (res, amt) => s"$res ${fmt1(amt)}" }
+      .mkString(" ")
+
+  // Plain arithmetic, not the f-interpolator/String.format with an explicit Locale: on a
+  // machine whose default locale uses a comma decimal separator (e.g. French), %.1f would
+  // silently corrupt every number in this transcript — but java.util.Locale itself doesn't
+  // link under Scala.js (this file cross-compiles to the browser build too, via
+  // GameApp.scala's live console ticker), so the fix has to avoid Locale/Formatter
+  // entirely rather than pin it to Locale.ROOT.
+  private def fmt1(d: Double): String =
+    val scaledAway = math.round(d * 10.0)
+    val whole = scaledAway / 10
+    val frac = math.abs(scaledAway % 10)
+    s"$whole.$frac"

@@ -10,7 +10,9 @@ package towerdefense.domain
 // VictoryConditions.hasWonViaFondamentale), so its list is empty.
 case class ResearchSpec(baseCost: Map[Resource, Double], effectByLevel: List[Double]):
   def costAtLevel(level: Int): Map[Resource, Double] =
-    baseCost.view.mapValues(_ * math.pow(Balance.ResearchCostMultiplierPerLevel, (level - 1).toDouble)).toMap
+    baseCost.view
+      .mapValues(_ * math.pow(Balance.ResearchCostMultiplierPerLevel, (level - 1).toDouble))
+      .toMap
 
   def effectAtLevel(level: Int): Double =
     if level <= 0 then 0.0 else effectByLevel(level - 1)
@@ -18,19 +20,31 @@ case class ResearchSpec(baseCost: Map[Resource, Double], effectByLevel: List[Dou
 object ResearchSpecs:
   val all: Map[BuildingKind, ResearchSpec] = Map(
     BuildingKind.LaboNaturel -> ResearchSpec(
-      baseCost = Map(Resource.Wood -> Balance.RecherchesNaturellesCostWood, Resource.Crystal -> Balance.RecherchesNaturellesCostCrystal),
+      baseCost = Map(
+        Resource.Wood -> Balance.RecherchesNaturellesCostWood,
+        Resource.Crystal -> Balance.RecherchesNaturellesCostCrystal
+      ),
       effectByLevel = Balance.NaturellesCostReductionByLevel
     ),
     BuildingKind.LaboSombre -> ResearchSpec(
-      baseCost = Map(Resource.Shadow -> Balance.RecherchesSombresCostShadow, Resource.Crystal -> Balance.RecherchesSombresCostCrystal),
+      baseCost = Map(
+        Resource.Shadow -> Balance.RecherchesSombresCostShadow,
+        Resource.Crystal -> Balance.RecherchesSombresCostCrystal
+      ),
       effectByLevel = Balance.SombresCorruptionSpeedIncreaseByLevel
     ),
     BuildingKind.LaboDuChaos -> ResearchSpec(
-      baseCost = Map(Resource.Fire -> Balance.RecherchesChaotiquesCostFire, Resource.Crystal -> Balance.RecherchesChaotiquesCostCrystal),
+      baseCost = Map(
+        Resource.Fire -> Balance.RecherchesChaotiquesCostFire,
+        Resource.Crystal -> Balance.RecherchesChaotiquesCostCrystal
+      ),
       effectByLevel = Balance.ChaotiquesSpawnTimeReductionByLevel
     ),
     BuildingKind.LaboDeLaLoi -> ResearchSpec(
-      baseCost = Map(Resource.Light -> Balance.RecherchesLoyalesCostLight, Resource.Crystal -> Balance.RecherchesLoyalesCostCrystal),
+      baseCost = Map(
+        Resource.Light -> Balance.RecherchesLoyalesCostLight,
+        Resource.Crystal -> Balance.RecherchesLoyalesCostCrystal
+      ),
       effectByLevel = Balance.LoyalesAttackSpeedIncreaseByLevel
     ),
     BuildingKind.LaboDeRecherche -> ResearchSpec(
@@ -53,8 +67,9 @@ object ResearchSpecs:
   // tooltip and the generated wiki page's per-level table both need this exact number) so
   // neither can special-case Fondamentale differently from the other.
   def magnitudeAtLevel(kind: BuildingKind, level: Int): Double = kind match
-    case BuildingKind.LaboDeRecherche => Balance.FondamentaleRequiredOtherLabLevel(level - 1).toDouble
-    case other                        => all(other).effectAtLevel(level)
+    case BuildingKind.LaboDeRecherche =>
+      Balance.FondamentaleRequiredOtherLabLevel(level - 1).toDouble
+    case other => all(other).effectAtLevel(level)
 
   // Explicit, stable iteration order for AiStrategy.researchAnyAffordable — `all.keys`
   // alone isn't guaranteed deterministic across runs, and a strategy's research choice

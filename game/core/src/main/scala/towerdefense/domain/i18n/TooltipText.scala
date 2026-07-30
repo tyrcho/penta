@@ -68,21 +68,33 @@ object TooltipText:
   // at all (costIcons empty), and the " - rate" suffix is omitted when the kind produces
   // nothing — a building's own ability/spawn summary (BuildingOwnAbility/
   // spawnAbilitySuffix) is still appended separately by the caller, same split as before.
-  def buildingButtonTooltip(kind: BuildingKind, cost: Map[Resource, Double], produces: Map[Resource, Double], lang: Lang): String =
+  def buildingButtonTooltip(
+      kind: BuildingKind,
+      cost: Map[Resource, Double],
+      produces: Map[Resource, Double],
+      lang: Lang
+  ): String =
     val name = EntityNames.buildingName(kind, lang)
     val cText = costIcons(cost)
     val costSuffix = if cText.isEmpty then "" else s" ($cText)"
     val rates = produces.toList.filter(_._2 > 0.0).sortBy(_._1.ordinal)
     val rateText =
       if rates.isEmpty then ""
-      else " - " + rates.map { case (res, rate) => s"+${decimal(rate)} ${resourceIcon(res)}/s" }.mkString(", ")
+      else
+        " - " + rates
+          .map { case (res, rate) => s"+${decimal(rate)} ${resourceIcon(res)}/s" }
+          .mkString(", ")
     s"$name$costSuffix$rateText"
 
   // ── Unit ability summaries — one entry per kind, all static (Balance-only) data ──────
 
   private def plunders(amounts: List[(Resource, Double)]): I18nText =
-    val frText = amounts.map { case (res, amt) => s"${decimal(amt)} ${EntityNames.resourceName(res, Lang.Fr)}" }.mkString(" + ")
-    val enText = amounts.map { case (res, amt) => s"${decimal(amt)} ${EntityNames.resourceName(res, Lang.En)}" }.mkString(" + ")
+    val frText = amounts
+      .map { case (res, amt) => s"${decimal(amt)} ${EntityNames.resourceName(res, Lang.Fr)}" }
+      .mkString(" + ")
+    val enText = amounts
+      .map { case (res, amt) => s"${decimal(amt)} ${EntityNames.resourceName(res, Lang.En)}" }
+      .mkString(" + ")
     I18nText(fr = s"pille $frText à l'arrivée", en = s"plunders $enText on arrival")
 
   private val noPlunder: I18nText = I18nText(fr = "ne pille pas — ", en = "doesn't plunder — ")
@@ -112,17 +124,25 @@ object TooltipText:
     I18nText(fr = s"invoque une Âme toutes les ${secs}s", en = s"invokes a Soul every ${secs}s")
 
   private def closeRanks(reductionPerSec: Double): I18nText = I18nText(
-    fr = s"subit ${decimal(reductionPerSec)} dégâts/sec en moins si un autre Soldat est à proximité",
+    fr =
+      s"subit ${decimal(reductionPerSec)} dégâts/sec en moins si un autre Soldat est à proximité",
     en = s"takes ${decimal(reductionPerSec)} less dmg/s when another Soldier is nearby"
+  )
+
+  private def survivesFirstLethalHit: I18nText = I18nText(
+    fr = ", survit à son premier coup fatal avec 1 PV (une seule fois)",
+    en = ", survives its first lethal hit at 1 HP (once)"
   )
 
   private def clones(intervalMs: Double, minSizePercent: Double): I18nText =
     val secs = NumberFormat.seconds(intervalMs)
     I18nText(
-      fr = s"se clone (en plus petit) toutes les ${secs}s (jusqu'à ${decimal(minSizePercent)}% de taille), " +
-        "compte pour la victoire de son propriétaire tant qu'il est en vie",
-      en = s"clones a smaller copy of itself every ${secs}s (down to ${decimal(minSizePercent)}% size), " +
-        "counting toward its owner's victory the whole time"
+      fr =
+        s"se clone (en plus petit) toutes les ${secs}s (jusqu'à ${decimal(minSizePercent)}% de taille), " +
+          "compte pour la victoire de son propriétaire tant qu'il est en vie",
+      en =
+        s"clones a smaller copy of itself every ${secs}s (down to ${decimal(minSizePercent)}% size), " +
+          "counting toward its owner's victory the whole time"
     )
 
   // Appended to a building's tooltip (button or live hover) whenever it spawns a unit, so
@@ -137,20 +157,37 @@ object TooltipText:
     UnitKind.Dragon -> plunders(List(Resource.Gold -> Balance.DragonPlunderGold)),
     UnitKind.Paladin -> (noPlunder ++ shields(Balance.PaladinAuraDamageReductionPerSec)),
     UnitKind.Soldier -> (noPlunder ++ closeRanks(Balance.SoldierCloseRanksDamageReductionPerSec)),
-    UnitKind.Wolf -> (noPlunder ++ speedsUp(Balance.WolfSpeedAuraRangeCells, (Balance.WolfSpeedAuraMultiplier - 1) * 100)),
+    UnitKind.Wolf -> (noPlunder ++ speedsUp(
+      Balance.WolfSpeedAuraRangeCells,
+      (Balance.WolfSpeedAuraMultiplier - 1) * 100
+    )),
     UnitKind.Zombie -> (noPlunder ++ corrupts(Balance.ZombieCorruptionPercentPerSec)),
     UnitKind.Vampire ->
-      (noPlunder ++ corrupts(Balance.VampireCorruptionPercentPerSec) ++ takesLessDamage(Balance.VampireDamageReductionFraction * 100)),
+      (noPlunder ++ corrupts(Balance.VampireCorruptionPercentPerSec) ++ takesLessDamage(
+        Balance.VampireDamageReductionFraction * 100
+      )),
     UnitKind.Necromancer -> (noPlunder ++ invokesSoul(Balance.SoulSummonIntervalMs)),
     UnitKind.Soul -> (noPlunder ++ corrupts(Balance.SoulCorruptionPercentPerSec)),
-    UnitKind.Tree -> (noPlunder ++ clones(Balance.TreeCloneIntervalMs, Balance.TreeMinCloneSizeFraction * 100))
+    UnitKind.Tree -> (noPlunder ++ clones(
+      Balance.TreeCloneIntervalMs,
+      Balance.TreeMinCloneSizeFraction * 100
+    )),
+    UnitKind.Orc -> (plunders(
+      List(Resource.Gold -> Balance.OrcPlunderPerUnit)
+    ) ++ survivesFirstLethalHit)
   )
 
   def unitAbilitySummary(kind: UnitKind, lang: Lang): String = unitAbilities(kind)(lang)
 
   // A live creature's hover text — same numbers as unitAbilitySummary, plus its current
   // HP and (for a Tree) its current clone size, since those vary per-instance.
-  def creatureHoverText(kind: UnitKind, lang: Lang, hp: Int, maxHp: Int, sizePercent: Option[Int]): String =
+  def creatureHoverText(
+      kind: UnitKind,
+      lang: Lang,
+      hp: Int,
+      maxHp: Int,
+      sizePercent: Option[Int]
+  ): String =
     val name = EntityNames.unitName(kind, lang)
     val sizeNote = sizePercent.filter(_ < 100).map(p => s" ($p%)").getOrElse("")
     val ability = unitAbilitySummary(kind, lang)
@@ -173,7 +210,8 @@ object TooltipText:
     if constructionRemainingMs <= 0 then ""
     else
       val secs = math.ceil(constructionRemainingMs / 1000.0).toInt
-      if lang == Lang.Fr then s" — en construction (${secs}s)" else s" — under construction (${secs}s)"
+      if lang == Lang.Fr then s" — en construction (${secs}s)"
+      else s" — under construction (${secs}s)"
 
   def destroyLabel(refundText: String, lang: Lang): String =
     if lang == Lang.Fr then s"Détruire ($refundText)" else s"Destroy ($refundText)"
@@ -194,7 +232,10 @@ object TooltipText:
     if lang == Lang.Fr then s"Améliorer ($costText)" else s"Upgrade ($costText)"
 
   def levelText(level: Int, maxLevel: Int, effect: Option[String], lang: Lang): String =
-    if level <= 0 then (if lang == Lang.Fr then s"niveau 0/$maxLevel (aucun bonus)" else s"level 0/$maxLevel (no bonus yet)")
+    if level <= 0 then
+      (if lang == Lang.Fr then s"niveau 0/$maxLevel (aucun bonus)"
+       else s"level 0/$maxLevel (no bonus yet)"
+    )
     else
       val word = if lang == Lang.Fr then "niveau" else "level"
       effect match
@@ -208,7 +249,10 @@ object TooltipText:
   private val researchEffectTemplates: Map[BuildingKind, Double => I18nText] = Map(
     BuildingKind.LaboNaturel -> { magnitude =>
       val v = decimal(magnitude * 100)
-      I18nText(fr = s"-$v% coût et temps de construction des bâtiments Nature", en = s"-$v% Nature building cost and build time")
+      I18nText(
+        fr = s"-$v% coût et temps de construction des bâtiments Nature",
+        en = s"-$v% Nature building cost and build time"
+      )
     },
     BuildingKind.LaboSombre -> { magnitude =>
       val v = decimal(magnitude * 100)
@@ -216,11 +260,17 @@ object TooltipText:
     },
     BuildingKind.LaboDuChaos -> { magnitude =>
       val v = decimal(magnitude * 100)
-      I18nText(fr = s"-$v% temps de production des unités Chaos", en = s"-$v% Chaos unit spawn time")
+      I18nText(
+        fr = s"-$v% temps de production des unités Chaos",
+        en = s"-$v% Chaos unit spawn time"
+      )
     },
     BuildingKind.LaboDeLaLoi -> { magnitude =>
       val v = decimal(magnitude * 100)
-      I18nText(fr = s"+$v% vitesse d'attaque des bâtiments Loi", en = s"+$v% Law building attack speed")
+      I18nText(
+        fr = s"+$v% vitesse d'attaque des bâtiments Loi",
+        en = s"+$v% Law building attack speed"
+      )
     },
     BuildingKind.LaboDeRecherche -> { magnitude =>
       val level = magnitude.toInt
@@ -234,7 +284,8 @@ object TooltipText:
   def researchEffectSummary(labKind: BuildingKind, magnitude: Double, lang: Lang): String =
     researchEffectTemplates.get(labKind).map(_(magnitude)(lang)).getOrElse("")
 
-  def spawnsNothing(lang: Lang): String = if lang == Lang.Fr then "n'envoie aucune unité" else "spawns no unit"
+  def spawnsNothing(lang: Lang): String =
+    if lang == Lang.Fr then "n'envoie aucune unité" else "spawns no unit"
 
   // ── Building live-hover building blocks ─────────────────────────────────
   // Small composable fragments `perKindHoverText` (GameApp) strings together per kind —
@@ -257,7 +308,8 @@ object TooltipText:
     else s"${decimal(dmgPerSec)} dmg/s to adjacent enemies"
 
   def adjacentDamageAndSlow(dmgPerSec: Double, slowPercent: Double, lang: Lang): String =
-    if lang == Lang.Fr then s"${decimal(dmgPerSec)} dégâts/sec aux ennemis adjacents, ralentis de ${decimal(slowPercent)}%"
+    if lang == Lang.Fr then
+      s"${decimal(dmgPerSec)} dégâts/sec aux ennemis adjacents, ralentis de ${decimal(slowPercent)}%"
     else s"${decimal(dmgPerSec)} dmg/s to adjacent enemies, slows them ${decimal(slowPercent)}%"
 
   def adjacentSlow(slowPercent: Double, lang: Lang): String =
@@ -265,7 +317,8 @@ object TooltipText:
     else s"slows adjacent enemies by ${decimal(slowPercent)}%"
 
   def rangedDamage(dmgPerSec: Double, rangeCells: Int, lang: Lang): String =
-    if lang == Lang.Fr then s"${decimal(dmgPerSec)} dégâts/sec à l'ennemi le plus proche jusqu'à $rangeCells cases"
+    if lang == Lang.Fr then
+      s"${decimal(dmgPerSec)} dégâts/sec à l'ennemi le plus proche jusqu'à $rangeCells cases"
     else s"${decimal(dmgPerSec)} dmg/s to the nearest enemy within $rangeCells cells"
 
   def passingGateAbility(dmgPerSec: Double, harvestPercent: Double, lang: Lang): String =
@@ -280,62 +333,76 @@ object TooltipText:
     if lang == Lang.Fr then "aucun bonus propre — améliorez-le en un labo spécifique ci-dessous"
     else "no bonus of its own — upgrade it into a specific lab below"
 
-  def noSpawnLabel(lang: Lang): String = if lang == Lang.Fr then "n'envoie aucune ressource" else "spawns no resource"
+  def noSpawnLabel(lang: Lang): String =
+    if lang == Lang.Fr then "n'envoie aucune ressource" else "spawns no resource"
 
   // ── Building "own ability" sentences — one entry per kind that has one, all static ───
 
-  private def upperFirst(text: String): String = if text.isEmpty then text else text.charAt(0).toUpper.toString + text.substring(1)
+  private def upperFirst(text: String): String =
+    if text.isEmpty then text else text.charAt(0).toUpper.toString + text.substring(1)
 
   private val groveUpgradeHint: I18nText =
     val forestFr = EntityNames.buildingName(BuildingKind.Forest, Lang.Fr)
     val forestEn = EntityNames.buildingName(BuildingKind.Forest, Lang.En)
     val jungleFr = EntityNames.buildingName(BuildingKind.Jungle, Lang.Fr)
     val jungleEn = EntityNames.buildingName(BuildingKind.Jungle, Lang.En)
-    I18nText(fr = s" Devient $forestFr puis $jungleFr en s'améliorant.", en = s" Upgrades into a $forestEn, then a $jungleEn.")
+    I18nText(
+      fr = s" Devient $forestFr puis $jungleFr en s'améliorant.",
+      en = s" Upgrades into a $forestEn, then a $jungleEn."
+    )
 
   private val watchtowerOwnAbility: I18nText =
     val dmg = decimal(Balance.WatchtowerDamagePerSec)
     I18nText(
-      fr = s" ${upperFirst(spawnsNothing(Lang.Fr))} — inflige plutôt $dmg dégâts/sec à l'ennemi le plus proche " +
-        s"jusqu'à ${Balance.WatchtowerRangeCells} cases",
-      en = s" ${upperFirst(spawnsNothing(Lang.En))} — instead inflicts $dmg dmg/s to the nearest enemy within " +
-        s"${Balance.WatchtowerRangeCells} cells"
+      fr =
+        s" ${upperFirst(spawnsNothing(Lang.Fr))} — inflige plutôt $dmg dégâts/sec à l'ennemi le plus proche " +
+          s"jusqu'à ${Balance.WatchtowerRangeCells} cases",
+      en =
+        s" ${upperFirst(spawnsNothing(Lang.En))} — instead inflicts $dmg dmg/s to the nearest enemy within " +
+          s"${Balance.WatchtowerRangeCells} cells"
     )
 
   private val angelOwnAbility: I18nText =
     val dmg = decimal(Balance.AngelDamagePerSec)
     val slow = decimal(Balance.AngelSlowFraction * 100)
     I18nText(
-      fr = s" ${upperFirst(spawnsNothing(Lang.Fr))} — inflige plutôt $dmg dégâts/sec aux unités adjacentes et " +
-        s"ralentit leur vitesse de $slow%",
-      en = s" ${upperFirst(spawnsNothing(Lang.En))} — instead inflicts $dmg dmg/s to adjacent enemies and slows " +
-        s"them by $slow%"
+      fr =
+        s" ${upperFirst(spawnsNothing(Lang.Fr))} — inflige plutôt $dmg dégâts/sec aux unités adjacentes et " +
+          s"ralentit leur vitesse de $slow%",
+      en =
+        s" ${upperFirst(spawnsNothing(Lang.En))} — instead inflicts $dmg dmg/s to adjacent enemies and slows " +
+          s"them by $slow%"
     )
 
   private val passingGateOwnAbility: I18nText =
     val dmg = decimal(Balance.PassingGateDamagePerSec)
     val harvest = decimal(Balance.PassingGateHarvestFraction * 100)
     I18nText(
-      fr = s" ${upperFirst(spawnsNothing(Lang.Fr))} — inflige $dmg dégâts/sec aux ennemis sur ses 4 cases " +
-        s"adjacentes, et récupère $harvest% du coût du bâtiment ayant produit toute unité qui meurt sur " +
-        "l'une de ces cases, en or",
-      en = s" ${upperFirst(spawnsNothing(Lang.En))} — inflicts $dmg dmg/s to enemies on its 4 adjacent cells, " +
-        s"and recovers $harvest% of the cost of the building that produced any unit that dies on one of " +
-        "those cells, in gold"
+      fr =
+        s" ${upperFirst(spawnsNothing(Lang.Fr))} — inflige $dmg dégâts/sec aux ennemis sur ses 4 cases " +
+          s"adjacentes, et récupère $harvest% du coût du bâtiment ayant produit toute unité qui meurt sur " +
+          "l'une de ces cases, en or",
+      en =
+        s" ${upperFirst(spawnsNothing(Lang.En))} — inflicts $dmg dmg/s to enemies on its 4 adjacent cells, " +
+          s"and recovers $harvest% of the cost of the building that produced any unit that dies on one of " +
+          "those cells, in gold"
     )
 
   private val stasisFieldOwnAbility: I18nText =
     val slow = decimal(Balance.StasisSlowFraction * 100)
     I18nText(
-      fr = s" ${upperFirst(spawnsNothing(Lang.Fr))} — ralentit plutôt les unités adjacentes de $slow%",
+      fr =
+        s" ${upperFirst(spawnsNothing(Lang.Fr))} — ralentit plutôt les unités adjacentes de $slow%",
       en = s" ${upperFirst(spawnsNothing(Lang.En))} — instead slows adjacent enemies by $slow%"
     )
 
   private val laboFondamentalOwnAbility: I18nText = I18nText(
-    fr = " sans bonus propre. Améliorez-le en un labo spécifique pour débloquer ses niveaux (niveau 1 gratuit, " +
-      "puis d'autres améliorations sur place) — un seul labo de chaque type spécifique par maze à la fois",
-    en = " with no bonus of its own. Upgrade it into a specific lab to unlock its levels (starting at a free " +
-      "level 1, then further upgrades in place) — only one lab of each specific kind per maze at a time"
+    fr =
+      " sans bonus propre. Améliorez-le en un labo spécifique pour débloquer ses niveaux (niveau 1 gratuit, " +
+        "puis d'autres améliorations sur place) — un seul labo de chaque type spécifique par maze à la fois",
+    en =
+      " with no bonus of its own. Upgrade it into a specific lab to unlock its levels (starting at a free " +
+        "level 1, then further upgrades in place) — only one lab of each specific kind per maze at a time"
   )
 
   // The extra sentence a building's own tooltip needs beyond cost/production/spawn —
@@ -352,4 +419,5 @@ object TooltipText:
     BuildingKind.StasisField -> stasisFieldOwnAbility
   )
 
-  def buildingOwnAbility(kind: BuildingKind, lang: Lang): String = buildingOwnAbilities.get(kind).fold("")(_(lang))
+  def buildingOwnAbility(kind: BuildingKind, lang: Lang): String =
+    buildingOwnAbilities.get(kind).fold("")(_(lang))

@@ -94,7 +94,8 @@ class VictoryConditionsTest extends munit.FunSuite:
   // yet, so it must not count toward "Nature's unstoppable expansion" even though it's
   // still Grove's own faction/upgrade-chain kin.
   test("a Grove does not count toward the forest target — it's a bush, not a forest yet") {
-    val groves = List.fill(Balance.NatureVictoryForestTarget)(Building(1, 1, 1, BuildingKind.Grove, 0.0))
+    val groves =
+      List.fill(Balance.NatureVictoryForestTarget)(Building(1, 1, 1, BuildingKind.Grove, 0.0))
     val battle =
       BattleState(player = MazeState.initial.copy(buildings = groves), ai = MazeState.initial)
     assertEquals(VictoryConditions.evaluate(battle), None)
@@ -114,13 +115,23 @@ class VictoryConditionsTest extends munit.FunSuite:
   // (Creature.kind alone can't say whose it is, but every creature in a maze's own
   // creature list is — by the game's own invariant — always "sent by the opponent of
   // that maze", so a Tree sitting in the AI's creatures list can only be the player's).
-  test("a Tree raiding the opponent's maze counts toward ITS OWNER's forest tally, not a bare building count") {
+  test(
+    "a Tree raiding the opponent's maze counts toward ITS OWNER's forest tally, not a bare building count"
+  ) {
     val raidingTrees = List.fill(Balance.NatureVictoryForestTarget)(
-      Creature(1, GridConfig.cellCenter(2, 2), Balance.TreeMaxHp, Balance.TreeMaxHp, 0.0, UnitKind.Tree)
+      Creature(
+        1,
+        GridConfig.cellCenter(2, 2),
+        Balance.TreeMaxHp,
+        Balance.TreeMaxHp,
+        0.0,
+        UnitKind.Tree
+      )
     )
     // The trees sit in the AI's OWN creature list (they crossed over to raid it) — the
     // player (who built the Stonehenge that sent them) still wins, not the AI.
-    val battle = BattleState(player = MazeState.initial, ai = MazeState.initial.copy(creatures = raidingTrees))
+    val battle =
+      BattleState(player = MazeState.initial, ai = MazeState.initial.copy(creatures = raidingTrees))
     assertEquals(
       VictoryConditions.evaluate(battle).map(_.isInstanceOf[MatchResult.PlayerWins]),
       Some(true)
@@ -131,9 +142,17 @@ class VictoryConditionsTest extends munit.FunSuite:
     // Same trees, but sitting in the player's own creature list this time — per the same
     // invariant, they must be the AI's raiders, so the AI (not the player) wins here.
     val raidingTrees = List.fill(Balance.NatureVictoryForestTarget)(
-      Creature(1, GridConfig.cellCenter(2, 2), Balance.TreeMaxHp, Balance.TreeMaxHp, 0.0, UnitKind.Tree)
+      Creature(
+        1,
+        GridConfig.cellCenter(2, 2),
+        Balance.TreeMaxHp,
+        Balance.TreeMaxHp,
+        0.0,
+        UnitKind.Tree
+      )
     )
-    val battle = BattleState(player = MazeState.initial.copy(creatures = raidingTrees), ai = MazeState.initial)
+    val battle =
+      BattleState(player = MazeState.initial.copy(creatures = raidingTrees), ai = MazeState.initial)
     assertEquals(
       VictoryConditions.evaluate(battle).map(_.isInstanceOf[MatchResult.AiWins]),
       Some(true)
@@ -142,7 +161,14 @@ class VictoryConditionsTest extends munit.FunSuite:
 
   test("real Forest buildings and raiding Trees add up together toward the same forest tally") {
     val raidingTrees = List.fill(Balance.NatureVictoryForestTarget - 1)(
-      Creature(1, GridConfig.cellCenter(2, 2), Balance.TreeMaxHp, Balance.TreeMaxHp, 0.0, UnitKind.Tree)
+      Creature(
+        1,
+        GridConfig.cellCenter(2, 2),
+        Balance.TreeMaxHp,
+        Balance.TreeMaxHp,
+        0.0,
+        UnitKind.Tree
+      )
     )
     val battle = BattleState(
       player = MazeState.initial.copy(buildings = List(forestBuilding(5, 5))),
@@ -176,7 +202,9 @@ class VictoryConditionsTest extends munit.FunSuite:
     )
   }
 
-  test("clearing the corruption floor isn't enough once the opponent has caught up: must double them too") {
+  test(
+    "clearing the corruption floor isn't enough once the opponent has caught up: must double them too"
+  ) {
     val battle = BattleState(
       player = MazeState.initial.copy(buildingsCorrupted = Balance.MortVictoryCorruptionTarget),
       ai = MazeState.initial.copy(buildingsCorrupted = Balance.MortVictoryCorruptionTarget / 2 + 1)
@@ -199,7 +227,10 @@ class VictoryConditionsTest extends munit.FunSuite:
   test("researching Sombres has no effect on the plunder or corruption targets either") {
     val researcher = MazeState.initial.copy(researchLevels = Map(BuildingKind.LaboSombre -> 5))
     assertEquals(VictoryConditions.plunderTarget(researcher), Balance.ChaosVictoryPlunderTarget)
-    assertEquals(VictoryConditions.corruptionTarget(researcher), Balance.MortVictoryCorruptionTarget)
+    assertEquals(
+      VictoryConditions.corruptionTarget(researcher),
+      Balance.MortVictoryCorruptionTarget
+    )
   }
 
   // ── Recherche fondamentale ─────────────────────────────────────────────
@@ -216,7 +247,8 @@ class VictoryConditionsTest extends munit.FunSuite:
     )
     assertEquals(VictoryConditions.hasWonViaFondamentale(almost), false)
 
-    val complete = almost.copy(researchLevels = almost.researchLevels.updated(BuildingKind.LaboDuChaos, 5))
+    val complete =
+      almost.copy(researchLevels = almost.researchLevels.updated(BuildingKind.LaboDuChaos, 5))
     assertEquals(VictoryConditions.hasWonViaFondamentale(complete), true)
   }
 
@@ -285,7 +317,9 @@ class VictoryConditionsTest extends munit.FunSuite:
     assertEquals(VictoryConditions.fondamentaleReadyLabCount(state), 0)
   }
 
-  test("fondamentaleReadyLabCount counts exactly how many of the other 4 labs meet the CURRENT level's required depth") {
+  test(
+    "fondamentaleReadyLabCount counts exactly how many of the other 4 labs meet the CURRENT level's required depth"
+  ) {
     val state = MazeState.initial.copy(
       researchLevels = Map(
         BuildingKind.LaboDeRecherche -> 1, // requires every other lab at level 5
@@ -309,4 +343,173 @@ class VictoryConditionsTest extends munit.FunSuite:
       )
     )
     assertEquals(VictoryConditions.fondamentaleReadyLabCount(state), 3)
+  }
+
+  // ── Loi: Paix Éternelle (Victoire.md's "W" condition) ───────────────────
+  // Unlike the other 4, this isn't a race against a floor/opponent-multiplier target: it's
+  // a sudden-death comparison that only starts once Balance.LoiVictoryTickThreshold ticks
+  // have passed, at which point whoever has strictly more Loi buildings (Church/
+  // Watchtower/Angel/Barracks) wins — no minimum floor, even 1 vs 0 counts.
+
+  private def loiBuilding(id: Long, kind: BuildingKind): Building =
+    Building(
+      id,
+      col = id.toInt % GridConfig.cols,
+      row = 1 + (id.toInt / GridConfig.cols),
+      kind,
+      spawnCountdownMs = 0.0
+    )
+
+  test("no Loi win before the tick threshold, even with a lopsided building count") {
+    val battle = BattleState(
+      player = MazeState.initial.copy(buildings = List(loiBuilding(1, BuildingKind.Church))),
+      ai = MazeState.initial,
+      elapsedTicks = Balance.LoiVictoryTickThreshold - 1
+    )
+    assertEquals(VictoryConditions.evaluate(battle), None)
+  }
+
+  test(
+    "player wins via Loi with even 1 Loi building vs 0, once at the tick threshold (no minimum floor)"
+  ) {
+    val battle = BattleState(
+      player = MazeState.initial.copy(buildings = List(loiBuilding(1, BuildingKind.Church))),
+      ai = MazeState.initial,
+      elapsedTicks = Balance.LoiVictoryTickThreshold
+    )
+    assertEquals(
+      VictoryConditions.evaluate(battle).map(_.isInstanceOf[MatchResult.PlayerWins]),
+      Some(true)
+    )
+  }
+
+  test("the AI can also win via Loi (symmetric)") {
+    val battle = BattleState(
+      player = MazeState.initial,
+      ai = MazeState.initial.copy(buildings = List(loiBuilding(1, BuildingKind.Watchtower))),
+      elapsedTicks = Balance.LoiVictoryTickThreshold
+    )
+    assertEquals(
+      VictoryConditions.evaluate(battle).map(_.isInstanceOf[MatchResult.AiWins]),
+      Some(true)
+    )
+  }
+
+  test(
+    "a tie at the threshold does not resolve, and stays unresolved as more ticks pass while still tied"
+  ) {
+    val tiedBuildings = List(loiBuilding(1, BuildingKind.Church))
+    val atThreshold = BattleState(
+      player = MazeState.initial.copy(buildings = tiedBuildings),
+      ai = MazeState.initial.copy(buildings = List(loiBuilding(2, BuildingKind.Watchtower))),
+      elapsedTicks = Balance.LoiVictoryTickThreshold
+    )
+    assertEquals(VictoryConditions.evaluate(atThreshold), None)
+    val muchLater = atThreshold.copy(elapsedTicks = Balance.LoiVictoryTickThreshold + 500)
+    assertEquals(VictoryConditions.evaluate(muchLater), None)
+  }
+
+  test("a tie that later breaks resolves once one side pulls strictly ahead") {
+    val playerAhead = BattleState(
+      player = MazeState.initial.copy(buildings =
+        List(loiBuilding(1, BuildingKind.Church), loiBuilding(2, BuildingKind.Angel))
+      ),
+      ai = MazeState.initial.copy(buildings = List(loiBuilding(3, BuildingKind.Watchtower))),
+      elapsedTicks = Balance.LoiVictoryTickThreshold + 500
+    )
+    assertEquals(
+      VictoryConditions.evaluate(playerAhead).map(_.isInstanceOf[MatchResult.PlayerWins]),
+      Some(true)
+    )
+  }
+
+  test("loiBuildingCount counts Church/Watchtower/Angel/Barracks but not PassingGate") {
+    val state = MazeState.initial.copy(
+      buildings = List(
+        loiBuilding(1, BuildingKind.Church),
+        loiBuilding(2, BuildingKind.Watchtower),
+        loiBuilding(3, BuildingKind.Angel),
+        loiBuilding(4, BuildingKind.Barracks),
+        loiBuilding(5, BuildingKind.PassingGate)
+      )
+    )
+    assertEquals(VictoryConditions.loiBuildingCount(state), 4)
+  }
+
+  test("winReason names Loi's eternal peace when that's the branch that decided the match") {
+    val battle = BattleState(
+      player = MazeState.initial.copy(buildings = List(loiBuilding(1, BuildingKind.Church))),
+      ai = MazeState.initial,
+      elapsedTicks = Balance.LoiVictoryTickThreshold
+    )
+    val reason = VictoryConditions.evaluate(battle).map(_.reason).getOrElse("")
+    assert(reason.contains("Loi"), s"expected the win reason to mention Loi, got: $reason")
+  }
+
+  // ── winningCondition ─────────────────────────────────────────────────────
+  // A structured counterpart to winReason's prose, sharing the exact same branch
+  // precedence (forest, then plunder, then corruption, then Loi, then fondamentale) — see
+  // its own doc. Exists so callers that need to know WHICH condition decided a match (the
+  // rock-paper-scissors regression test in sim, most obviously) don't have to parse an
+  // English sentence meant for a match log.
+
+  test("winningCondition reports Nature when the forest target decided the match") {
+    val forests = List.fill(Balance.NatureVictoryForestTarget)(forestBuilding(2, 2))
+    val battle =
+      BattleState(player = MazeState.initial.copy(buildings = forests), ai = MazeState.initial)
+    assertEquals(
+      VictoryConditions.winningCondition(battle.player, battle.ai, battle),
+      VictoryConditions.WinCondition.Nature
+    )
+  }
+
+  test("winningCondition reports Chaos when the plunder target decided the match") {
+    val battle = BattleState(
+      player = MazeState.initial.copy(resourcesPlundered = Balance.ChaosVictoryPlunderTarget),
+      ai = MazeState.initial
+    )
+    assertEquals(
+      VictoryConditions.winningCondition(battle.player, battle.ai, battle),
+      VictoryConditions.WinCondition.Chaos
+    )
+  }
+
+  test("winningCondition reports Mort when the corruption target decided the match") {
+    val battle = BattleState(
+      player = MazeState.initial.copy(buildingsCorrupted = Balance.MortVictoryCorruptionTarget),
+      ai = MazeState.initial
+    )
+    assertEquals(
+      VictoryConditions.winningCondition(battle.player, battle.ai, battle),
+      VictoryConditions.WinCondition.Mort
+    )
+  }
+
+  test("winningCondition reports Loi when the sudden-death building count decided the match") {
+    val battle = BattleState(
+      player = MazeState.initial.copy(buildings = List(loiBuilding(1, BuildingKind.Church))),
+      ai = MazeState.initial,
+      elapsedTicks = Balance.LoiVictoryTickThreshold
+    )
+    assertEquals(
+      VictoryConditions.winningCondition(battle.player, battle.ai, battle),
+      VictoryConditions.WinCondition.Loi
+    )
+  }
+
+  test("winningCondition reports Science when the fondamentale research decided the match") {
+    val winner = MazeState.initial.copy(
+      researchLevels = Map(
+        BuildingKind.LaboDeRecherche -> 5,
+        BuildingKind.LaboNaturel -> 1,
+        BuildingKind.LaboSombre -> 1,
+        BuildingKind.LaboDeLaLoi -> 1,
+        BuildingKind.LaboDuChaos -> 1
+      )
+    )
+    val battle = BattleState(player = MazeState.initial, ai = winner)
+    assertEquals(
+      VictoryConditions.winningCondition(battle.ai, battle.player, battle),
+      VictoryConditions.WinCondition.Science
+    )
   }

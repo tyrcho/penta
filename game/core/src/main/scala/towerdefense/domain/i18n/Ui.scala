@@ -40,8 +40,10 @@ object Ui:
   def wood(lang: Lang): String = EntityNames.resourceName(towerdefense.domain.Resource.Wood, lang)
   def fire(lang: Lang): String = EntityNames.resourceName(towerdefense.domain.Resource.Fire, lang)
   def light(lang: Lang): String = EntityNames.resourceName(towerdefense.domain.Resource.Light, lang)
-  def shadow(lang: Lang): String = EntityNames.resourceName(towerdefense.domain.Resource.Shadow, lang)
-  def crystal(lang: Lang): String = EntityNames.resourceName(towerdefense.domain.Resource.Crystal, lang)
+  def shadow(lang: Lang): String =
+    EntityNames.resourceName(towerdefense.domain.Resource.Shadow, lang)
+  def crystal(lang: Lang): String =
+    EntityNames.resourceName(towerdefense.domain.Resource.Crystal, lang)
   def gold(lang: Lang): String = EntityNames.resourceName(towerdefense.domain.Resource.Gold, lang)
 
   def natureTitle(lang: Lang): String = lang match

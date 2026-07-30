@@ -19,7 +19,10 @@ class BuildingSpecsTest extends munit.FunSuite:
     val grove = BuildingSpecs.all(BuildingKind.Grove).tier
     val forest = BuildingSpecs.all(BuildingKind.Forest).tier
     val jungle = BuildingSpecs.all(BuildingKind.Jungle).tier
-    assert(grove < forest && forest <= jungle, s"expected grove < forest <= jungle, got $grove, $forest, $jungle")
+    assert(
+      grove < forest && forest <= jungle,
+      s"expected grove < forest <= jungle, got $grove, $forest, $jungle"
+    )
   }
 
   test("buildings costing the same within a faction land in the same tier (the 5 specific labs)") {
@@ -41,7 +44,9 @@ class BuildingSpecsTest extends munit.FunSuite:
       BuildingKind.PassingGate,
       BuildingKind.Watchtower
     )
-    noCombat.foreach(kind => assertEquals(BuildingSpecs.all(kind).dps, 0.0, s"$kind should have no dps"))
+    noCombat.foreach(kind =>
+      assertEquals(BuildingSpecs.all(kind).dps, 0.0, s"$kind should have no dps")
+    )
   }
 
   test("dps matches the same Balance constant CombatEngine deals in a real match") {
@@ -58,4 +63,14 @@ class BuildingSpecsTest extends munit.FunSuite:
     }
     val everyTarget = BuildingSpecs.upgradeOptions.values.flatten.toSet
     assertEquals(BuildingSpecs.upgradeFrom.keySet, everyTarget)
+  }
+
+  // AiStrategy.upgradeAnyAffordable always takes the first affordable target in this list
+  // — LawSpending's own rush relies on LaboDeLaLoi being tried first (see its own doc), not
+  // just present somewhere in the 5.
+  test("LaboFondamental's upgrade options try LaboDeLaLoi first") {
+    assertEquals(
+      BuildingSpecs.upgradeOptions(BuildingKind.LaboFondamental).head,
+      BuildingKind.LaboDeLaLoi
+    )
   }

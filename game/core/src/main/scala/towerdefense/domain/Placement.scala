@@ -39,7 +39,13 @@ object Placement:
       row: Int,
       nonBlocking: Set[(Int, Int)]
   ): Either[PlacementError, MazeState] =
-    tryPlaceBuildingKnowingReachability(state, kind, col, row, blocksPath = !nonBlocking.contains((col, row)))
+    tryPlaceBuildingKnowingReachability(
+      state,
+      kind,
+      col,
+      row,
+      blocksPath = !nonBlocking.contains((col, row))
+    )
 
   // Every cell where placing *something* wouldn't seal the only route from spawn to goal —
   // kind-independent, see tryPlaceBuildingCached's doc. Cheap checks (occupied, etc.) are
@@ -76,7 +82,11 @@ object Placement:
   // of this maze's Naturelles level. Research costs themselves are exempt (see
   // Balance.NaturellesCostReductionByLevel's doc): callers computing a *research* cost use
   // spec.costAtLevel directly, not this.
-  private[domain] def effectiveCost(state: MazeState, kind: BuildingKind, baseCost: Map[Resource, Double]): Map[Resource, Double] =
+  private[domain] def effectiveCost(
+      state: MazeState,
+      kind: BuildingKind,
+      baseCost: Map[Resource, Double]
+  ): Map[Resource, Double] =
     val level = state.researchLevels.getOrElse(BuildingKind.LaboNaturel, 0)
     if level <= 0 || EntityNames.buildingInfo(kind).faction != Faction.Nature then baseCost
     else
@@ -86,10 +96,15 @@ object Placement:
   // Science's five labs cap at one each (Note sur les laboratoires.md: "Il n'est possible
   // de controler qu'un seul laboratoire de chaque type") — every other kind has
   // maxPerMaze = None and is unrestricted.
-  private def checkMaxCount(state: MazeState, kind: BuildingKind, spec: BuildingSpec): Either[PlacementError, Unit] =
+  private def checkMaxCount(
+      state: MazeState,
+      kind: BuildingKind,
+      spec: BuildingSpec
+  ): Either[PlacementError, Unit] =
     spec.maxPerMaze match
-      case Some(max) => Either.cond(state.buildings.count(_.kind == kind) < max, (), PlacementError.MaxCountReached)
-      case None       => Right(())
+      case Some(max) =>
+        Either.cond(state.buildings.count(_.kind == kind) < max, (), PlacementError.MaxCountReached)
+      case None => Right(())
 
   // Upgrades whatever building already sits at (col, row) to a next tier from
   // BuildingSpecs.upgradeOptions (Grove -> Forest -> Jungle's single-option chain, or
@@ -116,12 +131,14 @@ object Placement:
       targetKind: Option[BuildingKind] = None
   ): Either[PlacementError, MazeState] =
     for
-      building <- state.buildings.find(b => b.col == col && b.row == row).toRight(PlacementError.NoBuildingThere)
+      building <- state.buildings
+        .find(b => b.col == col && b.row == row)
+        .toRight(PlacementError.NoBuildingThere)
       options = BuildingSpecs.upgradeOptions.getOrElse(building.kind, Nil)
       chosenKind <- (targetKind match
-        case Some(kind)          => Option.when(options.contains(kind))(kind)
+        case Some(kind)                => Option.when(options.contains(kind))(kind)
         case None if options.size == 1 => options.headOption
-        case None                => None
+        case None                      => None
       ).toRight(PlacementError.NoUpgradeAvailable)
       targetSpec = BuildingSpecs.all(chosenKind)
       _ <- checkMaxCount(state, chosenKind, targetSpec)
@@ -141,7 +158,11 @@ object Placement:
     val cost = spec.costAtLevel(currentLevel + 1)
     for
       _ <- Either.cond(state.buildings.exists(_.kind == labKind), (), PlacementError.LabNotOwned)
-      _ <- Either.cond(currentLevel < Balance.MaxResearchLevel, (), PlacementError.MaxResearchLevelReached)
+      _ <- Either.cond(
+        currentLevel < Balance.MaxResearchLevel,
+        (),
+        PlacementError.MaxResearchLevelReached
+      )
       _ <- Either.cond(canAfford(state.resources, cost), (), PlacementError.InsufficientResources)
     yield state.copy(
       resources = debit(state.resources, cost),
@@ -160,7 +181,9 @@ object Placement:
   // a payment method, not a price ingredient) — this still behaves sanely even if one did
   // (Gold's own "shortfall" would just draw further Gold), but nothing enforces that today.
   def canAfford(resources: Map[Resource, Double], cost: Map[Resource, Double]): Boolean =
-    val shortfall = cost.map { case (res, amount) => math.max(0.0, amount - resources.getOrElse(res, 0.0)) }.sum
+    val shortfall = cost.map { case (res, amount) =>
+      math.max(0.0, amount - resources.getOrElse(res, 0.0))
+    }.sum
     shortfall <= resources.getOrElse(Resource.Gold, 0.0)
 
   // Bounds/spawn-goal/occupied only — the expensive wouldBlockPath BFS is checked
@@ -237,7 +260,10 @@ object Placement:
     )
     val researchLevels =
       if ResearchSpecs.all.contains(nextKind) then
-        state.researchLevels.updated(nextKind, math.max(state.researchLevels.getOrElse(nextKind, 0), 1))
+        state.researchLevels.updated(
+          nextKind,
+          math.max(state.researchLevels.getOrElse(nextKind, 0), 1)
+        )
       else state.researchLevels
     state.copy(
       buildings = upgraded :: state.buildings.filterNot(_.id == building.id),
@@ -250,14 +276,22 @@ object Placement:
   // doc), keyed by what the cost actually names — deliberately independent of debit below,
   // which is the one that decides how much of that same payment actually came out of Gold
   // vs the named resource; that split never reaches this tally.
-  private def accumulateSpend(spent: Map[Resource, Double], cost: Map[Resource, Double]): Map[Resource, Double] =
-    cost.foldLeft(spent) { case (acc, (res, amount)) => acc.updated(res, acc.getOrElse(res, 0.0) + amount) }
+  private def accumulateSpend(
+      spent: Map[Resource, Double],
+      cost: Map[Resource, Double]
+  ): Map[Resource, Double] =
+    cost.foldLeft(spent) { case (acc, (res, amount)) =>
+      acc.updated(res, acc.getOrElse(res, 0.0) + amount)
+    }
 
   // Mirrors canAfford's own joker math per resource: spend as much of the named resource
   // as is on hand first, then draw any remaining shortfall from Gold — never negative on
   // the named resource itself (canAfford already guaranteed enough combined Wood+Gold, so
   // Gold's own balance can't go negative here either, assuming the caller checked first).
-  private def debit(resources: Map[Resource, Double], cost: Map[Resource, Double]): Map[Resource, Double] =
+  private def debit(
+      resources: Map[Resource, Double],
+      cost: Map[Resource, Double]
+  ): Map[Resource, Double] =
     cost.foldLeft(resources) { case (acc, (res, amount)) =>
       val have = acc.getOrElse(res, 0.0)
       val direct = math.min(have, amount)

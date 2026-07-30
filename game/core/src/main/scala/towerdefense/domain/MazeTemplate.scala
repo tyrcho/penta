@@ -49,14 +49,12 @@ object MazeTemplate:
     val wallSet = walls.toSet
     (0 until rows)
       .map { r =>
-        (0 until cols)
-          .map { c =>
-            val cell = (c, r)
-            if cell == spawn then 'S'
-            else if cell == goal then 'G'
-            else if wallSet.contains(cell) then 'x'
-            else '.'
-          }
-          .mkString
+        (0 until cols).map { c =>
+          val cell = (c, r)
+          if cell == spawn then 'S'
+          else if cell == goal then 'G'
+          else if wallSet.contains(cell) then 'x'
+          else '.'
+        }.mkString
       }
       .mkString("\n")

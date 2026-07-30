@@ -62,16 +62,33 @@ object EntityText:
       spawnLine(UnitKind.Goblin, Balance.GoblinSpawnIntervalMs, faction(BuildingKind.Cave))
     ),
     BuildingKind.Labyrinth ->
-      I18nText.combine(spawnLine(UnitKind.Minotaur, Balance.MinotaurSpawnIntervalMs, faction(BuildingKind.Labyrinth))),
+      I18nText.combine(
+        spawnLine(
+          UnitKind.Minotaur,
+          Balance.MinotaurSpawnIntervalMs,
+          faction(BuildingKind.Labyrinth)
+        )
+      ),
     // No production at all — like Labyrinth, its value is purely the Dragon it spawns.
     BuildingKind.DragonsLair ->
-      I18nText.combine(spawnLine(UnitKind.Dragon, Balance.DragonSpawnIntervalMs, faction(BuildingKind.DragonsLair))),
+      I18nText.combine(
+        spawnLine(UnitKind.Dragon, Balance.DragonSpawnIntervalMs, faction(BuildingKind.DragonsLair))
+      ),
+    // Unlike Labyrinth/DragonsLair, still produces Fire (same as Cave) on top of the Orc it spawns.
+    BuildingKind.WarCamp -> I18nText.combine(
+      produceLine(Resource.Fire, Balance.FirePerSecPerWarCamp, faction(BuildingKind.WarCamp)),
+      spawnLine(UnitKind.Orc, Balance.OrcSpawnIntervalMs, faction(BuildingKind.WarCamp))
+    ),
     BuildingKind.Church -> I18nText.combine(
       produceLine(Resource.Light, Balance.LightPerSecPerEglise, faction(BuildingKind.Church)),
       spawnLine(UnitKind.Paladin, Balance.PaladinSpawnIntervalMs, faction(BuildingKind.Church))
     ),
     BuildingKind.Watchtower -> I18nText.combine(
-      produceLine(Resource.Light, Balance.LightPerSecPerWatchtower, faction(BuildingKind.Watchtower)),
+      produceLine(
+        Resource.Light,
+        Balance.LightPerSecPerWatchtower,
+        faction(BuildingKind.Watchtower)
+      ),
       watchtowerAbilityLine
     ),
     BuildingKind.Angel -> I18nText.combine(
@@ -87,24 +104,55 @@ object EntityText:
       spawnLine(UnitKind.Zombie, Balance.ZombieSpawnIntervalMs, faction(BuildingKind.Tomb))
     ),
     BuildingKind.BlackCastle -> I18nText.combine(
-      produceLine(Resource.Shadow, Balance.ShadowPerSecPerBlackCastle, faction(BuildingKind.BlackCastle)),
+      produceLine(
+        Resource.Shadow,
+        Balance.ShadowPerSecPerBlackCastle,
+        faction(BuildingKind.BlackCastle)
+      ),
       spawnLine(UnitKind.Vampire, Balance.VampireSpawnIntervalMs, faction(BuildingKind.BlackCastle))
     ),
     BuildingKind.DeathHouse -> I18nText.combine(
-      produceLine(Resource.Shadow, Balance.ShadowPerSecPerDeathHouse, faction(BuildingKind.DeathHouse)),
-      spawnLine(UnitKind.Necromancer, Balance.NecromancerSpawnIntervalMs, faction(BuildingKind.DeathHouse))
+      produceLine(
+        Resource.Shadow,
+        Balance.ShadowPerSecPerDeathHouse,
+        faction(BuildingKind.DeathHouse)
+      ),
+      spawnLine(
+        UnitKind.Necromancer,
+        Balance.NecromancerSpawnIntervalMs,
+        faction(BuildingKind.DeathHouse)
+      )
     ),
     BuildingKind.PassingGate -> passingGateBody,
     BuildingKind.LaboFondamental -> laboFondamentalBody,
     BuildingKind.StasisField -> I18nText.combine(
-      produceLine(Resource.Crystal, Balance.CrystalPerSecPerStasisField, faction(BuildingKind.StasisField)),
+      produceLine(
+        Resource.Crystal,
+        Balance.CrystalPerSecPerStasisField,
+        faction(BuildingKind.StasisField)
+      ),
       stasisAbilityLine
     ),
-    BuildingKind.LaboNaturel -> specificLabBody(BuildingKind.LaboNaturel, Balance.CrystalPerSecPerLaboNaturel),
-    BuildingKind.LaboSombre -> specificLabBody(BuildingKind.LaboSombre, Balance.CrystalPerSecPerLaboSombre),
-    BuildingKind.LaboDeRecherche -> specificLabBody(BuildingKind.LaboDeRecherche, Balance.CrystalPerSecPerLaboDeRecherche),
-    BuildingKind.LaboDeLaLoi -> specificLabBody(BuildingKind.LaboDeLaLoi, Balance.CrystalPerSecPerLaboDeLaLoi),
-    BuildingKind.LaboDuChaos -> specificLabBody(BuildingKind.LaboDuChaos, Balance.CrystalPerSecPerLaboDuChaos)
+    BuildingKind.LaboNaturel -> specificLabBody(
+      BuildingKind.LaboNaturel,
+      Balance.CrystalPerSecPerLaboNaturel
+    ),
+    BuildingKind.LaboSombre -> specificLabBody(
+      BuildingKind.LaboSombre,
+      Balance.CrystalPerSecPerLaboSombre
+    ),
+    BuildingKind.LaboDeRecherche -> specificLabBody(
+      BuildingKind.LaboDeRecherche,
+      Balance.CrystalPerSecPerLaboDeRecherche
+    ),
+    BuildingKind.LaboDeLaLoi -> specificLabBody(
+      BuildingKind.LaboDeLaLoi,
+      Balance.CrystalPerSecPerLaboDeLaLoi
+    ),
+    BuildingKind.LaboDuChaos -> specificLabBody(
+      BuildingKind.LaboDuChaos,
+      Balance.CrystalPerSecPerLaboDuChaos
+    )
   )
 
   private def stonehengeBody: I18nText =
@@ -126,17 +174,21 @@ object EntityText:
     )
 
   private def watchtowerAbilityLine: I18nText = I18nText(
-    fr = s"N'envoie aucune unité. Inflige ${decimal(Balance.WatchtowerDamagePerSec)} dégâts par seconde à " +
-      s"l'ennemi le plus proche jusqu'à ${Balance.WatchtowerRangeCells} cases de distance.",
-    en = s"Spawns no unit. Deals ${decimal(Balance.WatchtowerDamagePerSec)} damage per second to the " +
-      s"nearest enemy within ${Balance.WatchtowerRangeCells} cells."
+    fr =
+      s"N'envoie aucune unité. Inflige ${decimal(Balance.WatchtowerDamagePerSec)} dégâts par seconde à " +
+        s"l'ennemi le plus proche jusqu'à ${Balance.WatchtowerRangeCells} cases de distance.",
+    en =
+      s"Spawns no unit. Deals ${decimal(Balance.WatchtowerDamagePerSec)} damage per second to the " +
+        s"nearest enemy within ${Balance.WatchtowerRangeCells} cells."
   )
 
   private def angelAbilityLine: I18nText = I18nText(
-    fr = s"N'envoie aucune unité. Inflige ${decimal(Balance.AngelDamagePerSec)} dégâts par seconde aux " +
-      s"unités adjacentes, et ralentit leur vitesse de déplacement de ${percentPoints(Balance.AngelSlowFraction * 100)}.",
-    en = s"Spawns no unit. Deals ${decimal(Balance.AngelDamagePerSec)} damage per second to adjacent " +
-      s"units, and slows their movement speed by ${percentPoints(Balance.AngelSlowFraction * 100)}."
+    fr =
+      s"N'envoie aucune unité. Inflige ${decimal(Balance.AngelDamagePerSec)} dégâts par seconde aux " +
+        s"unités adjacentes, et ralentit leur vitesse de déplacement de ${percentPoints(Balance.AngelSlowFraction * 100)}.",
+    en =
+      s"Spawns no unit. Deals ${decimal(Balance.AngelDamagePerSec)} damage per second to adjacent " +
+        s"units, and slows their movement speed by ${percentPoints(Balance.AngelSlowFraction * 100)}."
   )
 
   private def stasisAbilityLine: I18nText = I18nText(
@@ -180,10 +232,24 @@ object EntityText:
     val labLinksEn = specificLabs.map(EntityNames.buildingLink(f, _, Lang.En)).mkString(", ")
     val crystalLinkFr = EntityNames.resourceLink(f, Resource.Crystal, Lang.Fr)
     val crystalLinkEn = EntityNames.resourceLink(f, Resource.Crystal, Lang.En)
-    val notePageFr = EntityNames.outOfScopeLink("Note sur les laboratoires", f, Faction.Science, "Note sur les laboratoires.md", Lang.Fr)
-    val notePageEn = EntityNames.outOfScopeLink("Note on labs", f, Faction.Science, "Note sur les laboratoires.md", Lang.En)
+    val notePageFr = EntityNames.outOfScopeLink(
+      "Note sur les laboratoires",
+      f,
+      Faction.Science,
+      "Note sur les laboratoires.md",
+      Lang.Fr
+    )
+    val notePageEn = EntityNames.outOfScopeLink(
+      "Note on labs",
+      f,
+      Faction.Science,
+      "Note sur les laboratoires.md",
+      Lang.En
+    )
     val growthPerLevel = percentPoints(Balance.LaboSizeGrowthPerResearchLevel * 100)
-    val growthAtMax = percentPoints(Balance.LaboSizeGrowthPerResearchLevel * Balance.MaxResearchLevel * 100)
+    val growthAtMax = percentPoints(
+      Balance.LaboSizeGrowthPerResearchLevel * Balance.MaxResearchLevel * 100
+    )
     I18nText(
       fr = s(
         "Le seul bâtiment de Science constructible directement — un laboratoire générique, sans bonus propre.",
@@ -232,7 +298,8 @@ object EntityText:
     def crystalPerSecAtLevel(level: Int): Double =
       crystalPerSec * math.pow(1.0 + Balance.LaboCrystalBoostPerResearchLevel, level.toDouble)
     def row(level: Int, lang: Lang): String =
-      val effect = TooltipText.researchEffectSummary(kind, ResearchSpecs.magnitudeAtLevel(kind, level), lang)
+      val effect =
+        TooltipText.researchEffectSummary(kind, ResearchSpecs.magnitudeAtLevel(kind, level), lang)
       s"| $level | ${costCell(level, lang)} | ${decimal(crystalPerSecAtLevel(level))} | $effect |"
     val tableFr =
       (
@@ -264,8 +331,10 @@ object EntityText:
     )
 
   private def produceLine(resource: Resource, perSec: Double, from: Faction): I18nText = I18nText(
-    fr = s"Produit ${decimal(perSec)} ${EntityNames.resourceLink(from, resource, Lang.Fr)} par seconde.",
-    en = s"Produces ${decimal(perSec)} ${EntityNames.resourceLink(from, resource, Lang.En)} per second."
+    fr =
+      s"Produit ${decimal(perSec)} ${EntityNames.resourceLink(from, resource, Lang.Fr)} par seconde.",
+    en =
+      s"Produces ${decimal(perSec)} ${EntityNames.resourceLink(from, resource, Lang.En)} per second."
   )
 
   // Every unit kind a building spawns happens to be grammatically masculine in French
@@ -274,8 +343,10 @@ object EntityText:
   private def spawnLine(unit: UnitKind, intervalMs: Double, from: Faction): I18nText =
     val article = englishIndefiniteArticle(EntityNames.unitName(unit, Lang.En))
     I18nText(
-      fr = s"Toutes les ${seconds(intervalMs)} secondes, génère un ${EntityNames.unitLink(from, unit, Lang.Fr)}.",
-      en = s"Every ${seconds(intervalMs)} seconds, spawns $article ${EntityNames.unitLink(from, unit, Lang.En)}."
+      fr =
+        s"Toutes les ${seconds(intervalMs)} secondes, génère un ${EntityNames.unitLink(from, unit, Lang.Fr)}.",
+      en =
+        s"Every ${seconds(intervalMs)} seconds, spawns $article ${EntityNames.unitLink(from, unit, Lang.En)}."
     )
 
   private def englishIndefiniteArticle(name: String): String =
@@ -293,19 +364,25 @@ object EntityText:
     )
 
   private def entAuraLine(dmgPerSec: Double): I18nText = I18nText(
-    fr = s"Contient des Ents qui attaquent les unités passant sur les cases adjacentes pour ${decimal(dmgPerSec)} dégâts/sec.",
-    en = s"Home to Ents that deal ${decimal(dmgPerSec)} damage/sec to units passing on adjacent cells."
+    fr =
+      s"Contient des Ents qui attaquent les unités passant sur les cases adjacentes pour ${decimal(dmgPerSec)} dégâts/sec.",
+    en =
+      s"Home to Ents that deal ${decimal(dmgPerSec)} damage/sec to units passing on adjacent cells."
   )
 
   private def groveHealLine(healPercentPerSec: Double, from: Faction): I18nText =
-    val corruptionLinkFr = EntityNames.outOfScopeLink("Corruption", from, Faction.Mort, "Corruption.md", Lang.Fr)
-    val corruptionLinkEn = EntityNames.outOfScopeLink("Corruption", from, Faction.Mort, "Corruption.md", Lang.En)
+    val corruptionLinkFr =
+      EntityNames.outOfScopeLink("Corruption", from, Faction.Mort, "Corruption.md", Lang.Fr)
+    val corruptionLinkEn =
+      EntityNames.outOfScopeLink("Corruption", from, Faction.Mort, "Corruption.md", Lang.En)
     val healText = percentPoints(healPercentPerSec)
     I18nText(
-      fr = s"Soigne la corruption (voir $corruptionLinkFr) de lui-même et des 8 bâtiments environnants de " +
-        s"$healText par seconde.",
-      en = s"Heals corruption (see $corruptionLinkEn) on itself and the 8 surrounding buildings by " +
-        s"$healText per second."
+      fr =
+        s"Soigne la corruption (voir $corruptionLinkFr) de lui-même et des 8 bâtiments environnants de " +
+          s"$healText par seconde.",
+      en =
+        s"Heals corruption (see $corruptionLinkEn) on itself and the 8 surrounding buildings by " +
+          s"$healText per second."
     )
 
   // ── Units ────────────────────────────────────────────────────────────────
@@ -327,14 +404,18 @@ object EntityText:
     ),
     UnitKind.Minotaur -> I18nText.combine(
       spawnedByLine(BuildingKind.Labyrinth, faction(UnitKind.Minotaur)),
-      plunderLine(List(Resource.Gold -> 2 * Balance.MinotaurPlunderPerUnit), faction(UnitKind.Minotaur))
+      plunderLine(
+        List(Resource.Gold -> 2 * Balance.MinotaurPlunderPerUnit),
+        faction(UnitKind.Minotaur)
+      )
     ),
     UnitKind.Dragon -> I18nText.combine(
       spawnedByLine(BuildingKind.DragonsLair, faction(UnitKind.Dragon)),
       dragonSpeedLine,
       plunderLine(List(Resource.Gold -> Balance.DragonPlunderGold), faction(UnitKind.Dragon))
     ),
-    UnitKind.Paladin -> I18nText.combine(spawnedByLine(BuildingKind.Church, faction(UnitKind.Paladin)), paladinAuraLine),
+    UnitKind.Paladin -> I18nText
+      .combine(spawnedByLine(BuildingKind.Church, faction(UnitKind.Paladin)), paladinAuraLine),
     UnitKind.Soldier -> I18nText.combine(
       spawnedByLine(BuildingKind.Barracks, faction(UnitKind.Soldier)),
       soldierCloseRanksLine
@@ -348,31 +429,49 @@ object EntityText:
     ),
     UnitKind.Vampire -> vampireBody,
     UnitKind.Necromancer -> necromancerBody,
-    UnitKind.Soul -> soulBody
+    UnitKind.Soul -> soulBody,
+    UnitKind.Orc -> I18nText.combine(
+      spawnedByLine(BuildingKind.WarCamp, faction(UnitKind.Orc)),
+      plunderLine(List(Resource.Gold -> Balance.OrcPlunderPerUnit), faction(UnitKind.Orc)),
+      orcCheatsDeathLine
+    )
   )
 
   private def elfSwarmTacticsLine: I18nText =
     val bonus = percentPoints(Balance.ElfHpBonusPerAlly * 100)
     I18nText(
-      fr = s"« Tactique de meute » : gagne $bonus de PV en plus pour chaque autre Elfe déjà présent dans le " +
-        "labyrinthe adverse qu'il s'apprête à envahir, fixé une fois pour toutes à sa création.",
-      en = s"\"Swarm tactics\": gains $bonus extra HP for every other Elf already in the opposing maze it's " +
-        "about to raid, fixed once and for all when it's spawned."
+      fr =
+        s"« Tactique de meute » : gagne $bonus de PV en plus pour chaque autre Elfe déjà présent dans le " +
+          "labyrinthe adverse qu'il s'apprête à envahir, fixé une fois pour toutes à sa création.",
+      en =
+        s"\"Swarm tactics\": gains $bonus extra HP for every other Elf already in the opposing maze it's " +
+          "about to raid, fixed once and for all when it's spawned."
+    )
+
+  private def orcCheatsDeathLine: I18nText =
+    I18nText(
+      fr =
+        "Le premier coup qui devrait le tuer le laisse à 1 PV à la place, une seule fois par Orc.",
+      en = "The first hit that would kill it instead leaves it at 1 HP, once per Orc."
     )
 
   private def dragonSpeedLine: I18nText =
     val speedMultiplier = decimal(Balance.DragonSpeedPerMs / Balance.ElfSpeedPerMs)
     I18nText(
-      fr = s"Se déplace vite (${speedMultiplier}x la vitesse standard) mais a peu de PV — un pilleur fragile " +
-        "mais redoutable.",
-      en = s"Moves fast (${speedMultiplier}x standard speed) but has few HP — a fragile but fearsome raider."
+      fr =
+        s"Se déplace vite (${speedMultiplier}x la vitesse standard) mais a peu de PV — un pilleur fragile " +
+          "mais redoutable.",
+      en =
+        s"Moves fast (${speedMultiplier}x standard speed) but has few HP — a fragile but fearsome raider."
     )
 
   private def soldierCloseRanksLine: I18nText = I18nText(
-    fr = s"« Rang serré » : subit ${decimal(Balance.SoldierCloseRanksDamageReductionPerSec)} dégâts de moins " +
-      "par seconde tant qu'un autre Soldat se trouve sur sa case ou une case adjacente.",
-    en = s"\"Close ranks\": takes ${decimal(Balance.SoldierCloseRanksDamageReductionPerSec)} less damage per " +
-      "second while another Soldier is on or adjacent to its cell."
+    fr =
+      s"« Rang serré » : subit ${decimal(Balance.SoldierCloseRanksDamageReductionPerSec)} dégâts de moins " +
+        "par seconde tant qu'un autre Soldat se trouve sur sa case ou une case adjacente.",
+    en =
+      s"\"Close ranks\": takes ${decimal(Balance.SoldierCloseRanksDamageReductionPerSec)} less damage per " +
+        "second while another Soldier is on or adjacent to its cell."
   )
 
   private def paladinAuraLine: I18nText =
@@ -401,8 +500,20 @@ object EntityText:
 
   private def treeBody: I18nText =
     val f = faction(UnitKind.Tree)
-    val zombieLinkFr = EntityNames.outOfScopeLink(EntityNames.unitName(UnitKind.Zombie, Lang.Fr), f, Faction.Mort, "Zombie.md", Lang.Fr)
-    val zombieLinkEn = EntityNames.outOfScopeLink(EntityNames.unitName(UnitKind.Zombie, Lang.En), f, Faction.Mort, "Zombie.md", Lang.En)
+    val zombieLinkFr = EntityNames.outOfScopeLink(
+      EntityNames.unitName(UnitKind.Zombie, Lang.Fr),
+      f,
+      Faction.Mort,
+      "Zombie.md",
+      Lang.Fr
+    )
+    val zombieLinkEn = EntityNames.outOfScopeLink(
+      EntityNames.unitName(UnitKind.Zombie, Lang.En),
+      f,
+      Faction.Mort,
+      "Zombie.md",
+      Lang.En
+    )
     val cloneFraction = percentPoints((1.0 - Balance.TreeCloneSizeStepFraction) * 100)
     val minFraction = percentPoints(Balance.TreeMinCloneSizeFraction * 100)
     I18nText(
@@ -437,11 +548,14 @@ object EntityText:
   )
 
   private def corruptsLine(percentPerSec: Double, from: Faction): I18nText =
-    val corruptionLinkFr = EntityNames.outOfScopeLink("Corruption", from, Faction.Mort, "Corruption.md", Lang.Fr)
-    val corruptionLinkEn = EntityNames.outOfScopeLink("Corruption", from, Faction.Mort, "Corruption.md", Lang.En)
+    val corruptionLinkFr =
+      EntityNames.outOfScopeLink("Corruption", from, Faction.Mort, "Corruption.md", Lang.Fr)
+    val corruptionLinkEn =
+      EntityNames.outOfScopeLink("Corruption", from, Faction.Mort, "Corruption.md", Lang.En)
     val rate = percentPoints(percentPerSec)
     I18nText(
-      fr = s"Corrompt les bâtiments ennemis adjacents de $rate par seconde (voir $corruptionLinkFr).",
+      fr =
+        s"Corrompt les bâtiments ennemis adjacents de $rate par seconde (voir $corruptionLinkFr).",
       en = s"Corrupts adjacent enemy buildings by $rate per second (see $corruptionLinkEn)."
     )
 
@@ -459,15 +573,28 @@ object EntityText:
       ),
       corruptsLine(Balance.VampireCorruptionPercentPerSec, f),
       I18nText(
-        fr = s"Réduit les dégâts qu'il subit de $reduction (mais n'est pas protégé par l'aura du $paladinLinkFr).",
+        fr =
+          s"Réduit les dégâts qu'il subit de $reduction (mais n'est pas protégé par l'aura du $paladinLinkFr).",
         en = s"Takes $reduction less damage (but isn't shielded by the $paladinLinkEn's aura)."
       )
     )
 
   private def necromancerBody: I18nText =
     val f = faction(UnitKind.Necromancer)
-    val zombieLinkFr = EntityNames.outOfScopeLink(EntityNames.unitName(UnitKind.Zombie, Lang.Fr), f, Faction.Mort, "Zombie.md", Lang.Fr)
-    val zombieLinkEn = EntityNames.outOfScopeLink(EntityNames.unitName(UnitKind.Zombie, Lang.En), f, Faction.Mort, "Zombie.md", Lang.En)
+    val zombieLinkFr = EntityNames.outOfScopeLink(
+      EntityNames.unitName(UnitKind.Zombie, Lang.Fr),
+      f,
+      Faction.Mort,
+      "Zombie.md",
+      Lang.Fr
+    )
+    val zombieLinkEn = EntityNames.outOfScopeLink(
+      EntityNames.unitName(UnitKind.Zombie, Lang.En),
+      f,
+      Faction.Mort,
+      "Zombie.md",
+      Lang.En
+    )
     val soulLinkFr = EntityNames.unitLink(f, UnitKind.Soul, Lang.Fr)
     val soulLinkEn = EntityNames.unitLink(f, UnitKind.Soul, Lang.En)
     I18nText(
@@ -489,8 +616,10 @@ object EntityText:
     val f = faction(UnitKind.Soul)
     val necroLinkFr = EntityNames.unitLink(f, UnitKind.Necromancer, Lang.Fr)
     val necroLinkEn = EntityNames.unitLink(f, UnitKind.Necromancer, Lang.En)
-    val corruptionLinkFr = EntityNames.outOfScopeLink("Corruption", f, Faction.Mort, "Corruption.md", Lang.Fr)
-    val corruptionLinkEn = EntityNames.outOfScopeLink("Corruption", f, Faction.Mort, "Corruption.md", Lang.En)
+    val corruptionLinkFr =
+      EntityNames.outOfScopeLink("Corruption", f, Faction.Mort, "Corruption.md", Lang.Fr)
+    val corruptionLinkEn =
+      EntityNames.outOfScopeLink("Corruption", f, Faction.Mort, "Corruption.md", Lang.En)
     val rate = percentPoints(Balance.SoulCorruptionPercentPerSec)
     val heal = decimal(Balance.SoulHealPerSecPerBuilding)
     I18nText(
@@ -525,14 +654,21 @@ object EntityText:
   // does not have them" — project owner's explicit request) — only the victim's own loss
   // is capped at that.
   private def resourceDisplay(from: Faction, res: Resource, lang: Lang): String =
-    if res == Resource.Gold then EntityNames.resourceName(res, lang) else EntityNames.resourceLink(from, res, lang)
+    if res == Resource.Gold then EntityNames.resourceName(res, lang)
+    else EntityNames.resourceLink(from, res, lang)
 
   private def plunderLine(amounts: List[(Resource, Double)], from: Faction): I18nText =
-    val frLinks = amounts.map { case (res, amount) => s"${decimal(amount)} ${resourceDisplay(from, res, Lang.Fr)}" }
-    val enLinks = amounts.map { case (res, amount) => s"${decimal(amount)} ${resourceDisplay(from, res, Lang.En)}" }
+    val frLinks = amounts.map { case (res, amount) =>
+      s"${decimal(amount)} ${resourceDisplay(from, res, Lang.Fr)}"
+    }
+    val enLinks = amounts.map { case (res, amount) =>
+      s"${decimal(amount)} ${resourceDisplay(from, res, Lang.En)}"
+    }
     I18nText(
-      fr = s"Pille ${frLinks.mkString(" et ")} à l'adversaire ; son propriétaire reçoit exactement cette " +
-        "ressource, en totalité, même si l'adversaire n'en a pas assez en stock.",
-      en = s"Plunders ${enLinks.mkString(" and ")} from the opponent; its owner receives exactly that " +
-        "resource in full, even if the opponent doesn't have enough in stock."
+      fr =
+        s"Pille ${frLinks.mkString(" et ")} à l'adversaire ; son propriétaire reçoit exactement cette " +
+          "ressource, en totalité, même si l'adversaire n'en a pas assez en stock.",
+      en =
+        s"Plunders ${enLinks.mkString(" and ")} from the opponent; its owner receives exactly that " +
+          "resource in full, even if the opponent doesn't have enough in stock."
     )

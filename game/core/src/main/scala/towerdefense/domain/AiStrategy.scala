@@ -36,16 +36,30 @@ trait AiStrategy:
   // (see the sim tournament's own use of it for comparing build speed across strategies).
   def buildCooldownMs: Double = Balance.AiBuildCooldownMs
 
+  // Returns a copy of this strategy with its internal tie-break randomness (if any)
+  // reseeded — default no-op identity, since most strategies (LinearStrategy, every plain
+  // SpendingPolicy/LayoutPolicy combination that never ties) have no randomness of their
+  // own to reseed. Only ComposedStrategy overrides this for real. Exists so a caller that
+  // wants reproducible measurements (Simulator's own tuning/regression use, most
+  // obviously — see its own doc) can pin down "which tied candidate gets picked" per
+  // match without giving every AiStrategy implementation a seed constructor parameter.
+  def reseed(seed: Long): AiStrategy = this
+
 // Wraps any AiStrategy to override only how fast it may act (buildCooldownMs), delegating
 // every actual decision — what to build, where, whether to upgrade/research/destroy — to
 // `inner` unchanged. Lets "how fast" be tuned independently of "what"/"where" for any
 // existing strategy without giving each one (ComposedStrategy, LinearStrategy, ...) its own
 // cooldown constructor parameter — see AiStrategy.buildCooldownMs's doc.
 case class RateLimited(inner: AiStrategy, override val buildCooldownMs: Double) extends AiStrategy:
-  def maybeBuild(state: MazeState, opponent: MazeState): MazeState = inner.maybeBuild(state, opponent)
-  override def maybeDestroy(state: MazeState, opponent: MazeState): MazeState = inner.maybeDestroy(state, opponent)
-  override def maybeUpgrade(state: MazeState, opponent: MazeState): MazeState = inner.maybeUpgrade(state, opponent)
-  override def maybeResearch(state: MazeState, opponent: MazeState): MazeState = inner.maybeResearch(state, opponent)
+  def maybeBuild(state: MazeState, opponent: MazeState): MazeState =
+    inner.maybeBuild(state, opponent)
+  override def maybeDestroy(state: MazeState, opponent: MazeState): MazeState =
+    inner.maybeDestroy(state, opponent)
+  override def maybeUpgrade(state: MazeState, opponent: MazeState): MazeState =
+    inner.maybeUpgrade(state, opponent)
+  override def maybeResearch(state: MazeState, opponent: MazeState): MazeState =
+    inner.maybeResearch(state, opponent)
+  override def reseed(seed: Long): AiStrategy = copy(inner = inner.reseed(seed))
 
 object AiStrategy:
   // Shared "first that works" maybeUpgrade body: try each of the strategy's own buildings
@@ -61,7 +75,9 @@ object AiStrategy:
         BuildingSpecs.upgradeOptions
           .getOrElse(b.kind, Nil)
           .iterator
-          .flatMap(target => Placement.tryUpgradeBuilding(state, b.col, b.row, Some(target)).toOption)
+          .flatMap(target =>
+            Placement.tryUpgradeBuilding(state, b.col, b.row, Some(target)).toOption
+          )
       }
       .nextOption()
       .getOrElse(state)
@@ -150,24 +166,106 @@ object AiStrategy:
   // as a pool of distinct LayoutPolicy x SpendingPolicy combinations that CLI tools
   // (sim/run, sim/tournament, sim/rateTournament's baseName arg, ...) can still resolve by
   // name via `all`.
+  // Forced openings (see ForcedOpeningLayout's own doc) for each single-faction rush
+  // strategy below — explicit, auditable control over how each strategy's starting Gold
+  // gets spent, instead of leaving it to emerge from the ordinary candidate-scoring
+  // competition. Found by reading real `sim/run <a> <b> --log` transcripts: chaosOpening
+  // avoids the exact bug where PlunderSpending once spent its entire starting Gold on a
+  // zero-return DragonsLair turn 1; scienceOpening avoids ScienceSpending incidentally
+  // building a 13-Forest wall chasing Wood income instead of its own intended producers.
+  private val chaosOpening = Seq(BuildingKind.Cave, BuildingKind.WarCamp)
+  private val mortOpening = Seq(BuildingKind.Tomb)
+  // Shortened from an initial [Cave, Church, Tomb] (rock-paper-scissors tuning pass): a
+  // 3-item forced opening made Science's own economy dramatically slower to get going
+  // than every other faction's 1-2 item opening, losing almost every match on pure
+  // opening speed before its labs/defense ever mattered — confirmed via `rockPaperScissors
+  // 9` (Science lost 0-9 to both Chaos and Nature). One forced item (Cave, cheapest
+  // producer) is now enough to kick off Fire income; ScienceSpending's own
+  // missingProducerBonus tier already prioritizes Church/Tomb dynamically right after,
+  // just without forcing a specific (possibly not cost-optimal) order for them.
+  private val scienceOpening = Seq(BuildingKind.Cave)
+  private val loiOpening = Seq(BuildingKind.Barracks, BuildingKind.Watchtower)
+  private val natureOpening = Seq(BuildingKind.Grove)
+  // See HealClusterLayout's own doc: rewards placing one of these kinds next to more of
+  // this maze's own existing buildings, since a healer covers *any* building (not just
+  // other healers) within Chebyshev distance 1 of it and multiple nearby healers stack —
+  // added per the project owner's explicit direction (alongside Balance's own
+  // corruption/heal-speed tuning) to give Nature a real defense against Death's
+  // corruption-sabotage of its own forestCount win condition, confirmed by transcript to
+  // otherwise go undefended (see maze-corruption's doc for the sabotage mechanism).
+  //
+  // Watchtower is included even though it isn't itself a healer (CombatEngine.
+  // healBuildingCorruption's own healer map has no Watchtower entry): a transcript
+  // (`sim/run maze-nature maze-corruption --log`) showed all 12 of Death's corruption
+  // wins landing on Watchtowers specifically, every one built off on its own via plain
+  // FreeformLayout danger-scoring, nowhere near the Grove/Forest cluster — Nature kept
+  // rebuilding them (NatureSpending's own watchtowerDefenseCap priority) as an
+  // undefended, disposable corruption target instead of the intended defense. Clustering
+  // Watchtower alongside the healers it doesn't itself provide, but can still receive, was
+  // the actual fix; raising heal rates alone couldn't touch a mechanism this doesn't heal
+  // participate in at all.
+  //
+  // Raised from an initial 3.0 (comparable to one AuraDamagePerSec hit): confirmed via
+  // transcript that 3.0 was too weak to move Watchtower off a single stand-out chokepoint
+  // cell that dominates FreeformLayout's own path-danger score by a wide margin — Death
+  // just camped a corrupting unit there and picked off every Watchtower Nature rebuilt on
+  // that exact cell, one after another (6 in a row, in one measured match). Strong enough
+  // now to reliably outweigh a chokepoint's raw path-danger lead, so a healer-adjacent (but
+  // slightly less path-optimal) cell wins instead.
+  private val natureClusterKinds =
+    Set(BuildingKind.Grove, BuildingKind.Forest, BuildingKind.Jungle, BuildingKind.Watchtower)
+  private val natureHealClusterBonus = 15.0
+
+  // Every kind a Science-lab building can ever be (LaboFondamental itself, before its
+  // first upgrade, plus the 5 kinds it upgrades into — same set LawSpending/
+  // ScienceSpending build privately for their own labCount checks) — used here to give
+  // CountCapLayout the full "counts as" set for LawSpending's own one-lab cap: see
+  // CountCapLayout's own doc for why a layout-level veto (not just a SpendingPolicy
+  // penalty) was needed to make this cap actually hold under a genuine resource drought.
+  private val labKinds: Set[BuildingKind] = ResearchSpecs.all.keySet + BuildingKind.LaboFondamental
+
   val catalog: Seq[(String, AiStrategy)] = Seq(
     "comb-vertical" -> ComposedStrategy(TemplateLayout(MazeTemplate.combVertical), GrovePriority),
     "comb" -> ComposedStrategy(TemplateLayout(MazeTemplate.comb), GrovePriority),
     "linear" -> LinearStrategy,
-    "counter-only" -> ComposedStrategy(NoLayoutPreference, WeightedSpending(resourceWeight = 0.0, counterWeight = 1.0)),
-    "resource-only" -> ComposedStrategy(NoLayoutPreference, WeightedSpending(resourceWeight = 1.0, counterWeight = 0.0)),
-    "maze-counter" -> ComposedStrategy(FreeformLayout, WeightedSpending(resourceWeight = 0.0, counterWeight = 1.0)),
+    "counter-only" -> ComposedStrategy(
+      NoLayoutPreference,
+      WeightedSpending(resourceWeight = 0.0, counterWeight = 1.0)
+    ),
+    "resource-only" -> ComposedStrategy(
+      NoLayoutPreference,
+      WeightedSpending(resourceWeight = 1.0, counterWeight = 0.0)
+    ),
+    "maze-counter" -> ComposedStrategy(
+      FreeformLayout,
+      WeightedSpending(resourceWeight = 0.0, counterWeight = 1.0)
+    ),
     "resource-maze" -> ComposedStrategy(
       FreeformLayout,
       WeightedSpending(resourceWeight = 1.0, counterWeight = 0.0),
       layoutWeight = 0.25,
       spendingWeight = 0.5
     ),
-    "balanced" -> ComposedStrategy(FreeformLayout, WeightedSpending(resourceWeight = 1.0, counterWeight = 1.0)),
-    "maze-plunder" -> ComposedStrategy(FreeformLayout, PlunderSpending),
-    "comb-plunder" -> ComposedStrategy(TemplateLayout(MazeTemplate.comb), PlunderSpending),
-    "comb-vertical-plunder" -> ComposedStrategy(TemplateLayout(MazeTemplate.combVertical), PlunderSpending),
-    "maze-only" -> ComposedStrategy(FreeformLayout, WeightedSpending(resourceWeight = 0.0, counterWeight = 0.0)),
+    "balanced" -> ComposedStrategy(
+      FreeformLayout,
+      WeightedSpending(resourceWeight = 1.0, counterWeight = 1.0)
+    ),
+    "maze-plunder" -> ComposedStrategy(
+      ForcedOpeningLayout(chaosOpening, FreeformLayout),
+      PlunderSpending
+    ),
+    "comb-plunder" -> ComposedStrategy(
+      ForcedOpeningLayout(chaosOpening, TemplateLayout(MazeTemplate.comb)),
+      PlunderSpending
+    ),
+    "comb-vertical-plunder" -> ComposedStrategy(
+      ForcedOpeningLayout(chaosOpening, TemplateLayout(MazeTemplate.combVertical)),
+      PlunderSpending
+    ),
+    "maze-only" -> ComposedStrategy(
+      FreeformLayout,
+      WeightedSpending(resourceWeight = 0.0, counterWeight = 0.0)
+    ),
     "comb-resource" -> ComposedStrategy(
       TemplateLayout(MazeTemplate.comb),
       WeightedSpending(resourceWeight = 1.0, counterWeight = 0.0)
@@ -179,8 +277,67 @@ object AiStrategy:
     // Mort's Tomb/BlackCastle-racing counterparts to comb-plunder/maze-plunder above — see
     // this doc's maze-corruption paragraph for why their win rate doesn't mean what the
     // name implies.
-    "comb-corruption" -> ComposedStrategy(TemplateLayout(MazeTemplate.comb), CorruptionSpending),
-    "maze-corruption" -> ComposedStrategy(FreeformLayout, CorruptionSpending)
+    "comb-corruption" -> ComposedStrategy(
+      ForcedOpeningLayout(mortOpening, TemplateLayout(MazeTemplate.comb)),
+      CorruptionSpending
+    ),
+    "maze-corruption" -> ComposedStrategy(
+      ForcedOpeningLayout(mortOpening, FreeformLayout),
+      CorruptionSpending
+    ),
+    // Science's own racing counterpart to maze-plunder/maze-corruption above — added after
+    // a full-ladder tournament (`sim/runMain towerdefense.sim.tournament`) turned up 0
+    // Science victories out of 118 decisive matches (Chaos plunder alone took 60%): every
+    // existing strategy either ignores the 5-lab-building requirement entirely or only ever
+    // researches opportunistically, never on purpose (see ScienceSpending's doc for why no
+    // prior policy could win this way).
+    "comb-science" -> ComposedStrategy(
+      ForcedOpeningLayout(scienceOpening, TemplateLayout(MazeTemplate.comb)),
+      ScienceSpending
+    ),
+    "maze-science" -> ComposedStrategy(
+      ForcedOpeningLayout(scienceOpening, FreeformLayout),
+      ScienceSpending
+    ),
+    // Loi's and Nature's own racing counterparts, completing one dedicated rush strategy
+    // per faction (Chaos/Mort/Science already had one) — added to verify the claimed
+    // 5-faction rock-paper-scissors cycle (Chaos > Science > Nature > Mort > Loi > Chaos)
+    // via `sim/runMain towerdefense.sim.rockPaperScissors`. NatureSpending is genuinely
+    // new (GrovePriority only ever chases Grove itself, a different shape — see its own
+    // doc); LawSpending's racing kinds already include Watchtower, giving it built-in
+    // defense the same mechanism ScienceSpending's own Watchtower bonus provides.
+    "comb-law" -> ComposedStrategy(
+      ForcedOpeningLayout(
+        loiOpening,
+        CountCapLayout(BuildingKind.LaboFondamental, labKinds, 1, TemplateLayout(MazeTemplate.comb))
+      ),
+      LawSpending
+    ),
+    "maze-law" -> ComposedStrategy(
+      ForcedOpeningLayout(
+        loiOpening,
+        CountCapLayout(BuildingKind.LaboFondamental, labKinds, 1, FreeformLayout)
+      ),
+      LawSpending
+    ),
+    "comb-nature" -> ComposedStrategy(
+      ForcedOpeningLayout(
+        natureOpening,
+        HealClusterLayout(
+          natureClusterKinds,
+          natureHealClusterBonus,
+          TemplateLayout(MazeTemplate.comb)
+        )
+      ),
+      NatureSpending
+    ),
+    "maze-nature" -> ComposedStrategy(
+      ForcedOpeningLayout(
+        natureOpening,
+        HealClusterLayout(natureClusterKinds, natureHealClusterBonus, FreeformLayout)
+      ),
+      NatureSpending
+    )
   )
 
   // The AI difficulty ladder GameApp actually drives players/spectators through (see
@@ -209,34 +366,50 @@ object AiStrategy:
   private val catalogByName: Map[String, AiStrategy] = catalog.toMap
 
   private def rateLimited(baseName: String, periodSec: Int): (String, AiStrategy) =
-    s"$baseName@${periodSec}s" -> RateLimited(catalogByName(baseName), buildCooldownMs = periodSec * 1_000.0)
+    s"$baseName@${periodSec}s" -> RateLimited(
+      catalogByName(baseName),
+      buildCooldownMs = periodSec * 1_000.0
+    )
 
+  // maze-science joins the other 5 base strategies at all 5 speeds (30 entries total, up
+  // from 25) after ScienceSpending was added specifically to make Science's victory
+  // condition actually reachable — see catalog's own doc. Re-measured via
+  // `sim/runMain towerdefense.sim.tournament` after ScienceSpending also learned to secure
+  // a Watchtower or two before over-investing in labs (see ScienceSpending's own doc for the
+  // plunder-race losses that fixed): maze-science@1s now leads the entire ladder, 5-0 in
+  // the Swiss phase and into the top-8 playoff bracket — see AiStrategyTest's ladder-order
+  // test for the full ranking.
   val ladder: Seq[(String, AiStrategy)] = Seq(
-    rateLimited("linear", 5),
-    rateLimited("comb-corruption", 5),
-    rateLimited("resource-maze", 8),
-    rateLimited("comb-corruption", 2),
-    rateLimited("comb-corruption", 1),
-    rateLimited("linear", 8),
+    rateLimited("maze-corruption", 8),
     rateLimited("comb-corruption", 3),
+    rateLimited("comb-corruption", 5),
+    rateLimited("linear", 8),
     rateLimited("balanced", 8),
-    rateLimited("maze-corruption", 5),
-    rateLimited("comb-corruption", 8),
-    rateLimited("maze-corruption", 1),
-    rateLimited("maze-corruption", 3),
+    rateLimited("comb-corruption", 2),
     rateLimited("balanced", 5),
     rateLimited("maze-corruption", 2),
-    rateLimited("resource-maze", 5),
-    rateLimited("balanced", 1),
-    rateLimited("maze-corruption", 8),
-    rateLimited("balanced", 2),
+    rateLimited("comb-corruption", 8),
+    rateLimited("resource-maze", 8),
+    rateLimited("maze-science", 2),
+    rateLimited("maze-corruption", 1),
+    rateLimited("comb-corruption", 1),
     rateLimited("linear", 3),
     rateLimited("balanced", 3),
     rateLimited("resource-maze", 3),
+    rateLimited("maze-corruption", 5),
+    rateLimited("resource-maze", 5),
+    rateLimited("linear", 5),
+    rateLimited("maze-science", 3),
+    rateLimited("maze-science", 8),
+    rateLimited("maze-science", 5),
+    rateLimited("balanced", 2),
+    rateLimited("maze-corruption", 3),
     rateLimited("resource-maze", 2),
-    rateLimited("resource-maze", 1),
+    rateLimited("linear", 2),
     rateLimited("linear", 1),
-    rateLimited("linear", 2)
+    rateLimited("resource-maze", 1),
+    rateLimited("balanced", 1),
+    rateLimited("maze-science", 1)
   )
 
   // Both catalog (named base combinations, for CLI experiments) and ladder (the 25

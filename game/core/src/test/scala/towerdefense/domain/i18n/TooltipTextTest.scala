@@ -74,6 +74,8 @@ class TooltipTextTest extends munit.FunSuite:
     assertEquals(TooltipText.rate(Resource.Shadow, 0.4, Lang.En), "+0.4 🌑/s")
   }
 
-  test("icon exposes the same glyph costIcons/rate use, for callers building their own cost strings") {
+  test(
+    "icon exposes the same glyph costIcons/rate use, for callers building their own cost strings"
+  ) {
     assertEquals(TooltipText.icon(Resource.Crystal), "💎")
   }

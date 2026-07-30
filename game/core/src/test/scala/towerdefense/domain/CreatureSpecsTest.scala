@@ -4,13 +4,21 @@ class CreatureSpecsTest extends munit.FunSuite:
 
   test("spawningBuilding covers every UnitKind, and every mapped BuildingKind is real") {
     UnitKind.values.foreach { kind =>
-      assert(CreatureSpecs.spawningBuilding.contains(kind), s"spawningBuilding is missing an entry for $kind")
+      assert(
+        CreatureSpecs.spawningBuilding.contains(kind),
+        s"spawningBuilding is missing an entry for $kind"
+      )
       val building = CreatureSpecs.spawningBuilding(kind)
-      assert(BuildingSpecs.all.contains(building), s"$kind maps to $building, which isn't a real BuildingKind")
+      assert(
+        BuildingSpecs.all.contains(building),
+        s"$kind maps to $building, which isn't a real BuildingKind"
+      )
     }
   }
 
-  test("every spawningBuilding entry's cost is nonzero, so Passing Gate always has something to harvest") {
+  test(
+    "every spawningBuilding entry's cost is nonzero, so Passing Gate always has something to harvest"
+  ) {
     UnitKind.values.foreach { kind =>
       val building = CreatureSpecs.spawningBuilding(kind)
       val cost = BuildingSpecs.all(building).cost.values.sum

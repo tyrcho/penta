@@ -13,7 +13,8 @@ enum Resource derives CanEqual:
 // CombatEngine's corruption mechanic. Science (Recherches*.md) has no unit at all in the
 // vault, only buildings — see BuildingKind's Science cases.
 enum UnitKind derives CanEqual:
-  case Elf, Goblin, Minotaur, Paladin, Wolf, Zombie, Vampire, Necromancer, Soul, Tree, Dragon, Soldier
+  case Elf, Goblin, Minotaur, Paladin, Wolf, Zombie, Vampire, Necromancer, Soul, Tree, Dragon,
+    Soldier, Orc
 
 // Grove/Forest/Jungle form Nature's upgrade chain (Bosquet.md/Foret.md/Jungle.md) — only
 // Grove is directly buildable; Forest and Jungle are reached by upgrading an existing
@@ -39,9 +40,11 @@ enum UnitKind derives CanEqual:
 // fondamentale's victory condition all live on MazeState.researchLevels/VictoryConditions
 // instead, see BuildingSpecs' doc.
 enum BuildingKind derives CanEqual:
-  case Grove, Forest, Jungle, Stonehenge, Cave, Labyrinth, Church, Watchtower, Angel, Tomb, BlackCastle,
-    DeathHouse, PassingGate, LaboFondamental, LaboNaturel, LaboSombre, LaboDeRecherche, LaboDeLaLoi, LaboDuChaos,
-    DragonsLair, Barracks, StasisField
+  case Grove, Forest, Jungle, Stonehenge, Cave, Labyrinth, Church, Watchtower, Angel, Tomb,
+    BlackCastle,
+    DeathHouse, PassingGate, LaboFondamental, LaboNaturel, LaboSombre, LaboDeRecherche, LaboDeLaLoi,
+    LaboDuChaos,
+    DragonsLair, Barracks, StasisField, WarCamp
 
 // A unit currently walking this maze. From this maze owner's point of view it's
 // always hostile — sent by one of the opponent's buildings. See CreatureSpecs for
@@ -62,6 +65,10 @@ enum BuildingKind derives CanEqual:
 // creature has — 1.0 (full size) for every kind except a self-cloned Tree (Arbre Anime.md:
 // each clone is TreeCloneSizeStepFraction smaller than the parent that made it, floored at
 // TreeMinCloneSizeFraction — see CombatEngine.advanceCreatureSummons).
+// hasCheatedDeath: false for every kind except Orc (Camp de Guerre — see Balance.
+// OrcMaxHp's doc), whose first lethal hit clamps it to 1 HP instead of removing it,
+// exactly once per creature (see CombatEngine.applyDamageSources) — inert for every other
+// kind, same "cheap to carry" choice as summonedBy/frozenMs/sizeFraction above.
 case class Creature(
     id: Long,
     pos: Vec2,
@@ -72,7 +79,8 @@ case class Creature(
     spawnCountdownMs: Double = 0.0,
     summonedBy: Option[Long] = None,
     frozenMs: Double = 0.0,
-    sizeFraction: Double = 1.0
+    sizeFraction: Double = 1.0,
+    hasCheatedDeath: Boolean = false
 )
 
 // Replaces the old per-faction Forest/Cave/Labyrinth/Eglise/Watchtower case classes —
@@ -133,16 +141,16 @@ case class MazeState(
     buildings: List[Building],
     resources: Map[Resource, Double],
     resourcesPlundered: Double, // this maze's own progress toward the Chaos victory
-                                // condition — deliberately cross-resource (Elf/Goblin/
-                                // Minotaur plunder different resource combinations into
-                                // the same tally), so it stays a flat Double rather than
-                                // living inside `resources`.
+    // condition — deliberately cross-resource (Elf/Goblin/
+    // Minotaur plunder different resource combinations into
+    // the same tally), so it stays a flat Double rather than
+    // living inside `resources`.
     buildingsCorrupted: Double = 0.0, // this maze's own progress toward the Mort victory
-                                       // condition (Corruption.md/Victoire.md "B") — counts
-                                       // enemy buildings this maze's Zombies/Vampires have
-                                       // corrupted to 100% and destroyed, symmetric in shape
-                                       // to resourcesPlundered above (see CombatEngine/
-                                       // BattleEngine's corruption handling).
+    // condition (Corruption.md/Victoire.md "B") — counts
+    // enemy buildings this maze's Zombies/Vampires have
+    // corrupted to 100% and destroyed, symmetric in shape
+    // to resourcesPlundered above (see CombatEngine/
+    // BattleEngine's corruption handling).
     // Science's leveled research (Recherches*.md/Recherche fondamentale.md) — keyed by the
     // five Labo* BuildingKinds, absent/0 meaning "not researched". Placement.tryResearch is
     // the only way this advances, gated on owning that lab (see its doc); a level, once

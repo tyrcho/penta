@@ -48,7 +48,8 @@ private object Persistence:
         aiBuildCooldownMs = b.aiBuildCooldownMs,
         playerBuildCooldownMs = b.playerBuildCooldownMs,
         outcome = b.outcome.map(encodeOutcome).getOrElse(null),
-        aiLevelName = aiLevelName
+        aiLevelName = aiLevelName,
+        elapsedTicks = b.elapsedTicks
       )
       .asInstanceOf[js.Object]
 
@@ -69,7 +70,9 @@ private object Persistence:
   // small, fixed set, same as Resource.values.
   private def encodeResearchLevels(levels: Map[BuildingKind, Int]): js.Dynamic =
     val obj = js.Dynamic.literal()
-    ResearchSpecs.orderedLabs.foreach(lab => obj.updateDynamic(lab.toString)(levels.getOrElse(lab, 0)))
+    ResearchSpecs.orderedLabs.foreach(lab =>
+      obj.updateDynamic(lab.toString)(levels.getOrElse(lab, 0))
+    )
     obj
 
   private def encodeResources(r: Map[Resource, Double]): js.Dynamic =
@@ -113,7 +116,8 @@ private object Persistence:
         case UnitKind.Soul        => "Soul"
         case UnitKind.Tree        => "Tree"
         case UnitKind.Dragon      => "Dragon"
-        case UnitKind.Soldier     => "Soldier",
+        case UnitKind.Soldier     => "Soldier"
+        case UnitKind.Orc         => "Orc",
       // Only Necromancer/Tree ever have a nonzero countdown/frozenMs (see CreatureSpec.
       // spawns/spawnFreezeMs), and only a Soul or a cloned Tree has a summonedBy — inert
       // (0.0/null/1.0) for every other kind, same "cheap to carry" choice as Building's
@@ -121,7 +125,8 @@ private object Persistence:
       spawnCountdownMs = c.spawnCountdownMs,
       summonedBy = c.summonedBy.map(_.toDouble).getOrElse(null).asInstanceOf[js.Any],
       frozenMs = c.frozenMs,
-      sizeFraction = c.sizeFraction
+      sizeFraction = c.sizeFraction,
+      hasCheatedDeath = c.hasCheatedDeath
     )
 
   private def encodeBuilding(b: Building): js.Dynamic =
@@ -149,8 +154,14 @@ private object Persistence:
       player = decodeMaze(d.player),
       ai = decodeMaze(d.ai),
       aiBuildCooldownMs = asDouble(d.aiBuildCooldownMs),
-      playerBuildCooldownMs = if js.isUndefined(d.playerBuildCooldownMs) then 0.0 else asDouble(d.playerBuildCooldownMs),
-      outcome = decodeOutcome(d.outcome)
+      playerBuildCooldownMs =
+        if js.isUndefined(d.playerBuildCooldownMs) then 0.0 else asDouble(d.playerBuildCooldownMs),
+      outcome = decodeOutcome(d.outcome),
+      // Pre-Loi-victory saves have no elapsedTicks at all — default to 0, same fallback
+      // shape as playerBuildCooldownMs above: a resumed match's Loi "sudden death" clock
+      // just restarts from 0, which is safe (only delays that condition, never wrongly
+      // triggers it early).
+      elapsedTicks = if js.isUndefined(d.elapsedTicks) then 0 else asDouble(d.elapsedTicks).toInt
     )
 
   // Old saves (before the difficulty ladder existed) have no aiLevelName — default to
@@ -163,7 +174,8 @@ private object Persistence:
 
   private def decodeMaze(d: js.Dynamic): MazeState =
     val buildings =
-      if js.isUndefined(d.buildings) then decodeLegacyBuildings(d) else decodeArray(d.buildings, decodeBuilding)
+      if js.isUndefined(d.buildings) then decodeLegacyBuildings(d)
+      else decodeArray(d.buildings, decodeBuilding)
     MazeState(
       creatures = decodeArray(d.enemies, decodeCreature),
       buildings = buildings,
@@ -172,7 +184,8 @@ private object Persistence:
       resourcesPlundered = asDouble(d.resourcesPlundered),
       // Pre-Mort saves have no buildingsCorrupted field — default to 0.0, same fallback
       // shape as Shadow/Crystal's decodeResources migration above.
-      buildingsCorrupted = if js.isUndefined(d.buildingsCorrupted) then 0.0 else asDouble(d.buildingsCorrupted),
+      buildingsCorrupted =
+        if js.isUndefined(d.buildingsCorrupted) then 0.0 else asDouble(d.buildingsCorrupted),
       researchLevels = decodeResearchLevels(d.researchLevels),
       nextId = asDouble(d.nextId).toLong
     )
@@ -182,12 +195,10 @@ private object Persistence:
   private def decodeResearchLevels(d: js.Dynamic): Map[BuildingKind, Int] =
     if js.isUndefined(d) then Map.empty
     else
-      ResearchSpecs.orderedLabs
-        .flatMap { lab =>
-          val level = d.selectDynamic(lab.toString)
-          if js.isUndefined(level) then None else Some(lab -> asDouble(level).toInt)
-        }
-        .toMap
+      ResearchSpecs.orderedLabs.flatMap { lab =>
+        val level = d.selectDynamic(lab.toString)
+        if js.isUndefined(level) then None else Some(lab -> asDouble(level).toInt)
+      }.toMap
 
   // Pre-refactor saves have flat wood/fire/light fields, not a `resources` object — light
   // has no Shadow/Crystal history to migrate (those factions don't exist yet), so a
@@ -243,7 +254,13 @@ private object Persistence:
               .filterNot(js.isUndefined)
               .map(asDouble)
               .getOrElse(0.0)
-            Building(asDouble(dd.id).toLong, asDouble(dd.col).toInt, asDouble(dd.row).toInt, kind, countdown)
+            Building(
+              asDouble(dd.id).toLong,
+              asDouble(dd.col).toInt,
+              asDouble(dd.row).toInt,
+              kind,
+              countdown
+            )
         )
     // Pre-upgrade-chain saves' single-tier "forests" is today's Grove (the base tier).
     tagged(d.forests, BuildingKind.Grove, Some("elfSpawnInMs")) ++
@@ -274,17 +291,23 @@ private object Persistence:
         case "Tree"        => UnitKind.Tree
         case "Dragon"      => UnitKind.Dragon
         case "Soldier"     => UnitKind.Soldier
+        case "Orc"         => UnitKind.Orc
         case _             => UnitKind.Goblin,
       // Pre-Necromancer saves have none of these fields — default to 0.0/None, same
       // fallback shape as buildingsCorrupted/researchLevels' migration elsewhere in this file.
-      spawnCountdownMs = if js.isUndefined(d.spawnCountdownMs) then 0.0 else asDouble(d.spawnCountdownMs),
+      spawnCountdownMs =
+        if js.isUndefined(d.spawnCountdownMs) then 0.0 else asDouble(d.spawnCountdownMs),
       summonedBy =
         if js.isUndefined(d.summonedBy) || d.summonedBy == null then None
         else Some(asDouble(d.summonedBy).toLong),
       frozenMs = if js.isUndefined(d.frozenMs) then 0.0 else asDouble(d.frozenMs),
       // Pre-Stonehenge saves have no sizeFraction at all — default to 1.0 (full size),
       // same fallback shape as spawnCountdownMs/frozenMs above.
-      sizeFraction = if js.isUndefined(d.sizeFraction) then 1.0 else asDouble(d.sizeFraction)
+      sizeFraction = if js.isUndefined(d.sizeFraction) then 1.0 else asDouble(d.sizeFraction),
+      // Pre-Orc saves have no hasCheatedDeath at all — default to false (hasn't used its
+      // one-time survival yet), same fallback shape as sizeFraction above.
+      hasCheatedDeath =
+        if js.isUndefined(d.hasCheatedDeath) then false else d.hasCheatedDeath.asInstanceOf[Boolean]
     )
 
   private def decodeBuilding(d: js.Dynamic): Building =
@@ -315,9 +338,12 @@ private object Persistence:
         case "DragonsLair"     => BuildingKind.DragonsLair
         case "Barracks"        => BuildingKind.Barracks
         case "StasisField"     => BuildingKind.StasisField
+        case "WarCamp"         => BuildingKind.WarCamp
         case _                 => BuildingKind.Watchtower,
-      spawnCountdownMs = if js.isUndefined(d.spawnCountdownMs) then 0.0 else asDouble(d.spawnCountdownMs),
-      corruptionPercent = if js.isUndefined(d.corruptionPercent) then 0.0 else asDouble(d.corruptionPercent),
+      spawnCountdownMs =
+        if js.isUndefined(d.spawnCountdownMs) then 0.0 else asDouble(d.spawnCountdownMs),
+      corruptionPercent =
+        if js.isUndefined(d.corruptionPercent) then 0.0 else asDouble(d.corruptionPercent),
       // Pre-PassingGate saves have no flashMs at all — default to 0.0 (no flash), same
       // fallback shape as sizeFraction above.
       flashMs = if js.isUndefined(d.flashMs) then 0.0 else asDouble(d.flashMs),
@@ -325,12 +351,14 @@ private object Persistence:
       // full DamageTickIntervalMs, matching the case class's own default for a building
       // that hasn't started counting down toward its next hit yet.
       damageCooldownMs =
-        if js.isUndefined(d.damageCooldownMs) then Balance.DamageTickIntervalMs else asDouble(d.damageCooldownMs),
+        if js.isUndefined(d.damageCooldownMs) then Balance.DamageTickIntervalMs
+        else asDouble(d.damageCooldownMs),
       // Pre-construction-time saves have no constructionRemainingMs at all — default to
       // 0.0 (already built), same fallback shape as flashMs above: a building saved before
       // this mechanic existed was always instantly functional, so it stays that way on load.
       constructionRemainingMs =
-        if js.isUndefined(d.constructionRemainingMs) then 0.0 else asDouble(d.constructionRemainingMs),
+        if js.isUndefined(d.constructionRemainingMs) then 0.0
+        else asDouble(d.constructionRemainingMs),
       // Same fallback as constructionRemainingMs above — a pre-existing save has no total
       // to report either, so the UI's progress wipe just has nothing to draw for it (see
       // Building.constructionTotalMs's doc on treating <= 0.0 as "no progress to draw").

@@ -24,7 +24,23 @@ class AiStrategyTest extends munit.FunSuite:
       )
     )
 
-  private def count(state: MazeState, kind: BuildingKind): Int = state.buildings.count(_.kind == kind)
+  private def count(state: MazeState, kind: BuildingKind): Int =
+    state.buildings.count(_.kind == kind)
+
+  // Diagnosed via code review: LinearStrategy.buildOrder is a hand-written literal list,
+  // not derived from BuildingSpecs — WarCamp was added to BuildingSpecs.all without a
+  // matching buildOrder entry, silently making it unbuildable by this strategy despite the
+  // file's own doc claiming "Both sides can build any directly-buildable BuildingKind".
+  // This test makes that claim an enforced invariant instead of an aspirational comment.
+  test("buildOrder contains every buildableDirectly BuildingKind, exactly once") {
+    val expected = BuildingKind.values.filter(BuildingSpecs.all(_).buildableDirectly).toSet
+    assertEquals(LinearStrategy.buildOrder.toSet, expected)
+    assertEquals(
+      LinearStrategy.buildOrder.size,
+      expected.size,
+      "buildOrder must not list any kind twice"
+    )
+  }
 
   test("does nothing without enough resources for either building") {
     val state = withResources(wood = 0.0, fire = 0.0)
@@ -58,7 +74,9 @@ class AiStrategyTest extends munit.FunSuite:
   // resource level that affords a Tomb necessarily affords a Grove too, and Grove sits
   // earlier in buildOrder, so LinearStrategy (fixed priority, never reconsiders) always
   // picks Grove over Tomb now. "Only afford a tomb" is no longer constructible.
-  test("Grove wins the tie over Tomb (subsumed cost, earlier in buildOrder) even when shadow only helps Tomb") {
+  test(
+    "Grove wins the tie over Tomb (subsumed cost, earlier in buildOrder) even when shadow only helps Tomb"
+  ) {
     val state = withResources(wood = Balance.TombCostWood, shadow = Balance.TombCostShadow)
     val result = LinearStrategy.maybeBuild(state, noOpponent)
     assertEquals(count(result, BuildingKind.Grove), 1)
@@ -66,7 +84,8 @@ class AiStrategyTest extends munit.FunSuite:
   }
 
   test("builds a black castle when it can only afford one, over cheaper buildings tied on wood") {
-    val state = withResources(wood = Balance.BlackCastleCostWood, shadow = Balance.BlackCastleCostShadow)
+    val state =
+      withResources(wood = Balance.BlackCastleCostWood, shadow = Balance.BlackCastleCostShadow)
     val result = LinearStrategy.maybeBuild(state, noOpponent)
     assertEquals(count(result, BuildingKind.BlackCastle), 1)
     assertEquals(count(result, BuildingKind.Labyrinth), 0)
@@ -135,46 +154,57 @@ class AiStrategyTest extends munit.FunSuite:
     assertEquals(count(result, BuildingKind.Grove), 0)
   }
 
-  // Re-measured via `sim/runMain towerdefense.sim.tournament 2` (Swiss rounds, not a full
-  // round-robin — see Simulator.swissStandings) after fixing SpendingPolicy.marginFor to
-  // treat a zero-stock resource as affordable when Gold covers it: before that fix, every
-  // strategy on the ladder got stuck building only Cave forever (the one building whose
-  // cost structurally dodged the old Gold-blind unaffordable-floor), which is also why the
-  // previous measurement's ranking barely reflected real strategic differences — Science
-  // and every non-Chaos faction's buildings were simply never reachable. resource-maze and
-  // linear (both resource-aware at every speed once diversifying is actually possible) rose
-  // sharply; comb-corruption (whose previous lead came from CorruptionSpending's flat
-  // Mort-kind bonus dominating an all-strategies-are-stuck field) fell to the bottom tier
-  // at every speed except @8s. Ranked by Elo rating, weakest to strongest, ascending.
+  // Re-measured via `sim/runMain towerdefense.sim.tournament` (30 entries, up from 25) after
+  // adding ScienceSpending/maze-science: a full-ladder tournament turned up 0 Science
+  // victories out of 118 decisive matches before this addition (see ScienceSpending's own
+  // doc), so a 6th base strategy joined the other 5 at all 5 speeds specifically to make
+  // that victory condition reachable. A first pass (labs + Cave/Church/Tomb producers, no
+  // defense) fixed a Gold-starvation lockout but still lost almost every match to Chaos
+  // plunder on the clock, landing maze-science in the bottom half at every speed.
+  //
+  // Second pass, re-measured after ScienceSpending also learned to secure 1-2 Watchtowers
+  // before over-investing in labs: maze-science@1s now TOPS the entire 30-entry ladder,
+  // 5-0 in the Swiss phase, and reached the top-8 playoff bracket's semifinal. Confirmed via
+  // `sim/run maze-science maze-plunder 1 --log`: Watchtower kills the opponent's Goblin/
+  // Elf/Zombie raiders on sight (10 dmg/sec, one-shots most of them), buying enough time for
+  // all 5 Science labs to reach deep research levels before the match resolves — 21 of 147
+  // decisive matches this tournament won via Science mastery specifically (up from 2, and
+  // this time actually attributable to maze-science entries, not incidental opportunistic
+  // research elsewhere). Ranked by Elo rating, weakest to strongest, ascending.
   test("the ladder is ordered weakest to strongest by measured Elo rating") {
     assertEquals(
       AiStrategy.ladder.map(_._1),
       Seq(
-        "linear@5s",
-        "comb-corruption@5s",
-        "resource-maze@8s",
-        "comb-corruption@2s",
-        "comb-corruption@1s",
-        "linear@8s",
+        "maze-corruption@8s",
         "comb-corruption@3s",
+        "comb-corruption@5s",
+        "linear@8s",
         "balanced@8s",
-        "maze-corruption@5s",
-        "comb-corruption@8s",
-        "maze-corruption@1s",
-        "maze-corruption@3s",
+        "comb-corruption@2s",
         "balanced@5s",
         "maze-corruption@2s",
-        "resource-maze@5s",
-        "balanced@1s",
-        "maze-corruption@8s",
-        "balanced@2s",
+        "comb-corruption@8s",
+        "resource-maze@8s",
+        "maze-science@2s",
+        "maze-corruption@1s",
+        "comb-corruption@1s",
         "linear@3s",
         "balanced@3s",
         "resource-maze@3s",
+        "maze-corruption@5s",
+        "resource-maze@5s",
+        "linear@5s",
+        "maze-science@3s",
+        "maze-science@8s",
+        "maze-science@5s",
+        "balanced@2s",
+        "maze-corruption@3s",
         "resource-maze@2s",
-        "resource-maze@1s",
+        "linear@2s",
         "linear@1s",
-        "linear@2s"
+        "resource-maze@1s",
+        "balanced@1s",
+        "maze-science@1s"
       )
     )
   }
@@ -195,12 +225,19 @@ class AiStrategyTest extends munit.FunSuite:
   // buildCooldownMs (see AiStrategy's doc): a trait-level default so every existing
   // strategy keeps today's exact pacing with zero code changes, overridable per-instance
   // via RateLimited for anything that wants to tune "how fast" independently of "what".
-  test("buildCooldownMs defaults to Balance.AiBuildCooldownMs for any strategy that doesn't override it") {
+  test(
+    "buildCooldownMs defaults to Balance.AiBuildCooldownMs for any strategy that doesn't override it"
+  ) {
     assertEquals(LinearStrategy.buildCooldownMs, Balance.AiBuildCooldownMs)
-    assertEquals(ComposedStrategy(NoLayoutPreference, GrovePriority).buildCooldownMs, Balance.AiBuildCooldownMs)
+    assertEquals(
+      ComposedStrategy(NoLayoutPreference, GrovePriority).buildCooldownMs,
+      Balance.AiBuildCooldownMs
+    )
   }
 
-  test("RateLimited overrides buildCooldownMs but delegates every decision to the wrapped strategy") {
+  test(
+    "RateLimited overrides buildCooldownMs but delegates every decision to the wrapped strategy"
+  ) {
     val fast = RateLimited(LinearStrategy, buildCooldownMs = 500.0)
     assertEquals(fast.buildCooldownMs, 500.0)
     val state = withResources(wood = Balance.GroveCostWood)
@@ -211,7 +248,38 @@ class AiStrategyTest extends munit.FunSuite:
     val rich = withResources(wood = 1_000.0)
     val withGrove = Placement.tryPlaceBuilding(rich, BuildingKind.Grove, 5, 5).toOption.get
     val fast = RateLimited(LinearStrategy, buildCooldownMs = 500.0)
-    assertEquals(fast.maybeUpgrade(withGrove, noOpponent), LinearStrategy.maybeUpgrade(withGrove, noOpponent))
-    assertEquals(fast.maybeResearch(withGrove, noOpponent), LinearStrategy.maybeResearch(withGrove, noOpponent))
-    assertEquals(fast.maybeDestroy(withGrove, noOpponent), LinearStrategy.maybeDestroy(withGrove, noOpponent))
+    assertEquals(
+      fast.maybeUpgrade(withGrove, noOpponent),
+      LinearStrategy.maybeUpgrade(withGrove, noOpponent)
+    )
+    assertEquals(
+      fast.maybeResearch(withGrove, noOpponent),
+      LinearStrategy.maybeResearch(withGrove, noOpponent)
+    )
+    assertEquals(
+      fast.maybeDestroy(withGrove, noOpponent),
+      LinearStrategy.maybeDestroy(withGrove, noOpponent)
+    )
+  }
+
+  // reseed (see AiStrategy's own doc): a trait-level no-op default so any strategy with no
+  // internal randomness (LinearStrategy, every plain SpendingPolicy/LayoutPolicy) is
+  // unaffected — only ComposedStrategy's own tie-break Random actually needs reseeding.
+  test("the default AiStrategy.reseed is a no-op identity for a strategy with no randomness") {
+    assertEquals(LinearStrategy.reseed(42L), LinearStrategy)
+  }
+
+  test("RateLimited.reseed delegates to the wrapped strategy, keeping its own buildCooldownMs") {
+    val fast =
+      RateLimited(ComposedStrategy(NoLayoutPreference, GrovePriority), buildCooldownMs = 500.0)
+    val reseeded = fast.reseed(42L)
+    assertEquals(reseeded.buildCooldownMs, 500.0)
+    reseeded match
+      case RateLimited(inner: ComposedStrategy, _) =>
+        assertEquals(
+          inner.random.nextInt(),
+          new scala.util.Random(42L).nextInt(),
+          "the seed must reach the wrapped ComposedStrategy's own Random"
+        )
+      case other => fail(s"expected a RateLimited(ComposedStrategy, ...), got $other")
   }

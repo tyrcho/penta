@@ -1,5 +1,7 @@
 package towerdefense.domain
 
+import towerdefense.domain.i18n.EntityNames
+
 // What a building costs, what it produces (per second), and what unit it spawns (and
 // how often) — the data-driven replacement for the old per-faction case classes. Combat
 // abilities (Forest/Jungle/Angel/PassingGate's aura, Watchtower's ranged damage, Wolf's
@@ -24,9 +26,8 @@ package towerdefense.domain
 // VictoryConditions.hasWonViaFondamentale/fondamentaleLevel/fondamentaleReadyLabCount.
 // Labs are wired up here only as Crystal producers; the research-level state itself lives
 // on MazeState.researchLevels, not in this per-building-kind spec table. Loi's own victory
-// condition ("Paix Eternelle" — win by building count at a turn-count deadline) remains
-// genuinely unwired, since it needs a "number of turns"/time-limit concept this real-time
-// game doesn't have anywhere yet (see CLAUDE.md/README's note on that gap).
+// condition ("Paix Eternelle" — win by building count at a turn-count deadline) is wired
+// too, via BattleState.elapsedTicks and VictoryConditions.hasWonViaLoi.
 // dps: passive/ranged damage per second dealt to enemy creatures (Forest/Jungle/Angel/
 // PassingGate's adjacency aura, Watchtower's single-target range attack) — 0.0 (no combat
 // ability) for every other kind. The actual targeting rule (adjacency vs nearest-in-range)
@@ -38,8 +39,9 @@ package towerdefense.domain
 // for the three overrides (see tierOverrides) that came out of an explicit design pass.
 case class BuildingSpec(
     cost: Map[Resource, Double],
-    produces: Map[Resource, Double]=Map.empty, // rate per second
-    spawns: Option[(UnitKind, Double)] = None, // (unit kind, interval ms) — None for Watchtower and the Science labs
+    produces: Map[Resource, Double] = Map.empty, // rate per second
+    spawns: Option[(UnitKind, Double)] =
+      None, // (unit kind, interval ms) — None for Watchtower and the Science labs
     buildableDirectly: Boolean = true,
     maxPerMaze: Option[Int] = None,
     dps: Double = 0.0,
@@ -90,12 +92,25 @@ object BuildingSpecs:
     // Antre du Dragon.md: Chaos's tier-3 building — no resource production at all, its
     // value is purely the glass-cannon Dragon it spawns (see CreatureSpecs).
     BuildingKind.DragonsLair -> BuildingSpec(
-      cost = Map(Resource.Wood -> Balance.DragonsLairCostWood, Resource.Fire -> Balance.DragonsLairCostFire),
+      cost = Map(
+        Resource.Wood -> Balance.DragonsLairCostWood,
+        Resource.Fire -> Balance.DragonsLairCostFire
+      ),
       produces = Map.empty,
       spawns = Some(UnitKind.Dragon -> Balance.DragonSpawnIntervalMs)
     ),
+    // Camp de Guerre: Chaos's tier-2 building (see Balance.OrcMaxHp's doc) — unlike
+    // Labyrinth/DragonsLair it still produces Fire, same as Cave, on top of the Orc it
+    // spawns.
+    BuildingKind.WarCamp -> BuildingSpec(
+      cost =
+        Map(Resource.Wood -> Balance.WarCampCostWood, Resource.Fire -> Balance.WarCampCostFire),
+      produces = Map(Resource.Fire -> Balance.FirePerSecPerWarCamp),
+      spawns = Some(UnitKind.Orc -> Balance.OrcSpawnIntervalMs)
+    ),
     BuildingKind.Church -> BuildingSpec(
-      cost = Map(Resource.Wood -> Balance.EgliseCostWood, Resource.Light -> Balance.EgliseCostLight),
+      cost =
+        Map(Resource.Wood -> Balance.EgliseCostWood, Resource.Light -> Balance.EgliseCostLight),
       produces = Map(Resource.Light -> Balance.LightPerSecPerEglise),
       spawns = Some(UnitKind.Paladin -> Balance.PaladinSpawnIntervalMs)
     ),
@@ -117,7 +132,8 @@ object BuildingSpecs:
     // Caserne.md: Loi's tier-1 building — a genuinely cheap entry point, below Church's
     // own price, spawning the cheap/fragile Soldat (see CreatureSpecs).
     BuildingKind.Barracks -> BuildingSpec(
-      cost = Map(Resource.Wood -> Balance.BarracksCostWood, Resource.Light -> Balance.BarracksCostLight),
+      cost =
+        Map(Resource.Wood -> Balance.BarracksCostWood, Resource.Light -> Balance.BarracksCostLight),
       produces = Map(Resource.Light -> Balance.LightPerSecPerBarracks),
       spawns = Some(UnitKind.Soldier -> Balance.SoldierSpawnIntervalMs)
     ),
@@ -127,12 +143,18 @@ object BuildingSpecs:
       spawns = Some(UnitKind.Zombie -> Balance.ZombieSpawnIntervalMs)
     ),
     BuildingKind.BlackCastle -> BuildingSpec(
-      cost = Map(Resource.Wood -> Balance.BlackCastleCostWood, Resource.Shadow -> Balance.BlackCastleCostShadow),
+      cost = Map(
+        Resource.Wood -> Balance.BlackCastleCostWood,
+        Resource.Shadow -> Balance.BlackCastleCostShadow
+      ),
       produces = Map(Resource.Shadow -> Balance.ShadowPerSecPerBlackCastle),
       spawns = Some(UnitKind.Vampire -> Balance.VampireSpawnIntervalMs)
     ),
     BuildingKind.DeathHouse -> BuildingSpec(
-      cost = Map(Resource.Wood -> Balance.DeathHouseCostWood, Resource.Shadow -> Balance.DeathHouseCostShadow),
+      cost = Map(
+        Resource.Wood -> Balance.DeathHouseCostWood,
+        Resource.Shadow -> Balance.DeathHouseCostShadow
+      ),
       produces = Map(Resource.Shadow -> Balance.ShadowPerSecPerDeathHouse),
       spawns = Some(UnitKind.Necromancer -> Balance.NecromancerSpawnIntervalMs)
     ),
@@ -141,7 +163,10 @@ object BuildingSpecs:
     // applyPassingGateHarvest), same "combat abilities stay out of this data table" split
     // as Forest/Jungle/Angel's aura and Watchtower's ranged damage.
     BuildingKind.PassingGate -> BuildingSpec(
-      cost = Map(Resource.Shadow -> Balance.PassingGateCostShadow, Resource.Light -> Balance.PassingGateCostLight),
+      cost = Map(
+        Resource.Shadow -> Balance.PassingGateCostShadow,
+        Resource.Light -> Balance.PassingGateCostLight
+      ),
       produces = Map.empty,
       spawns = None,
       dps = Balance.PassingGateDamagePerSec
@@ -166,14 +191,20 @@ object BuildingSpecs:
     // buildableDirectly = false for all five: reached only by upgrading a LaboFondamental
     // (see upgradeOptions/Placement.tryUpgradeBuilding), never placed from scratch.
     BuildingKind.LaboNaturel -> BuildingSpec(
-      cost = Map(Resource.Wood -> Balance.LaboNaturelCostWood, Resource.Crystal -> Balance.LaboNaturelCostCrystal),
+      cost = Map(
+        Resource.Wood -> Balance.LaboNaturelCostWood,
+        Resource.Crystal -> Balance.LaboNaturelCostCrystal
+      ),
       produces = Map(Resource.Crystal -> Balance.CrystalPerSecPerLaboNaturel),
       spawns = None,
       buildableDirectly = false,
       maxPerMaze = Some(1)
     ),
     BuildingKind.LaboSombre -> BuildingSpec(
-      cost = Map(Resource.Shadow -> Balance.LaboSombreCostShadow, Resource.Crystal -> Balance.LaboSombreCostCrystal),
+      cost = Map(
+        Resource.Shadow -> Balance.LaboSombreCostShadow,
+        Resource.Crystal -> Balance.LaboSombreCostCrystal
+      ),
       produces = Map(Resource.Crystal -> Balance.CrystalPerSecPerLaboSombre),
       spawns = None,
       buildableDirectly = false,
@@ -187,14 +218,20 @@ object BuildingSpecs:
       maxPerMaze = Some(1)
     ),
     BuildingKind.LaboDeLaLoi -> BuildingSpec(
-      cost = Map(Resource.Light -> Balance.LaboDeLaLoiCostLight, Resource.Crystal -> Balance.LaboDeLaLoiCostCrystal),
+      cost = Map(
+        Resource.Light -> Balance.LaboDeLaLoiCostLight,
+        Resource.Crystal -> Balance.LaboDeLaLoiCostCrystal
+      ),
       produces = Map(Resource.Crystal -> Balance.CrystalPerSecPerLaboDeLaLoi),
       spawns = None,
       buildableDirectly = false,
       maxPerMaze = Some(1)
     ),
     BuildingKind.LaboDuChaos -> BuildingSpec(
-      cost = Map(Resource.Fire -> Balance.LaboDuChaosCostFire, Resource.Crystal -> Balance.LaboDuChaosCostCrystal),
+      cost = Map(
+        Resource.Fire -> Balance.LaboDuChaosCostFire,
+        Resource.Crystal -> Balance.LaboDuChaosCostCrystal
+      ),
       produces = Map(Resource.Crystal -> Balance.CrystalPerSecPerLaboDuChaos),
       spawns = None,
       buildableDirectly = false,
@@ -209,11 +246,18 @@ object BuildingSpecs:
   val upgradeOptions: Map[BuildingKind, List[BuildingKind]] = Map(
     BuildingKind.Grove -> List(BuildingKind.Forest),
     BuildingKind.Forest -> List(BuildingKind.Jungle),
+    // LaboDeLaLoi first (rock-paper-scissors tuning pass, at the project owner's explicit
+    // direction): AiStrategy.upgradeAnyAffordable always picks the first affordable target
+    // in this list, and LawSpending's own rush specifically wants its one LaboFondamental
+    // to become LaboDeLaLoi (its research speeds up Watchtower/Angel's attack rate — see
+    // LawSpending's own doc) rather than whichever of the 5 happens to be cheapest to
+    // afford first. Order otherwise doesn't matter to ScienceSpending, which wants all 5
+    // regardless of sequence (see VictoryConditions.hasWonViaFondamentale).
     BuildingKind.LaboFondamental -> List(
+      BuildingKind.LaboDeLaLoi,
       BuildingKind.LaboNaturel,
       BuildingKind.LaboSombre,
       BuildingKind.LaboDeRecherche,
-      BuildingKind.LaboDeLaLoi,
       BuildingKind.LaboDuChaos
     )
   )
@@ -228,21 +272,15 @@ object BuildingSpecs:
   // (not derived from EntityNames.buildingInfo(_).faction) because EntityNames' i18n
   // package itself imports this domain package; reaching back the other way would be a
   // cycle. Mirrors the grouping `baseSpecs`' own "── Faction ──" comments already show.
-  private val costRankGroups: List[List[BuildingKind]] = List(
-    List(BuildingKind.Grove, BuildingKind.Forest, BuildingKind.Jungle, BuildingKind.Stonehenge),
-    List(BuildingKind.Cave, BuildingKind.Labyrinth, BuildingKind.DragonsLair),
-    List(BuildingKind.Church, BuildingKind.Watchtower, BuildingKind.Angel, BuildingKind.Barracks),
-    List(BuildingKind.Tomb, BuildingKind.BlackCastle, BuildingKind.DeathHouse, BuildingKind.PassingGate),
-    List(
-      BuildingKind.LaboFondamental,
-      BuildingKind.StasisField,
-      BuildingKind.LaboNaturel,
-      BuildingKind.LaboSombre,
-      BuildingKind.LaboDeRecherche,
-      BuildingKind.LaboDeLaLoi,
-      BuildingKind.LaboDuChaos
-    )
-  )
+  // Derived from EntityNames' own faction data, not a hand-maintained parallel list — a
+  // new BuildingKind (a future WarCamp/etc.) is automatically included in its faction's
+  // own group the moment EntityNames.buildingInfo gets an entry for it, with no second
+  // place to remember to update. A literal list here once caused exactly the failure mode
+  // this comment is warning against: BuildingKind.WarCamp existed in `all` but not in this
+  // list, so `all` itself threw NoSuchElementException at class-init time the moment
+  // anything touched it.
+  private val costRankGroups: List[List[BuildingKind]] =
+    BuildingKind.values.toList.groupBy(k => EntityNames.buildingInfo(k).faction).values.toList
 
   // No design doc tiers every building (see DocGenerator/CLAUDE.md's symmetry rule and the
   // TODO.md design-pass note this reads from) — only Dragon's Lair/Barracks/Stasis Field
@@ -267,4 +305,6 @@ object BuildingSpecs:
   }.toMap
 
   val all: Map[BuildingKind, BuildingSpec] =
-    baseSpecs.map { case (kind, spec) => kind -> spec.copy(tier = tierOverrides.getOrElse(kind, computedTiers(kind))) }
+    baseSpecs.map { case (kind, spec) =>
+      kind -> spec.copy(tier = tierOverrides.getOrElse(kind, computedTiers(kind)))
+    }

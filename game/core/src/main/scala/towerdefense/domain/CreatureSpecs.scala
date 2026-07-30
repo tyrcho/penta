@@ -54,15 +54,27 @@ object CreatureSpecs:
     ),
     // Paladin.md gives it no plunder ability — its value is the shield it provides to
     // adjacent allies, a combat ability that stays outside this spec (see CombatEngine).
-    UnitKind.Paladin -> CreatureSpec(Balance.PaladinMaxHp, Balance.PaladinSpeedPerMs, plunder = Map.empty),
+    UnitKind.Paladin -> CreatureSpec(
+      Balance.PaladinMaxHp,
+      Balance.PaladinSpeedPerMs,
+      plunder = Map.empty
+    ),
     // Loup.md gives it no plunder ability either — its value is the speed buff it grants
     // nearby allies, a combat ability that stays outside this spec (see CombatEngine).
     UnitKind.Wolf -> CreatureSpec(Balance.WolfMaxHp, Balance.WolfSpeedPerMs, plunder = Map.empty),
     // Zombie.md/Vampire.md give neither a plunder ability — their value is corrupting
     // adjacent enemy buildings over time (Corruption.md), a combat ability that stays
     // outside this spec (see CombatEngine's corruption handling).
-    UnitKind.Zombie -> CreatureSpec(Balance.ZombieMaxHp, Balance.ZombieSpeedPerMs, plunder = Map.empty),
-    UnitKind.Vampire -> CreatureSpec(Balance.VampireMaxHp, Balance.VampireSpeedPerMs, plunder = Map.empty),
+    UnitKind.Zombie -> CreatureSpec(
+      Balance.ZombieMaxHp,
+      Balance.ZombieSpeedPerMs,
+      plunder = Map.empty
+    ),
+    UnitKind.Vampire -> CreatureSpec(
+      Balance.VampireMaxHp,
+      Balance.VampireSpeedPerMs,
+      plunder = Map.empty
+    ),
     // Necromancien.md gives it no plunder ability either — its value is periodically
     // invoking an Ame, a combat ability that stays outside this spec (see CombatEngine's
     // advanceCreatureSummons).
@@ -100,7 +112,19 @@ object CreatureSpecs:
     // Caserne.md gives it no plunder ability — its value is surviving combat via "Rang
     // serre" (see CombatEngine.soldierPairedIds/applyDamageSources), a combat ability
     // that stays outside this spec, same as Paladin/Wolf's own abilities above.
-    UnitKind.Soldier -> CreatureSpec(Balance.SoldierMaxHp, Balance.SoldierSpeedPerMs, plunder = Map.empty)
+    UnitKind.Soldier -> CreatureSpec(
+      Balance.SoldierMaxHp,
+      Balance.SoldierSpeedPerMs,
+      plunder = Map.empty
+    ),
+    // Camp de Guerre's tanky counterpart to DragonsLair's glass-cannon Dragon (see
+    // Balance.OrcMaxHp's doc) — steals Gold directly, same shape as Goblin/Minotaur, just
+    // at a higher per-trip amount to reward the tougher, costlier building that made it.
+    UnitKind.Orc -> CreatureSpec(
+      Balance.OrcMaxHp,
+      Balance.OrcSpeedPerMs,
+      plunder = Map(Resource.Gold -> Balance.OrcPlunderPerUnit)
+    )
   )
 
   // Which building "made" each unit kind — used by CombatEngine.applyPassingGateHarvest to
@@ -125,8 +149,11 @@ object CreatureSpecs:
     UnitKind.Soul -> BuildingKind.DeathHouse,
     UnitKind.Tree -> BuildingKind.Stonehenge,
     UnitKind.Dragon -> BuildingKind.DragonsLair,
-    UnitKind.Soldier -> BuildingKind.Barracks
+    UnitKind.Soldier -> BuildingKind.Barracks,
+    UnitKind.Orc -> BuildingKind.WarCamp
   )
 
   val all: Map[UnitKind, CreatureSpec] =
-    baseAll.map { case (kind, spec) => kind -> spec.copy(tier = BuildingSpecs.all(spawningBuilding(kind)).tier) }
+    baseAll.map { case (kind, spec) =>
+      kind -> spec.copy(tier = BuildingSpecs.all(spawningBuilding(kind)).tier)
+    }

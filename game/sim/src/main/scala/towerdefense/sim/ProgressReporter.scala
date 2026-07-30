@@ -11,13 +11,24 @@ object ProgressReporter:
   // most once every 2s, frequent enough that a multi-minute job never looks hung,
   // infrequent enough that a fast one doesn't spam a line per unit of work. Pure so it's
   // testable without depending on wall-clock timing.
-  private[sim] def shouldPrint(nowNanos: Long, lastPrintNanos: Long, completed: Int, total: Int): Boolean =
+  private[sim] def shouldPrint(
+      nowNanos: Long,
+      lastPrintNanos: Long,
+      completed: Int,
+      total: Int
+  ): Boolean =
     completed <= 1 || completed >= total || (nowNanos - lastPrintNanos) >= 2_000_000_000L
 
   // ETA is a flat linear extrapolation from elapsed/completed — good enough for a rough
   // "is this almost done" signal, not a promise.
-  private[sim] def formatLine(label: String, completed: Int, total: Int, elapsedSeconds: Double): String =
-    val etaSeconds = if completed == 0 then Double.NaN else elapsedSeconds / completed * (total - completed)
+  private[sim] def formatLine(
+      label: String,
+      completed: Int,
+      total: Int,
+      elapsedSeconds: Double
+  ): String =
+    val etaSeconds =
+      if completed == 0 then Double.NaN else elapsedSeconds / completed * (total - completed)
     val eta = if etaSeconds.isNaN then "unknown" else f"${etaSeconds}%.0fs"
     f"[$label] $completed%d/$total%d done, elapsed ${elapsedSeconds}%.0fs, ETA $eta"
 

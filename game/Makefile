@@ -1,15 +1,18 @@
-.PHONY: dev test test-js sim sim-tune docs build clean help
+.PHONY: dev test test-js sim sim-tune sim-tournament sim-rps docs build clean help
 
 help:
-	@echo "make dev      — compile + watch + dev server on :8082"
-	@echo "make test     — run unit tests on the JVM (fast — for iterating on AI strategies)"
-	@echo "make test-js  — run unit tests under Node.js (parity check for the browser build)"
-	@echo "make sim      — headless AI-vs-AI battles: make sim ARGS='linear balanced 200'"
-	@echo "                add --log <path> for a one-match transcript: ARGS='linear comb 1 --log /tmp/match.log'"
-	@echo "make sim-tune — sweep FreeformLayout+WeightedSpending weights: make sim-tune ARGS='linear 50 0.25'"
-	@echo "make docs     — regenerate the vault's building/unit/resource/research pages (FR in place, EN under ../Resources-en/)"
-	@echo "make build    — production JS build → public/"
-	@echo "make clean    — remove build artifacts"
+	@echo "make dev            — compile + watch + dev server on :8082"
+	@echo "make test           — run unit tests on the JVM (fast — for iterating on AI strategies)"
+	@echo "make test-js        — run unit tests under Node.js (parity check for the browser build)"
+	@echo "make sim            — headless AI-vs-AI battles: make sim ARGS='linear balanced 200'"
+	@echo "                      add --log <path> for a one-match transcript: ARGS='linear comb 1 --log /tmp/match.log'"
+	@echo "make sim-tune       — sweep FreeformLayout+WeightedSpending weights: make sim-tune ARGS='linear 50 0.25'"
+	@echo "make sim-tournament — Swiss tournament + top-8 playoff bracket across the AiStrategy ladder, parallel across cores:"
+	@echo "                      make sim-tournament ARGS='2 3000 100 tournament-matches.log tournament-report.md 8'"
+	@echo "make sim-rps        — verify the 5-faction rock-paper-scissors cycle: make sim-rps ARGS='20 3500'"
+	@echo "make docs           — regenerate the vault's building/unit/resource/research pages (FR in place, EN under ../Resources-en/)"
+	@echo "make build          — production JS build → public/"
+	@echo "make clean          — remove build artifacts"
 
 dev:
 	sbt --batch dev
@@ -25,6 +28,12 @@ sim:
 
 sim-tune:
 	sbt --batch "sim/runMain towerdefense.sim.tune $(ARGS)"
+
+sim-tournament:
+	sbt --batch "sim/runMain towerdefense.sim.tournament $(ARGS)"
+
+sim-rps:
+	sbt --batch "sim/runMain towerdefense.sim.rockPaperScissors $(ARGS)"
 
 docs:
 	sbt --batch "sim/runMain towerdefense.docgen.generate"

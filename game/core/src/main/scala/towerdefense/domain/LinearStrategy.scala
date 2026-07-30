@@ -7,8 +7,8 @@ package towerdefense.domain
 // is symmetric" — Forest/Jungle (and, since the Science redesign, the five specific labs)
 // are reached only via maybeUpgrade, never listed here.
 // Tried by descending wood cost (Stonehenge 150 > Church 20 = BlackCastle 20 =
-// DragonsLair 20 > Labyrinth 10 = Watchtower 10 = DeathHouse 10 > Grove 5 = Tomb 5 =
-// Barracks 5 > Cave 0 = Angel 0 = PassingGate 0 = LaboFondamental 0 = StasisField 0):
+// DragonsLair 20 > Labyrinth 10 = Watchtower 10 = DeathHouse 10 = WarCamp 10 > Grove 5 =
+// Tomb 5 = Barracks 5 > Cave 0 = Angel 0 = PassingGate 0 = LaboFondamental 0 = StasisField 0):
 // each one's wood cost dominates every cheaper building's, so trying it later would make
 // it unreachable — by the time its wood cost is affordable, the cheaper buildings' wood
 // costs always are too (their non-wood requirements are independent currencies and don't
@@ -27,9 +27,15 @@ package towerdefense.domain
 // LinearStrategy is meant to exercise Death at all.
 // Kept as the fixed baseline other AiStrategy implementations (e.g. CompositeStrategy)
 // are measured against — it never reads `opponent`.
+//
+// AiStrategyTest asserts buildOrder's kind set matches every buildableDirectly kind in
+// BuildingSpecs.all exactly — the same invariant this file's own doc claims ("Both sides
+// can build any directly-buildable BuildingKind") but that a hand-written literal list
+// can't otherwise guarantee: WarCamp was added to BuildingSpecs without a matching entry
+// here, silently making it unbuildable by this strategy, until that test caught it.
 object LinearStrategy extends AiStrategy:
 
-  private val buildOrder: Seq[BuildingKind] = Seq(
+  private[domain] val buildOrder: Seq[BuildingKind] = Seq(
     BuildingKind.Stonehenge,
     BuildingKind.Church,
     BuildingKind.BlackCastle,
@@ -37,6 +43,7 @@ object LinearStrategy extends AiStrategy:
     BuildingKind.Labyrinth,
     BuildingKind.Watchtower,
     BuildingKind.DeathHouse,
+    BuildingKind.WarCamp,
     BuildingKind.Grove,
     BuildingKind.Tomb,
     BuildingKind.Barracks,

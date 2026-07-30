@@ -36,7 +36,8 @@ object Balance:
   val ElfHpBonusPerAlly: Double = 0.02
 
   val WolfMaxHp: Double = 30.0 // Loup.md: "PV: 40"
-  val WolfSpeedPerMs: Double = ElfSpeedPerMs * 1.5 // Loup.md: "1.5x plus vite que les unites standard"
+  val WolfSpeedPerMs: Double =
+    ElfSpeedPerMs * 1.5 // Loup.md: "1.5x plus vite que les unites standard"
   // Loup.md: "augmente la vitesse de deplacement des unites a 2 cases de 50%" — a
   // multiplier (1.5x), not a flat addition, applied to any other creature within range.
   val WolfSpeedAuraMultiplier: Double = 1.5
@@ -49,15 +50,29 @@ object Balance:
   // its own tier. Multiple nearby healers stack, same "summed, not just present/absent" as
   // multiple corrupting creatures on the same building — see
   // CombatEngine.healBuildingCorruption.
-  val GroveCorruptionHealPercentPerSec: Double = 0.1
-  val ForestCorruptionHealPercentPerSec: Double = 0.3
-  val JungleCorruptionHealPercentPerSec: Double = 0.5
+  // Raised from an initial 0.1/0.3/0.5, then 0.2/0.6/1.0 (project owner's explicit
+  // direction, same tuning pass as ZombieCorruptionPercentPerSec/
+  // VampireCorruptionPercentPerSec's reductions above): confirmed via transcript
+  // (`sim/run maze-nature maze-corruption --log`) that even 0.2/0.6/1.0 still lost the
+  // race — several buildings sat in a genuine cluster (2-3 healers within Chebyshev
+  // distance 1) yet still corroded to dust, because losing even one nearby healer to an
+  // earlier corruption (self-reinforcing: fewer healers -> less heal -> the next building
+  // corrodes faster too) outpaced what was left. Raised again so a single Forest/Jungle
+  // alone is close to breakeven against one Zombie, and any real cluster (2+) reliably
+  // wins outright — clustering (HealClusterLayout) is now a genuine advantage on top of a
+  // baseline that already holds, not a hard requirement with no margin for attrition.
+  val GroveCorruptionHealPercentPerSec: Double = 0.4
+  val ForestCorruptionHealPercentPerSec: Double = 1.0
+  val JungleCorruptionHealPercentPerSec: Double = 1.8
 
   // Stonehenge.md: Nature's fourth building, wood-only like Grove/Forest/Jungle but at a
   // much steeper cost — spawns a self-cloning Arbre Anime (Tree) like every other
   // building's spawn (crosses into the opponent's maze, same as Forest's Elf/Jungle's Wolf).
   val StonehengeCostWood: Double = 150.0
-  val StonehengeSpawnIntervalMs: Double = 10_000.0
+  // Slowed from the original 10_000.0 (rock-paper-scissors tuning pass: maze-nature was
+  // winning its forest-count race well before slower factions' own economies even ramped
+  // up — see NatureVictoryForestTarget's doc for the other half of this nerf).
+  val StonehengeSpawnIntervalMs: Double = 16_000.0
   val TreeMaxHp: Double = 100.0
   // "lent comme un Zombie" — same formula as Balance.ZombieSpeedPerMs (defined later, in
   // the Mort section — inlined here to avoid a forward reference within this object).
@@ -67,7 +82,8 @@ object Balance:
   // shape as the Necromancer (CreatureSpec.spawnFreezeMs), except the clone appears at the
   // *next* path cell rather than the summoner's own position (see CreatureSpec.
   // spawnAtNextCell / CombatEngine.advanceCreatureSummons).
-  val TreeCloneIntervalMs: Double = 10_000.0
+  // Slowed alongside StonehengeSpawnIntervalMs above, same rock-paper-scissors tuning pass.
+  val TreeCloneIntervalMs: Double = 16_000.0
   val TreeCloneFreezeMs: Double = 3_000.0
   // Each clone is TreeCloneSizeStepFraction smaller (size AND HP, both scaled together)
   // than the parent that made it — e.g. the original (100%) makes an 80% clone, which in
@@ -100,7 +116,11 @@ object Balance:
   val MinotaurSpawnIntervalMs: Double =
     10_000.0 // Labyrinthe.md: "toutes les 10 secondes genere un Minotaure"
 
-  val MinotaurMaxHp: Double = 50.0 // Minotaure.md: "PV: 50"
+  // Raised from Minotaure.md's original 50 (rock-paper-scissors tuning pass): Labyrinth
+  // is now Chaos's tier-3 building (WarCamp/Orc took over the cheaper tier-2 slot above),
+  // so Minotaur's own HP should lead the ladder it now sits atop, not just match its old
+  // tier-2 value.
+  val MinotaurMaxHp: Double = 80.0
   val MinotaurSpeedPerMs: Double = 0.05 // POC default, matches Elf/Goblin
 
   // A heavier, slower-to-produce raider than Goblin's PlunderPerUnit — same 2x-for-Gold
@@ -121,6 +141,31 @@ object Balance:
   val DragonMaxHp: Double = 18.0
   val DragonSpeedPerMs: Double = ElfSpeedPerMs * 1.5 // +50% — same pace as Wolf/Vampire
   val DragonPlunderGold: Double = 40.0
+
+  // Camp de Guerre (TODO.md's "Orc" concept, repurposed) is Chaos's tier-2 building —
+  // cheaper than Labyrinth (below, tier 3), and unlike Labyrinth/DragonsLair it still
+  // produces a resource of its own (Fire, same as Cave), same shape as a mid-tier
+  // building rather than a pure glass-cannon/raider commitment.
+  val WarCampCostWood: Double = 10.0
+  val WarCampCostFire: Double = 25.0
+  val FirePerSecPerWarCamp: Double = 0.3 // between Cave's own rate and a Watchtower's Light rate
+  val OrcSpawnIntervalMs: Double = 6_000.0 // faster than Minotaur's 10s — a cheap, frequent raider
+
+  // Deliberately low HP (rock-paper-scissors tuning pass): Orc isn't meant to out-tank a
+  // Watchtower on raw HP alone — its first lethal hit instead clamps it to 1 HP, exactly
+  // once per Orc (see CombatEngine.applyDamageSources/Creature.hasCheatedDeath). Its real
+  // edge is volume (fast spawn) plus that one guaranteed extra step, not brute durability.
+  // Dialed back from 18 (third tuning pass — 18 overcorrected Law-vs-Chaos into Chaos's
+  // favor rather than just closing Chaos-vs-Science): still needs 2 sustained hits from a
+  // single-target defense to actually die, since a continuous per-tick source (a Forest's
+  // aura, unlike Watchtower's own throttled 1-hit/sec) can re-kill the cheated-death 1 HP
+  // Orc on literally the next tick either way.
+  val OrcMaxHp: Double = 15.0
+  val OrcSpeedPerMs: Double = 0.05 // POC default, matches Elf/Goblin/Minotaur
+  // Lower than Minotaur's 2x-PlunderPerUnit shape (rock-paper-scissors tuning pass: Orc's
+  // real value is volume + survivability, not per-trip payout) — steals Gold directly,
+  // same shape as Goblin/Minotaur.
+  val OrcPlunderPerUnit: Double = 5.0
 
   // ── Loi ──────────────────────────────────────────────────────────────────
   val EgliseCostWood: Double = 20.0 // Eglise.md: "cout en bois: 40"
@@ -143,9 +188,23 @@ object Balance:
   val WatchtowerCostWood: Double = 10.0 // "cout en bois: 10"
   val WatchtowerCostLight: Double = 20.0 // "cout en lumiere: 5"
   val LightPerSecPerWatchtower: Double = 0.3 // POC tuning: raised from Tour de guet.md's 0.1/sec
-  val WatchtowerDamagePerSec: Double = 10.0 // "Inflige 10 degats chaque seconde a une cible"
-  // "jusqu'a 2 cases de distance" — Chebyshev (king-move) distance in cells, the usual
-  // reading of tower range on a grid: any cell within a 5x5 block centered on the tower.
+  // Reverted to Tour de guet.md's original 10 (fourth tuning pass): a shared nerf here hit
+  // Law far harder than Science — Watchtower is LITERALLY Law's own racing kind (one of
+  // LawSpending's four), its entire defense, while Science has other value (labs economy,
+  // Cave/Church/Tomb producers) to fall back on. Nerfing this one lever overcorrected
+  // Law-vs-Chaos (Chaos started sweeping it) without meaningfully denting Chaos-vs-Science.
+  // Science's real fix was capping its incidental Forest-wall (see ScienceSpending's own
+  // naturePenalty), not this.
+  val WatchtowerDamagePerSec: Double = 10.0
+  // Shortened from Tour de guet.md's original 2 to 1 (an earlier rock-paper-scissors
+  // tuning pass): at range 2, Watchtower could snipe a slow-approaching Zombie/Vampire
+  // before it ever got close enough to start corrupting it. Raised back to 2 (this pass):
+  // confirmed via transcript that Mort still sweeps Loi with a huge margin at range 1
+  // already (its own corruption race resolves fast regardless — Watchtower range was never
+  // the deciding factor there), while Law-vs-Chaos badly needed the extra range: a steady
+  // trickle of cheap Goblin/Orc volume simply outpaced what range-1, single-tick Watchtower
+  // coverage could kill, regardless of how many towers Law built. Chebyshev (king-move)
+  // distance in cells.
   val WatchtowerRangeCells: Int = 2
 
   // Ange.md: Loi's third building — no unit spawn, produces Light like Eglise/Watchtower,
@@ -153,7 +212,8 @@ object Balance:
   // a slow debuff Forest/Jungle don't have.
   val AngelCostLight: Double = 50.0 // Ange.md: "cout en lumiere: 50"
   val LightPerSecPerAngel: Double = 0.5 // Ange.md: "Produit 0.5 Lumiere par seconde"
-  val AngelDamagePerSec: Double = 5.0 // Ange.md: "Inflige 5 degats par seconde aux unites adjacentes"
+  val AngelDamagePerSec: Double =
+    5.0 // Ange.md: "Inflige 5 degats par seconde aux unites adjacentes"
   // Ange.md: "ralentit leur vitesse de deplacement de 25%" — a multiplier (0.75x) applied
   // to any enemy creature adjacent to an Angel, same adjacency rule as its damage (see
   // CombatEngine.effectiveSpeedPerMs), stacking multiplicatively with Wolf's speed boost.
@@ -171,7 +231,15 @@ object Balance:
   // own tier-1 range — this fills Loi's missing cheap entry-tier slot.
   val BarracksCostWood: Double = 5.0
   val BarracksCostLight: Double = 10.0
-  val LightPerSecPerBarracks: Double = 0.2
+  // Raised from 0.2 (rock-paper-scissors tuning pass): confirmed via transcript
+  // (`sim/run maze-law maze-plunder --log`) that Law's own defense stalled at just 2
+  // Watchtowers (Light20 each) for hundreds of ticks — not from any scoring problem
+  // (LawSpending.watchtowerDefenseCap already prioritizes it), but because Placement
+  // itself won't even offer Watchtower as a candidate until enough Light is actually on
+  // hand, and 2 Barracks' worth of income took ~50s to refill one more Watchtower's cost.
+  // Chaos's own plunder race (a small, fixed target) kept finishing well inside that
+  // window regardless of how many raiders got killed along the way.
+  val LightPerSecPerBarracks: Double = 0.4
   val SoldierSpawnIntervalMs: Double = 8_000.0
 
   val SoldierMaxHp: Double = 10.0
@@ -200,11 +268,29 @@ object Balance:
   // building raises its corruptionPercent each tick; at CorruptionMaxPercent the building
   // is destroyed and its cost refunded to the corrupting unit's owner (not the building's
   // own owner, unlike Demolition).
+  // Raised from Zombie.md's original 1%/sec (rock-paper-scissors tuning pass, buffing
+  // Death a bit further — alongside VampireCorruptionPercentPerSec's own earlier buff).
+  // Dialed back from an initial 1.3 (third tuning pass — 1.3 overcorrected Nature-vs-Death
+  // into Death's favor rather than just closing Death-vs-Law).
+  // Eased back down again from 1.15 (project owner's explicit direction: "keep corruption
+  // design... tune the corruption speed, healing speed from nature buildings" — corruption
+  // was outrunning even a clustered Nature/Grove's heal, see
+  // GroveCorruptionHealPercentPerSec's own doc for the other half of this pass).
   val ZombieCorruptionPercentPerSec: Double = 1.0
 
   val VampireMaxHp: Double = 50.0 // Vampire.md: "PV: 50"
-  val VampireSpeedPerMs: Double = ElfSpeedPerMs * 1.5 // Vampire.md: "Se deplace vite (1.5 case/ sec)" — matches Wolf's pace
-  val VampireCorruptionPercentPerSec: Double = 2.0 // Vampire.md: "Corrompt les batiments adjacents de 2% par seconde"
+  val VampireSpeedPerMs: Double =
+    ElfSpeedPerMs * 1.5 // Vampire.md: "Se deplace vite (1.5 case/ sec)" — matches Wolf's pace
+  // Raised from Vampire.md's original 2%/sec (rock-paper-scissors tuning pass): Vampire is
+  // Mort's tier-2 unit (higher HP/speed than Zombie already — see VampireMaxHp/
+  // VampireSpeedPerMs above), so its corruption rate should lead Zombie's by more than the
+  // pre-tuning 2x, not just match "twice as fast" while contributing the same underlying
+  // mechanic.
+  // Eased back from 3.0 alongside ZombieCorruptionPercentPerSec's own reduction (same
+  // tuning pass) — still comfortably Zombie's rate * 2 (Vampire's own invariant, checked
+  // by CombatEngineTest), just no longer fast enough to out-race a clustered Nature heal
+  // outright regardless of how many Groves/Forests surround the target.
+  val VampireCorruptionPercentPerSec: Double = 2.5
   // Vampire.md: "Reduit les degats qu'il subit de 50% (mais n'est pas protege par l'aura du
   // Paladin)" — an unconditional flat reduction applied in CombatEngine, explicitly instead
   // of (not stacked with) Paladin's shield: a Vampire is excluded from paladinShieldedIds
@@ -217,7 +303,8 @@ object Balance:
   val DeathHouseCostWood: Double = 10.0 // "cout en bois: 10"
   val DeathHouseCostShadow: Double = 40.0 // "cout en ombre: 40"
   val ShadowPerSecPerDeathHouse: Double = 0.5 // "Produit 0.5 ombre / sec"
-  val NecromancerSpawnIntervalMs: Double = 10_000.0 // "Envoie un Necromancien toutes les 10 secondes"
+  val NecromancerSpawnIntervalMs: Double =
+    10_000.0 // "Envoie un Necromancien toutes les 10 secondes"
 
   // Portail.md: Mort's fourth building — no unit spawn at all, unlike Tomb/BlackCastle/
   // DeathHouse. A hybrid Loi/Mort cost (Light + Shadow, no Wood), dealing passive aura
@@ -256,8 +343,10 @@ object Balance:
   // Wolf/Vampire are 1.5x).
   val SoulSpeedPerMs: Double = ElfSpeedPerMs
   // Ame.md: "Corrompt les batiments adjacents de 1% par seconde" — same rate as a Zombie,
-  // reusing CombatEngine's existing corruption mechanic (Corruption.md).
-  val SoulCorruptionPercentPerSec: Double = 1.0
+  // reusing CombatEngine's existing corruption mechanic (Corruption.md). Kept in sync with
+  // ZombieCorruptionPercentPerSec's own rock-paper-scissors tuning-pass buff above, to
+  // preserve that "same rate as a Zombie" invariant rather than silently break it.
+  val SoulCorruptionPercentPerSec: Double = ZombieCorruptionPercentPerSec
   // Ame.md: "Chaque fois qu'elle corrompt un batiment, elle soigne le Necromancien... de 1
   // PV... Si sa corruption touche plusieurs batiments a la fois, elle soigne davantage" — a
   // per-second rate (like the corruption percentage itself) *per building* the Soul is
@@ -277,7 +366,16 @@ object Balance:
   // and destroying a whole enemy building (removing it outright and refunding its cost),
   // a far heavier swing than one Elf/Goblin plunder, so the target sits far below
   // ChaosVictoryPlunderTarget. Tunable via tournament iteration like the other targets.
-  val MortVictoryCorruptionTarget: Double = 8.0
+  //
+  // Raised from an original 8 (rock-paper-scissors tuning pass): confirmed via transcript
+  // that Nature's own Watchtower defense was successfully killing the large majority of
+  // Death's raiders (20 killed vs 8 that got through in one measured match) but a small,
+  // easily-reachable fixed target still let Death win the race regardless — corruption
+  // doesn't need to reliably get through, just eventually, given enough ticks. Raising the
+  // target buys Nature's own (much slower) forestCount race more time without touching
+  // anything Chaos/Science/Law's own win conditions depend on. Death-vs-Law had a wide
+  // (100% win rate) margin to spend on this same slowdown.
+  val MortVictoryCorruptionTarget: Double = 12.0
 
   // ── Science ──────────────────────────────────────────────────────────────
   // LaboFondamental is the only Science kind buildable from scratch — a cheap, generic
@@ -315,7 +413,8 @@ object Balance:
   val CrystalPerSecPerLaboSombre: Double = 0.2 // Labo Sombre.md: "Produit 0.2 Crystal par sec"
 
   val LaboDeRechercheCostCrystal: Double = 15.0 // Labo de Recherche.md: "cout en crystal: 15"
-  val CrystalPerSecPerLaboDeRecherche: Double = 0.3 // Labo de Recherche.md: "Produit 0.3 Crystal par sec"
+  val CrystalPerSecPerLaboDeRecherche: Double =
+    0.3 // Labo de Recherche.md: "Produit 0.3 Crystal par sec"
 
   val LaboDeLaLoiCostLight: Double = 5.0 // Labo de la Loi.md: "cout en lumiere: 5"
   val LaboDeLaLoiCostCrystal: Double = 10.0 // Labo de la Loi.md: "cout en crystal: 10"
@@ -461,11 +560,42 @@ object Balance:
   // VictoryMultiplierOverOpponent times the opponent's own count, so leading by a
   // fixed margin early in the match doesn't win the game outright once the opponent
   // has caught up.
-  val NatureVictoryForestTarget: Int = 40
+  // Raised from the original 40 (rock-paper-scissors tuning pass, alongside
+  // StonehengeSpawnIntervalMs/TreeCloneIntervalMs above): maze-nature's undiluted Grove/
+  // Forest/Jungle rush was winning its forest-count race well before Science's own
+  // (much slower, ~2,420-Crystal) economy could ramp up.
+  val NatureVictoryForestTarget: Int = 56
+  // Tried raising this to 70 (rock-paper-scissors tuning pass) to buy Law's own economy
+  // (LightPerSecPerBarracks, LawSpending's Watchtower-defense cap) more runway before
+  // Chaos's plunder race resolves — reverted: it flipped Chaos-vs-Science hard in
+  // Science's favor (Chaos's own race got too slow to matter there) while barely moving
+  // Loi-vs-Chaos at all, confirming the two legs share this one knob too tightly for a
+  // single global raise to fix one without breaking the other. Loi-vs-Chaos needs a
+  // leg-specific lever (Law's own defense/economy) instead, left as a follow-up.
   val ChaosVictoryPlunderTarget: Double = 50.0 // Victoire.md, "R: Plunder — piller XX ressources"
 
   // Must double the opponent's own count (not just clear a fixed floor) to win.
   val VictoryMultiplierOverOpponent: Double = 2.0
+
+  // Victoire.md, "W: Paix Éternelle — à la fin du nombre de tours définis, le joueur avec
+  // le plus de bâtiments W gagne la partie si aucune autre condition n'est remplie" — the
+  // one victory condition that isn't a race, but a sudden-death comparison once this many
+  // ticks (BattleState.elapsedTicks) have passed.
+  //
+  // Raised back to 3_000 (rock-paper-scissors tuning pass, reversing an earlier 2_000):
+  // confirmed via VictoryConditions.WinCondition-tagged transcripts that 2_000 fired far
+  // too early for legs where NEITHER side is actually racing Loi — Science-vs-Nature and
+  // Nature-vs-Mort both ended up decided mostly by an incidental Loi building-count lead
+  // (whichever side's fallback spending happened to pick up a stray Watchtower/Church)
+  // rather than either side's own intended condition, since those matchups routinely run
+  // past 2_000 ticks before Science's labs or Nature/Mort's own race concludes. 3_000 lets
+  // those genuine races resolve first; Loi-vs-Chaos (the one matchup Loi's sudden-death is
+  // actually meant to decide) still gets a real look, since Law reliably amasses far more
+  // Loi buildings than needed well before 3_000 (86 vs an opponent's 1, in one measured
+  // match) — the deciding factor there is whether Chaos's OWN plunder race (a small,
+  // eventually-reachable fixed target) resolves before 3_000 either way, same tension as
+  // before, just without dragging in the other 3 legs as collateral.
+  val LoiVictoryTickThreshold: Int = 3_000
 
   // POC default: tearing a building down returns half of what it cost, so reshaping a
   // maze isn't free (discourages build/destroy spam) but also isn't punitive.

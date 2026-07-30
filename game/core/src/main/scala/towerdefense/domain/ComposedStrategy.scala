@@ -19,6 +19,10 @@ case class ComposedStrategy(
     random: scala.util.Random = new scala.util.Random()
 ) extends AiStrategy:
 
+  // See AiStrategy.reseed's own doc — this is the one implementation that actually has
+  // randomness (the tied-candidate tie-break below) worth reseeding.
+  override def reseed(seed: Long): AiStrategy = copy(random = new scala.util.Random(seed))
+
   def maybeBuild(state: MazeState, opponent: MazeState): MazeState =
     val candidates = allCandidates(state)
     if candidates.isEmpty then state
@@ -36,7 +40,11 @@ case class ComposedStrategy(
         val maxScore = finiteScores.max
         val totals = eligible.map { case (c, layoutScore) =>
           val normalizedLayout = normalize(layoutScore, minScore, maxScore)
-          val total = spendingWeight * spending.score(state, opponent, c.kind) + layoutWeight * normalizedLayout
+          val total = spendingWeight * spending.score(
+            state,
+            opponent,
+            c.kind
+          ) + layoutWeight * normalizedLayout
           (c, total)
         }
         val best = totals.map(_._2).max
