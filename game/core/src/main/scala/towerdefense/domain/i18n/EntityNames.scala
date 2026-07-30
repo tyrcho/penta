@@ -304,12 +304,12 @@ object EntityNames:
     val info = unitInfo(k)
     s"${factionFolder(info.faction, lang)}/${info.fileName(lang)}"
 
-  // .get: only ever called for a resource that actually has a wiki page — DocGenerator's
-  // per-resource loop filters out any faction = None (Gold) before reaching this (see
-  // ResourceKindInfo's own doc), so this never actually sees a None in practice.
-  def resourcePath(r: Resource, lang: Lang): String =
-    val info = resourceInfo(r)
-    s"${factionFolder(info.faction.get, lang)}/${info.fileName(lang)}"
+  // faction is a parameter, not re-derived from ResourceKindInfo.faction here, so a
+  // Gold-shaped call (no faction) can't compile at all — the one real caller
+  // (DocGenerator.generate) already has a proven Faction in hand from its own
+  // `faction <- ... .faction` filter, see that loop's doc.
+  def resourcePath(r: Resource, faction: Faction, lang: Lang): String =
+    s"${factionFolder(faction, lang)}/${resourceInfo(r).fileName(lang)}"
 
   // ── Cross-links between generated pages ─────────────────────────────────
   // Every generated page lives in its own faction subfolder (Resources/<Faction>/ or
@@ -334,11 +334,18 @@ object EntityNames:
     val info = unitInfo(k)
     mdLink(info.name(lang), relativeTo(from, info.faction, info.fileName(lang), lang))
 
-  // .get: same precondition as resourcePath's own doc — never called with Gold, since no
-  // building/unit page links to it (out of scope for this pass, see ResourceKindInfo).
+  // Never called with Gold in practice (no building/unit page links to it — out of scope
+  // for this pass, see ResourceKindInfo's own doc), but unlike resourcePath this has
+  // several call sites (EntityText's per-resource body text) that would all need their own
+  // proven Faction threaded through to avoid a .get here — getOrElse a clear diagnostic
+  // instead, so a Gold misuse fails with a message pointing at the actual mistake rather
+  // than a bare NoSuchElementException.
   def resourceLink(from: Faction, r: Resource, lang: Lang): String =
     val info = resourceInfo(r)
-    mdLink(info.name(lang), relativeTo(from, info.faction.get, info.fileName(lang), lang))
+    val faction = info.faction.getOrElse(
+      throw IllegalArgumentException(s"$r has no faction and therefore no wiki page (resourceLink)")
+    )
+    mdLink(info.name(lang), relativeTo(from, faction, info.fileName(lang), lang))
 
   // A link from an EN page to an FR-only page (Corruption.md, the faction overview pages)
   // that this generator doesn't produce an English version of (out of scope — see

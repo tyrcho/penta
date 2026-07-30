@@ -2,12 +2,21 @@
 # Repo-level pre-commit hook, picked up automatically by Datadog's global
 # git hooks (run-local-hooks looks for <repo-root>/hooks/pre-commit).
 #
-# Formats staged Scala files with scalafmt (game/.scalafmt.conf), scoped to
-# game/ since that's the only Scala project in this repo. Formats and lints
-# staged Markdown files with markdownlint-cli2 --fix across the *whole* repo
-# — the rest of this repo is an Obsidian vault, but its notes get the same
-# formatting pass as game/'s docs. A formatter fix re-stages the file; a
-# lint issue markdownlint can't auto-fix blocks the commit.
+# Checks (never auto-fixes) staged Scala files' formatting via
+# scripts/check-scalafmt-diff.py (game/.scalafmt.conf), scoped to game/ since
+# that's the only Scala project in this repo — run `scalafmt <file>` yourself
+# and re-stage before committing. Deliberately diff-aware, not a blanket
+# `scalafmt --check`: this codebase went uncommitted-hook for a while, so
+# several files have pre-existing formatting drift nobody asked this pass to
+# fix; check-scalafmt-diff.py only fails on reformatting that overlaps lines
+# this commit actually staged, so a commit's diff stays exactly what the
+# author intended and pre-existing drift elsewhere in a touched file doesn't
+# also drag unrelated methods into the method-length check below (which uses
+# the same overlap technique).
+# Markdown *is* still auto-fixed (markdownlint-cli2 --fix, across the whole
+# repo — the rest of this repo is an Obsidian vault, not just game/'s docs):
+# markdownlint's fixes are narrowly scoped (trailing whitespace, blank-line
+# rules, ...) and don't cascade into any other check here.
 #
 # Three more checks, only when Scala files are staged:
 #   - WartRemover (build.sbt's banOptionGetWarts) via `sbt compile` — banned
@@ -46,12 +55,13 @@ if [ -n "$scala_files" ]; then
     scalafmt_bin="$HOME/Library/Application Support/Coursier/bin/scalafmt"
   fi
   if [ -n "$scalafmt_bin" ]; then
-    echo "pre-commit: formatting staged Scala files..."
-    relative_files=$(echo "$scala_files" | sed "s|^game/||")
-    (cd "$GAME_DIR" && "$scalafmt_bin" $relative_files)
-    echo "$scala_files" | xargs git add
+    echo "pre-commit: checking staged Scala files' formatting (diff-aware)..."
+    if ! PATH="$(dirname "$scalafmt_bin"):$PATH" python3 "$GAME_DIR/scripts/check-scalafmt-diff.py" $scala_files; then
+      echo "pre-commit: formatting issues (see above) — run scalafmt on these files and re-stage." >&2
+      fail=1
+    fi
   else
-    echo "pre-commit: scalafmt not found (cs install scalafmt) — skipping Scala formatting" >&2
+    echo "pre-commit: scalafmt not found (cs install scalafmt) — skipping Scala formatting check" >&2
   fi
 
   echo "pre-commit: checking method length (scripts/check-method-length.py)..."

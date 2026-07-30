@@ -18,9 +18,19 @@ look like the method already ended right there. A `def` nested inside another
 script's one job: catching a method that's grown well past the project's own
 "<= 30 lines per method" rule, not exactly reproducing what a real Scala
 parser would say.
+
+Only reports a violation whose line range overlaps lines actually staged in
+this commit (`git diff --cached -U0`) — this codebase has plenty of
+pre-existing oversized methods nobody asked this pass to fix (GameApp.scala's
+UI setup functions, Simulator.scala's CLI arg parsing, ...); the rule that
+matters when *introducing* a length check into a legacy file is "don't make
+it worse in what you touch", not "retroactively fix everything in any file
+you happen to edit". A brand-new (untracked) file has no diff to scope
+against, so every method in it is checked unconditionally.
 """
 
 import re
+import subprocess
 import sys
 
 MAX_LINES = 30
@@ -76,7 +86,35 @@ def method_spans(lines: list[str]):
             for k in range(i, end)
             if lines[k].strip() != "" and not lines[k].strip().startswith("//")
         )
-        yield m.group("name"), i + 1, span
+        # end (0-indexed, exclusive) is the boundary line; the method's own last physical
+        # line is 1-based `end` — yielded alongside the trimmed `span` so the caller can
+        # check diff-overlap against the method's real extent, not just its counted lines.
+        yield m.group("name"), i + 1, end, span
+
+
+HUNK_RE = re.compile(r"^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@")
+
+
+def changed_lines(path: str) -> set[int] | None:
+    """1-based line numbers added/modified in the staged diff for `path` (new-file line
+    numbers, matching method_spans' own numbering). None if the file has no staged diff
+    at all — a brand-new file's first commit has one hunk covering everything, so None in
+    practice only means "not actually staged", and the caller treats that as "check it
+    unconditionally" rather than silently skipping a file that slipped through."""
+    result = subprocess.run(["git", "diff", "--cached", "-U0", "--", path], capture_output=True, text=True)
+    if result.returncode != 0 or not result.stdout:
+        return None
+    touched: set[int] = set()
+    for line in result.stdout.splitlines():
+        m = HUNK_RE.match(line)
+        if not m:
+            continue
+        count = int(m.group(2)) if m.group(2) is not None else 1
+        if count == 0:
+            continue  # pure deletion hunk — nothing added to flag here
+        start = int(m.group(1))
+        touched.update(range(start, start + count))
+    return touched
 
 
 def main(paths: list[str]) -> int:
@@ -84,9 +122,13 @@ def main(paths: list[str]) -> int:
     for path in paths:
         with open(path, encoding="utf-8", errors="ignore") as f:
             lines = f.read().splitlines()
-        for name, start_line, span in method_spans(lines):
-            if span > MAX_LINES:
-                violations.append((path, start_line, name, span))
+        touched = changed_lines(path)
+        for name, start_line, end_line, span in method_spans(lines):
+            if span <= MAX_LINES:
+                continue
+            if touched is not None and not any(start_line <= n <= end_line for n in touched):
+                continue
+            violations.append((path, start_line, name, span))
     for path, start_line, name, span in violations:
         print(f"{path}:{start_line}: method '{name}' spans {span} lines (limit {MAX_LINES})")
     return 1 if violations else 0

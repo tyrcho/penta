@@ -146,6 +146,63 @@ object Simulator:
   // preemptively, rather than needing a separate reproduction step (not even guaranteed
   // to reproduce the same outcome, since ComposedStrategy's tie-breaks are unseeded here)
   // after the fact to see why an unusual result happened.
+  // The three mutable per-name accumulators tournamentStandings/swissStandings both keep
+  // (and both used to thread through as three separate parameters everywhere) — bundled so
+  // playPairing/pairRound/buildStandings each take one parameter for "the running tally"
+  // instead of three.
+  private class MatchAccumulator(
+      val ratings: scala.collection.mutable.Map[String, Double],
+      val records: scala.collection.mutable.Map[String, (Int, Int, Int)],
+      val researchTotals: scala.collection.mutable.Map[String, Int]
+  )
+
+  private def newAccumulator(names: Seq[String]): MatchAccumulator =
+    MatchAccumulator(
+      ratings = scala.collection.mutable.Map.from(names.map(_ -> EloRating.InitialRating)),
+      records =
+        scala.collection.mutable.Map.empty[String, (Int, Int, Int)].withDefaultValue((0, 0, 0)),
+      researchTotals = scala.collection.mutable.Map.empty[String, Int].withDefaultValue(0)
+    )
+
+  // Plays every match for one pairing and folds the results into `acc` — the exact same
+  // sequence (run matches, log each one, update Elo match by match, then update the
+  // win/draw/loss record and research total once for the whole pairing) both
+  // tournamentStandings and swissStandings used to duplicate in full.
+  private def playPairing(
+      nameA: String,
+      nameB: String,
+      strategies: Map[String, AiStrategy],
+      matchesPerPairing: Int,
+      maxTicks: Int,
+      deltaMs: Double,
+      logLine: String => Unit,
+      acc: MatchAccumulator
+  ): Unit =
+    val outcomes = (1 to matchesPerPairing).map { m =>
+      val outcome = runMatch(strategies(nameA), strategies(nameB), maxTicks, deltaMs)
+      logLine(tournamentMatchLine(nameA, nameB, m, matchesPerPairing, outcome))
+      outcome
+    }
+    outcomes.foreach(applyEloUpdate(nameA, nameB, acc.ratings, _))
+    acc.records(nameA) = addRecord(acc.records(nameA), record(outcomes, "a"))
+    acc.records(nameB) = addRecord(acc.records(nameB), record(outcomes, "b"))
+    acc.researchTotals(nameA) = acc.researchTotals(nameA) + outcomes.map(_.totalResearchA).sum
+    acc.researchTotals(nameB) = acc.researchTotals(nameB) + outcomes.map(_.totalResearchB).sum
+
+  private def applyEloUpdate(
+      nameA: String,
+      nameB: String,
+      ratings: scala.collection.mutable.Map[String, Double],
+      outcome: MatchOutcome
+  ): Unit =
+    val scoreA = outcome.winner match
+      case Some("a") => 1.0
+      case Some("b") => 0.0
+      case _         => 0.5
+    val (newA, newB) = EloRating.updateRatings(ratings(nameA), ratings(nameB), scoreA)
+    ratings(nameA) = newA
+    ratings(nameB) = newB
+
   def tournamentStandings(
       names: Seq[String],
       matchesPerPairing: Int,
@@ -156,41 +213,12 @@ object Simulator:
       logLine: String => Unit = _ => ()
   ): Seq[Standing] =
     val strategies = names.map(n => n -> resolve(n)).toMap
-    val records = scala.collection.mutable.Map.empty[String, (Int, Int, Int)].withDefaultValue((0, 0, 0))
-    val ratings = scala.collection.mutable.Map.from(names.map(_ -> EloRating.InitialRating))
-    val researchTotals = scala.collection.mutable.Map.empty[String, Int].withDefaultValue(0)
+    val acc = newAccumulator(names)
     names.combinations(2).zipWithIndex.foreach { case (Seq(nameA, nameB), idx) =>
-      val outcomes = (1 to matchesPerPairing).map { m =>
-        val outcome = runMatch(strategies(nameA), strategies(nameB), maxTicks, deltaMs)
-        logLine(tournamentMatchLine(nameA, nameB, m, matchesPerPairing, outcome))
-        outcome
-      }
-      outcomes.foreach { outcome =>
-        val scoreA = outcome.winner match
-          case Some("a") => 1.0
-          case Some("b") => 0.0
-          case _         => 0.5
-        val (newA, newB) = EloRating.updateRatings(ratings(nameA), ratings(nameB), scoreA)
-        ratings(nameA) = newA
-        ratings(nameB) = newB
-      }
-      val (winsA, drawsA, lossesA) = record(outcomes, "a")
-      val (winsB, drawsB, lossesB) = record(outcomes, "b")
-      records(nameA) = addRecord(records(nameA), (winsA, drawsA, lossesA))
-      records(nameB) = addRecord(records(nameB), (winsB, drawsB, lossesB))
-      researchTotals(nameA) = researchTotals(nameA) + outcomes.map(_.totalResearchA).sum
-      researchTotals(nameB) = researchTotals(nameB) + outcomes.map(_.totalResearchB).sum
+      playPairing(nameA, nameB, strategies, matchesPerPairing, maxTicks, deltaMs, logLine, acc)
       onPairingDone(idx + 1)
     }
-    names
-      .map { name =>
-        val (wins, draws, losses) = records(name)
-        val matches = wins + draws + losses
-        val winRate = if matches == 0 then 0.0 else wins.toDouble / matches
-        val avgResearch = if matches == 0 then 0.0 else researchTotals(name).toDouble / matches
-        Standing(name, wins, draws, losses, matches, winRate, ratings(name), avgResearch)
-      }
-      .sortBy(-_.winRate)
+    buildStandings(names, acc).sortBy(-_.winRate)
 
   // One line per match: pairing, which match within the pairing, winner, and a final
   // resource/plunder/corrupted snapshot (MatchLog.snapshotLine — cheap, no per-tick
@@ -234,6 +262,37 @@ object Simulator:
   // every remaining bottom-half opponent has already been played (only plausible on a
   // very small or heavily-rematched field) — simple, and sufficient for "avoid matches
   // which were already played" without needing a real matching-algorithm dependency.
+  // Decides this round's pairing and immediately credits a bye's win (the bye's own record
+  // update is bookkeeping, not pairing logic, but folding it in here keeps swissStandings'
+  // own round loop to "get this round's pairs, then play them" instead of a third
+  // responsibility). Never runs a match itself.
+  private def pairRound(
+      names: Seq[String],
+      acc: MatchAccumulator,
+      hadBye: scala.collection.mutable.Set[String],
+      played: scala.collection.mutable.Set[Set[String]]
+  ): Seq[(String, String)] =
+    def scoreOf(name: String): Double =
+      val (wins, draws, _) = acc.records(name)
+      wins + 0.5 * draws
+    val ranked = names.sortBy(n => (-scoreOf(n), -acc.ratings(n)))
+    val (byeName, field) =
+      if ranked.size % 2 == 1 then
+        val bye = ranked.reverseIterator.find(n => !hadBye.contains(n)).getOrElse(ranked.last)
+        (Some(bye), ranked.filterNot(_ == bye))
+      else (None, ranked)
+    byeName.foreach { name =>
+      hadBye += name
+      acc.records(name) = addRecord(acc.records(name), (1, 0, 0))
+    }
+    val half = field.size / 2
+    val bottomPool = scala.collection.mutable.ListBuffer.from(field.drop(half))
+    field.take(half).map { nameA =>
+      val idx = bottomPool.indexWhere(nameB => !played.contains(Set(nameA, nameB)))
+      val nameB = if idx >= 0 then bottomPool.remove(idx) else bottomPool.remove(0)
+      (nameA, nameB)
+    }
+
   def swissStandings(
       names: Seq[String],
       matchesPerPairing: Int,
@@ -244,70 +303,31 @@ object Simulator:
       logLine: String => Unit = _ => ()
   ): Seq[Standing] =
     val strategies = names.map(n => n -> resolve(n)).toMap
-    val records = scala.collection.mutable.Map.empty[String, (Int, Int, Int)].withDefaultValue((0, 0, 0))
-    val ratings = scala.collection.mutable.Map.from(names.map(_ -> EloRating.InitialRating))
-    val researchTotals = scala.collection.mutable.Map.empty[String, Int].withDefaultValue(0)
+    val acc = newAccumulator(names)
     val hadBye = scala.collection.mutable.Set.empty[String]
     val played = scala.collection.mutable.Set.empty[Set[String]]
 
-    def scoreOf(name: String): Double =
-      val (wins, draws, _) = records(name)
-      wins + 0.5 * draws
-
     val rounds = swissRounds(names.size)
     (1 to rounds).foreach { round =>
-      val ranked = names.sortBy(n => (-scoreOf(n), -ratings(n)))
-      val (byeName, field) =
-        if ranked.size % 2 == 1 then
-          val bye = ranked.reverseIterator.find(n => !hadBye.contains(n)).getOrElse(ranked.last)
-          (Some(bye), ranked.filterNot(_ == bye))
-        else (None, ranked)
-      byeName.foreach { name =>
-        hadBye += name
-        records(name) = addRecord(records(name), (1, 0, 0))
-      }
-      val half = field.size / 2
-      val topHalf = field.take(half)
-      val bottomPool = scala.collection.mutable.ListBuffer.from(field.drop(half))
-      val pairs = topHalf.map { nameA =>
-        val idx = bottomPool.indexWhere(nameB => !played.contains(Set(nameA, nameB)))
-        val nameB = if idx >= 0 then bottomPool.remove(idx) else bottomPool.remove(0)
-        (nameA, nameB)
-      }
-      pairs.foreach { case (nameA, nameB) =>
+      pairRound(names, acc, hadBye, played).foreach { case (nameA, nameB) =>
         played += Set(nameA, nameB)
-        val outcomes = (1 to matchesPerPairing).map { m =>
-          val outcome = runMatch(strategies(nameA), strategies(nameB), maxTicks, deltaMs)
-          logLine(tournamentMatchLine(nameA, nameB, m, matchesPerPairing, outcome))
-          outcome
-        }
-        outcomes.foreach { outcome =>
-          val scoreA = outcome.winner match
-            case Some("a") => 1.0
-            case Some("b") => 0.0
-            case _         => 0.5
-          val (newA, newB) = EloRating.updateRatings(ratings(nameA), ratings(nameB), scoreA)
-          ratings(nameA) = newA
-          ratings(nameB) = newB
-        }
-        val (winsA, drawsA, lossesA) = record(outcomes, "a")
-        val (winsB, drawsB, lossesB) = record(outcomes, "b")
-        records(nameA) = addRecord(records(nameA), (winsA, drawsA, lossesA))
-        records(nameB) = addRecord(records(nameB), (winsB, drawsB, lossesB))
-        researchTotals(nameA) = researchTotals(nameA) + outcomes.map(_.totalResearchA).sum
-        researchTotals(nameB) = researchTotals(nameB) + outcomes.map(_.totalResearchB).sum
+        playPairing(nameA, nameB, strategies, matchesPerPairing, maxTicks, deltaMs, logLine, acc)
       }
       onRoundDone(round)
     }
-    names
-      .map { name =>
-        val (wins, draws, losses) = records(name)
-        val matches = wins + draws + losses
-        val winRate = if matches == 0 then 0.0 else wins.toDouble / matches
-        val avgResearch = if matches == 0 then 0.0 else researchTotals(name).toDouble / matches
-        Standing(name, wins, draws, losses, matches, winRate, ratings(name), avgResearch)
-      }
-      .sortBy(s => (-(s.wins + 0.5 * s.draws), -s.elo))
+    buildStandings(names, acc).sortBy(s => (-(s.wins + 0.5 * s.draws), -s.elo))
+
+  // Turns the running per-name accumulator (both tournamentStandings and swissStandings
+  // keep one) into unsorted Standing rows — each caller applies its own sort (win rate
+  // alone vs. score-then-Elo) afterward.
+  private def buildStandings(names: Seq[String], acc: MatchAccumulator): Seq[Standing] =
+    names.map { name =>
+      val (wins, draws, losses) = acc.records(name)
+      val matches = wins + draws + losses
+      val winRate = if matches == 0 then 0.0 else wins.toDouble / matches
+      val avgResearch = if matches == 0 then 0.0 else acc.researchTotals(name).toDouble / matches
+      Standing(name, wins, draws, losses, matches, winRate, acc.ratings(name), avgResearch)
+    }
 
   private def record(outcomes: Seq[MatchOutcome], side: String): (Int, Int, Int) =
     val wins = outcomes.count(_.winner.contains(side))

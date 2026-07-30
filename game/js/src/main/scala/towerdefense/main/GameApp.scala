@@ -1247,6 +1247,39 @@ private def updateMazeResizer(vt: ViewTransform, layout: Layout): Unit =
     handle.classList.add("landscape")
     handle.classList.remove("portrait")
 
+// Shared pointer-drag lifecycle: `onStart` fires on pointerdown, `onDrag` fires on every
+// pointermove while dragging, and the "dragging" class / dragging flag are both handled
+// here — wireMazeResizeHandle and wireControlsResizeHandle only differ in what they
+// compute from the drag delta, not in this lifecycle scaffolding (they used to each
+// duplicate the whole thing).
+//
+// pointermove/pointerup are wired on `document`, not `handle` itself: a fast drag
+// routinely moves the pointer off a thin handle before the browser fires the next event,
+// and scalajs-dom 2.8.0 doesn't facade setPointerCapture to keep those events targeted at
+// it, so tracking the drag globally (guarded by `dragging`) is what actually keeps working
+// once the cursor leaves the strip.
+private def wireDragHandle(handle: dom.html.Element)(onStart: dom.PointerEvent => Unit)(
+    onDrag: dom.PointerEvent => Unit
+): Unit =
+  var dragging = false
+  handle.addEventListener(
+    "pointerdown",
+    (e: dom.Event) => {
+      dragging = true
+      handle.classList.add("dragging")
+      onStart(e.asInstanceOf[dom.PointerEvent])
+    }
+  )
+  document.addEventListener(
+    "pointermove",
+    (e: dom.Event) => if dragging then onDrag(e.asInstanceOf[dom.PointerEvent])
+  )
+  def endDrag(): Unit =
+    dragging = false
+    handle.classList.remove("dragging")
+  document.addEventListener("pointerup", (_: dom.Event) => if dragging then endDrag())
+  document.addEventListener("pointercancel", (_: dom.Event) => if dragging then endDrag())
+
 // Dragging #maze-resizer adjusts aiScaleOverride relative to where the drag started,
 // rather than trying to solve for an exact aiScale from the cursor's absolute position:
 // currentLayout's gap/scale both shift as aiScale itself changes (see mazeGap's doc), so
@@ -1254,54 +1287,31 @@ private def updateMazeResizer(vt: ViewTransform, layout: Layout): Unit =
 // to a stable, usable drag feel without that inverse. Standard split-pane sign convention:
 // dragging the handle further from the player's (fixed-size) maze shrinks the AI's, same
 // as dragging a pane divider toward one side shrinks that side.
-//
-// pointermove/pointerup are wired on `document`, not the (14px-wide) handle itself: a fast
-// drag routinely moves the pointer off the handle before the browser fires the next event,
-// and scalajs-dom 2.8.0 doesn't facade setPointerCapture to keep those events targeted at
-// it, so tracking the drag globally (guarded by `dragging`) is what actually keeps working
-// once the cursor leaves the strip.
 private def wireMazeResizeHandle(app: Application, currentMode: () => Mode): Unit =
   val handle = document.getElementById("maze-resizer").asInstanceOf[dom.html.Element]
-  var dragging = false
   var dragStartPos = 0.0
   var dragStartAiScale = 0.0
   var dragPortrait = false
   var dragPxPerUnit = 1.0
 
-  def clampScale(scale: Double): Double = math.max(MinAiScaleOverride, math.min(MaxAiScaleOverride, scale))
+  def clampScale(scale: Double): Double =
+    math.max(MinAiScaleOverride, math.min(MaxAiScaleOverride, scale))
 
-  handle.addEventListener(
-    "pointerdown",
-    (e: dom.Event) => {
-      val p = e.asInstanceOf[dom.PointerEvent]
-      val startAiScale = aiScaleFor(app.screen.width, app.screen.height, currentMode())
-      val layout = currentLayout(app.screen.width, app.screen.height, startAiScale)
-      val vt = computeViewTransform(app.screen.width, app.screen.height, layout)
-      dragging = true
-      dragPortrait = layout.portrait
-      dragStartAiScale = startAiScale
-      dragStartPos = if dragPortrait then p.clientY else p.clientX
-      dragPxPerUnit = (if dragPortrait then GridConfig.height else GridConfig.width) * vt.scale
-      handle.classList.add("dragging")
-    }
+  wireDragHandle(handle)(p =>
+    val startAiScale = aiScaleFor(app.screen.width, app.screen.height, currentMode())
+    val layout = currentLayout(app.screen.width, app.screen.height, startAiScale)
+    val vt = computeViewTransform(app.screen.width, app.screen.height, layout)
+    dragPortrait = layout.portrait
+    dragStartAiScale = startAiScale
+    dragStartPos = if dragPortrait then p.clientY else p.clientX
+    dragPxPerUnit = (if dragPortrait then GridConfig.height else GridConfig.width) * vt.scale
+  )(p =>
+    val pos = if dragPortrait then p.clientY else p.clientX
+    val delta = pos - dragStartPos
+    val newScale = clampScale(dragStartAiScale - delta / dragPxPerUnit)
+    aiScaleOverride = Some(newScale)
+    ResizePersistence.saveAiScale(newScale)
   )
-  document.addEventListener(
-    "pointermove",
-    (e: dom.Event) => {
-      if dragging then
-        val p = e.asInstanceOf[dom.PointerEvent]
-        val pos = if dragPortrait then p.clientY else p.clientX
-        val delta = pos - dragStartPos
-        val newScale = clampScale(dragStartAiScale - delta / dragPxPerUnit)
-        aiScaleOverride = Some(newScale)
-        ResizePersistence.saveAiScale(newScale)
-    }
-  )
-  def endDrag(): Unit =
-    dragging = false
-    handle.classList.remove("dragging")
-  document.addEventListener("pointerup", (_: dom.Event) => if dragging then endDrag())
-  document.addEventListener("pointercancel", (_: dom.Event) => if dragging then endDrag())
 
 // Same drag-to-adjust-a-persisted-override shape as wireMazeResizeHandle above, but
 // simpler: #concept-rows' height is a plain CSS value, not something derived from the
@@ -1312,36 +1322,21 @@ private val MinControlsHeightPx = 40.0
 private def wireControlsResizeHandle(): Unit =
   val handle = document.getElementById("controls-resizer").asInstanceOf[dom.html.Element]
   val panel = document.getElementById("concept-rows").asInstanceOf[dom.html.Element]
-  var dragging = false
   var dragStartClientY = 0.0
   var dragStartHeight = 0.0
 
-  handle.addEventListener(
-    "pointerdown",
-    (e: dom.Event) => {
-      val p = e.asInstanceOf[dom.PointerEvent]
-      dragging = true
-      dragStartClientY = p.clientY
-      dragStartHeight = panel.getBoundingClientRect().height
-      handle.classList.add("dragging")
-    }
+  wireDragHandle(handle)(p =>
+    dragStartClientY = p.clientY
+    dragStartHeight = panel.getBoundingClientRect().height
+  )(p =>
+    val maxHeight = dom.window.innerHeight.toDouble * 0.7
+    val newHeight = math.max(
+      MinControlsHeightPx,
+      math.min(maxHeight, dragStartHeight + (p.clientY - dragStartClientY))
+    )
+    panel.style.height = s"${newHeight}px"
+    ResizePersistence.saveControlsHeight(newHeight)
   )
-  document.addEventListener(
-    "pointermove",
-    (e: dom.Event) => {
-      if dragging then
-        val p = e.asInstanceOf[dom.PointerEvent]
-        val maxHeight = dom.window.innerHeight.toDouble * 0.7
-        val newHeight = math.max(MinControlsHeightPx, math.min(maxHeight, dragStartHeight + (p.clientY - dragStartClientY)))
-        panel.style.height = s"${newHeight}px"
-        ResizePersistence.saveControlsHeight(newHeight)
-    }
-  )
-  def endDrag(): Unit =
-    dragging = false
-    handle.classList.remove("dragging")
-  document.addEventListener("pointerup", (_: dom.Event) => if dragging then endDrag())
-  document.addEventListener("pointercancel", (_: dom.Event) => if dragging then endDrag())
 
 // ── Sprite sync (one maze's GameState → its Pixi sprites) ──────────────
 

@@ -49,3 +49,17 @@ class DocGeneratorTest extends munit.FunSuite:
     val cave = read(tmp, EntityNames.vaultRoot(Lang.Fr) + "/" + EntityNames.buildingPath(BuildingKind.Cave, Lang.Fr))
     assert(!cave.contains("degats par seconde"), cave)
   }
+
+  test("a resource with a faction (Crystal) gets its own page, with a faction link") {
+    val tmp = Files.createTempDirectory("docgen-test")
+    generatedTo(tmp)
+    val faction = EntityNames.resourceInfo(Resource.Crystal).faction.get
+    val crystal =
+      read(
+        tmp,
+        EntityNames
+          .vaultRoot(Lang.Fr) + "/" + EntityNames.resourcePath(Resource.Crystal, faction, Lang.Fr)
+      )
+    assert(crystal.contains("type: ressource"), crystal)
+    assert(crystal.contains(EntityNames.factionName(faction, Lang.Fr)), crystal)
+  }

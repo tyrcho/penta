@@ -46,7 +46,13 @@ case class Death(creatureId: Long, kind: UnitKind, cause: DeathCause)
 // Placement.upgradeBuilding — cost was never modeled as cumulative), matching
 // Corruption.md's own clarification that an upgraded building only refunds its last
 // upgrade's cost.
-case class Corrosion(buildingId: Long, kind: BuildingKind, col: Int, row: Int, cost: Map[Resource, Double])
+case class Corrosion(
+    buildingId: Long,
+    kind: BuildingKind,
+    col: Int,
+    row: Int,
+    cost: Map[Resource, Double]
+)
 
 object CombatEngine:
 
@@ -57,7 +63,11 @@ object CombatEngine:
   // *own* maze, invisible from `state` alone. Defaults to empty so every caller untouched
   // by Science (every existing test, the live browser game before a match ever researches
   // anything) keeps today's exact behavior with no plumbing required.
-  def tick(state: MazeState, deltaMs: Double, attackerResearchLevels: Map[BuildingKind, Int] = Map.empty): TickResult =
+  def tick(
+      state: MazeState,
+      deltaMs: Double,
+      attackerResearchLevels: Map[BuildingKind, Int] = Map.empty
+  ): TickResult =
     val s0 = advanceConstruction(state, deltaMs)
     val (s1, stolen, plundered, arrivals) = moveCreatures(s0, deltaMs)
     val (s2, deaths) = applyDamageSources(s1, deltaMs)
@@ -85,8 +95,10 @@ object CombatEngine:
       deltaMs: Double
   ): (MazeState, Map[Resource, Double], Map[Resource, Double], List[UnitKind]) =
     val blocked = state.buildingCells
-    val angelCells = state.buildings.filter(_.kind == BuildingKind.Angel).map(b => (b.col, b.row)).toSet
-    val stasisCells = state.buildings.filter(_.kind == BuildingKind.StasisField).map(b => (b.col, b.row)).toSet
+    val angelCells =
+      state.buildings.filter(_.kind == BuildingKind.Angel).map(b => (b.col, b.row)).toSet
+    val stasisCells =
+      state.buildings.filter(_.kind == BuildingKind.StasisField).map(b => (b.col, b.row)).toSet
     val (remaining, arrived) =
       state.creatures
         .map(stepCreature(_, state.creatures, blocked, angelCells, stasisCells, deltaMs))
@@ -117,14 +129,17 @@ object CombatEngine:
       stasisCells: Set[(Int, Int)],
       deltaMs: Double
   ): Either[Creature, Creature] =
-    if creature.frozenMs > 0 then Left(creature.copy(frozenMs = math.max(0.0, creature.frozenMs - deltaMs)))
+    if creature.frozenMs > 0 then
+      Left(creature.copy(frozenMs = math.max(0.0, creature.frozenMs - deltaMs)))
     else
       val currentCell = GridConfig.cellOf(creature.pos)
       if currentCell == GridConfig.goalCell then Right(creature)
       else
         Pathfinding.shortestPath(currentCell, GridConfig.goalCell, blocked) match
-          case None => Left(creature) // no route right now (shouldn't happen, placement guards this)
-          case Some(path) => Left(advanceTowards(creature, allCreatures, angelCells, stasisCells, path, deltaMs))
+          case None =>
+            Left(creature) // no route right now (shouldn't happen, placement guards this)
+          case Some(path) =>
+            Left(advanceTowards(creature, allCreatures, angelCells, stasisCells, path, deltaMs))
 
   private def advanceTowards(
       creature: Creature,
@@ -209,50 +224,106 @@ object CombatEngine:
   // values too, applied only in a tick where something actually fired, not scaled by
   // deltaMs the way a continuous rate would need.
   private def applyDamageSources(state: MazeState, deltaMs: Double): (MazeState, List[Death]) =
-    // Recherches loyales.md: "Augmente la vitesse d'attaque des batiments" — purely local
-    // to `state` (the maze whose own buildings are dealing the damage), and scoped to
-    // Loi-faction damage dealers ONLY (Watchtower/Angel — Faction.Loi): Forest/Jungle's
-    // aura (Nature) and PassingGate's aura (Mort) always fire at the plain
-    // Balance.DamageTickIntervalMs below, regardless of this maze's own Loi research
-    // level. A faster interval, not a bigger per-hit number — damage-per-hit stays the
-    // building's own flat Balance.*DamagePerSec no matter what.
-    val loyalesLevel = state.researchLevels.getOrElse(BuildingKind.LaboDeLaLoi, 0)
-    val loyalesSpeedMultiplier = 1.0 + ResearchSpecs.all(BuildingKind.LaboDeLaLoi).effectAtLevel(loyalesLevel)
-    def intervalFor(kind: BuildingKind): Double =
-      if EntityNames.buildingInfo(kind).faction == Faction.Loi then Balance.DamageTickIntervalMs / loyalesSpeedMultiplier
-      else Balance.DamageTickIntervalMs
+    val (buildingsAfterCooldowns, fromForests, fromTowers, fromLoiAura) =
+      tickDamageSources(state, deltaMs)
+    val damaged = applyDefensiveReductions(state.creatures, mergeSum(fromForests, fromTowers))
+    val dead = damaged.filter(_.hp <= 0)
+    val deaths = dead.map(c => Death(c.id, c.kind, deathCause(c.id, fromForests, fromTowers)))
+    val withoutDead = state.copy(
+      buildings = buildingsAfterCooldowns,
+      creatures = damaged.filter(_.hp > 0),
+      resources = creditLoyalesKillGold(state.resources, dead, fromTowers, fromLoiAura)
+    )
+    (applyPassingGateHarvest(withoutDead, dead, deltaMs), deaths)
 
+  // Ticks every damage-dealing building's cooldown and accumulates this tick's hits, per
+  // source — the "which buildings fire, and for how much" half of applyDamageSources,
+  // independent of how that damage is then applied to creatures (applyDefensiveReductions)
+  // or rewarded in Gold (creditLoyalesKillGold).
+  // fromLoiAura: the Angel-only subset of the aura sources folded into fromForests — that
+  // map mixes Nature (Forest/Jungle), Loi (Angel), and Mort (PassingGate) damage together
+  // for the actual damage total, which doesn't say which building contributed to a given
+  // kill; this is purely for creditLoyalesKillGold's attribution, not damage math.
+  private def tickDamageSources(
+      state: MazeState,
+      deltaMs: Double
+  ): (List[Building], Map[Long, Double], Map[Long, Double], Map[Long, Double]) =
     // Still under construction (Building.constructionRemainingMs's doc): excluded here
     // entirely rather than ticked-but-inert, so its damageCooldownMs stays untouched at
     // its fresh default and it doesn't accumulate a free "overdue" hit while inactive.
     val active = state.buildings.filter(_.constructionRemainingMs <= 0.0)
-    val forestsTicked =
-      active.filter(b => auraBuildingKinds.contains(b.kind)).map(b => tickDamageCooldown(b, deltaMs, intervalFor(b.kind)))
-    val towersTicked =
-      active.filter(_.kind == BuildingKind.Watchtower).map(b => tickDamageCooldown(b, deltaMs, intervalFor(b.kind)))
+    def tickMatching(matches: Building => Boolean): List[(Building, Boolean)] =
+      active
+        .filter(matches)
+        .map(b => tickDamageCooldown(b, deltaMs, loyalesIntervalFor(state, b.kind)))
+    val forestsTicked = tickMatching(b => auraBuildingKinds.contains(b.kind))
+    val towersTicked = tickMatching(_.kind == BuildingKind.Watchtower)
+    def auraFiring(ticked: List[(Building, Boolean)]): Map[Long, Double] =
+      accumulateFiring(
+        ticked,
+        (f, acc) => accumulateAuraHits(f, state.creatures, auraDamagePerSecFor(f.kind), acc)
+      )
 
-    val fromForests = forestsTicked.foldLeft(Map.empty[Long, Double]) { case (acc, (f, fires)) =>
-      if fires then accumulateAuraHits(f, state.creatures, auraDamagePerSecFor(f.kind), acc)
-      else acc
-    }
-    val fromTowers = towersTicked.foldLeft(Map.empty[Long, Double]) { case (acc, (w, fires)) =>
-      if fires then accumulateWatchtowerHit(w, state.creatures, BuildingSpecs.all(BuildingKind.Watchtower).dps, acc) else acc
-    }
-    // Angel-only subset of forestsTicked's own aura sources — fromForests above mixes
-    // Nature (Forest/Jungle), Loi (Angel), and Mort (PassingGate) damage together for the
-    // actual damage total, which doesn't say which building contributed to a given kill.
-    // This is purely for the Gold-reward attribution below, not damage math (unaffected).
-    val fromLoiAura = forestsTicked.foldLeft(Map.empty[Long, Double]) { case (acc, (f, fires)) =>
-      if fires && f.kind == BuildingKind.Angel then accumulateAuraHits(f, state.creatures, auraDamagePerSecFor(f.kind), acc)
-      else acc
-    }
+    val fromForests = auraFiring(forestsTicked)
+    val fromTowers = watchtowerFiring(state, towersTicked)
+    // Angel-only subset of forestsTicked, same "fires" gate as fromForests — see this
+    // method's own doc on why (Gold-attribution only, not damage math).
+    val fromLoiAura = auraFiring(forestsTicked.filter(_._1.kind == BuildingKind.Angel))
     val tickedById = (forestsTicked ++ towersTicked).map { case (b, _) => b.id -> b }.toMap
     val buildingsAfterCooldowns = state.buildings.map(b => tickedById.getOrElse(b.id, b))
+    (buildingsAfterCooldowns, fromForests, fromTowers, fromLoiAura)
 
-    val damageByCreature = mergeSum(fromForests, fromTowers)
-    val shielded = paladinShieldedIds(state.creatures)
-    val paired = soldierPairedIds(state.creatures)
-    val damaged = state.creatures.map { c =>
+  private def watchtowerFiring(
+      state: MazeState,
+      ticked: List[(Building, Boolean)]
+  ): Map[Long, Double] =
+    accumulateFiring(
+      ticked,
+      (w, acc) =>
+        accumulateWatchtowerHit(
+          w,
+          state.creatures,
+          BuildingSpecs.all(BuildingKind.Watchtower).dps,
+          acc
+        )
+    )
+
+  // Recherches loyales.md: "Augmente la vitesse d'attaque des batiments" — purely local to
+  // `state` (the maze whose own buildings are dealing the damage), and scoped to
+  // Loi-faction damage dealers ONLY (Watchtower/Angel — Faction.Loi): Forest/Jungle's aura
+  // (Nature) and PassingGate's aura (Mort) always fire at the plain
+  // Balance.DamageTickIntervalMs, regardless of this maze's own Loi research level. A
+  // faster interval, not a bigger per-hit number — damage-per-hit stays the building's own
+  // flat Balance.*DamagePerSec no matter what.
+  private def loyalesIntervalFor(state: MazeState, kind: BuildingKind): Double =
+    val loyalesLevel = state.researchLevels.getOrElse(BuildingKind.LaboDeLaLoi, 0)
+    val loyalesSpeedMultiplier =
+      1.0 + ResearchSpecs.all(BuildingKind.LaboDeLaLoi).effectAtLevel(loyalesLevel)
+    if EntityNames.buildingInfo(kind).faction == Faction.Loi then
+      Balance.DamageTickIntervalMs / loyalesSpeedMultiplier
+    else Balance.DamageTickIntervalMs
+
+  // Folds `accumulate` over just the buildings that actually fired this tick (tickedBuilding
+  // pairs where the Boolean is true) — the "if fires then ... else acc" shape fromForests/
+  // fromTowers/fromLoiAura all shared before this was pulled out.
+  private def accumulateFiring(
+      ticked: List[(Building, Boolean)],
+      accumulate: (Building, Map[Long, Double]) => Map[Long, Double]
+  ): Map[Long, Double] =
+    ticked.foldLeft(Map.empty[Long, Double]) { case (acc, (b, fires)) =>
+      if fires then accumulate(b, acc) else acc
+    }
+
+  // Paladin shield, Soldier "Rang serre", and Vampire's own flat reduction, applied (in
+  // that order) to each creature's share of `damageByCreature`, then subtracted from hp —
+  // the "how much of the raw damage actually lands" half of applyDamageSources.
+  private def applyDefensiveReductions(
+      creatures: List[Creature],
+      damageByCreature: Map[Long, Double]
+  ): List[Creature] =
+    val shielded = paladinShieldedIds(creatures)
+    val paired = soldierPairedIds(creatures)
+    creatures.map { c =>
       val raw = damageByCreature.getOrElse(c.id, 0.0)
       // Vampire.md: "Reduit les degats qu'il subit de 50% (mais n'est pas protege par
       // l'aura du Paladin)" — explicitly excluded from Paladin's shield even when
@@ -270,32 +341,38 @@ object CombatEngine:
           math.max(0.0, afterShield - Balance.SoldierCloseRanksDamageReductionPerSec)
         else afterShield
       val taken =
-        if c.kind == UnitKind.Vampire then afterCloseRanks * (1.0 - Balance.VampireDamageReductionFraction)
+        if c.kind == UnitKind.Vampire then
+          afterCloseRanks * (1.0 - Balance.VampireDamageReductionFraction)
         else afterCloseRanks
       c.copy(hp = c.hp - taken)
     }
-    val dead = damaged.filter(_.hp <= 0)
-    val deaths = dead.map(c => Death(c.id, c.kind, deathCause(c.id, fromForests, fromTowers)))
-    // Recherches loyales.md has nothing to say about this (added at the project owner's
-    // explicit request alongside the new Gold resource): a kill any of THIS maze's own Loi
-    // buildings (Watchtower and/or Angel) contributed damage to this tick earns `state`
-    // itself Gold — same "any contribution counts" attribution DeathCause.AuraAndWatchtower
-    // already uses for reporting, not "whichever hit was the literal final one." Purely
-    // local to `state`: these are its own buildings rewarding it for its own kills, no
-    // BattleEngine-level crediting needed (contrast Chaos/Mort's gold, which cross to the
-    // *attacker* — see BattleEngine.creditPlunder/creditCorruption).
+
+  // Recherches loyales.md has nothing to say about this (added at the project owner's
+  // explicit request alongside the new Gold resource): a kill any of THIS maze's own Loi
+  // buildings (Watchtower and/or Angel) contributed damage to this tick earns `state`
+  // itself Gold — same "any contribution counts" attribution DeathCause.AuraAndWatchtower
+  // already uses for reporting, not "whichever hit was the literal final one." Purely
+  // local to `state`: these are its own buildings rewarding it for its own kills, no
+  // BattleEngine-level crediting needed (contrast Chaos/Mort's gold, which cross to the
+  // *attacker* — see BattleEngine.creditPlunder/creditCorruption).
+  private def creditLoyalesKillGold(
+      resources: Map[Resource, Double],
+      dead: List[Creature],
+      fromTowers: Map[Long, Double],
+      fromLoiAura: Map[Long, Double]
+  ): Map[Resource, Double] =
     val goldFromKills = dead
       .filter(c => fromTowers.contains(c.id) || fromLoiAura.contains(c.id))
-      .map(c => if isLargeKill(c.kind) then Balance.LoyalesLargeKillGoldReward else Balance.LoyalesKillGoldReward)
+      .map(c =>
+        if isLargeKill(c.kind) then Balance.LoyalesLargeKillGoldReward
+        else Balance.LoyalesKillGoldReward
+      )
       .sum
-    val withoutDead = state.copy(
-      buildings = buildingsAfterCooldowns,
-      creatures = damaged.filter(_.hp > 0),
-      resources =
-        if goldFromKills <= 0.0 then state.resources
-        else state.resources.updated(Resource.Gold, state.resources.getOrElse(Resource.Gold, 0.0) + goldFromKills)
-    )
-    (applyPassingGateHarvest(withoutDead, dead, deltaMs), deaths)
+    addGold(resources, goldFromKills)
+
+  private def addGold(resources: Map[Resource, Double], amount: Double): Map[Resource, Double] =
+    if amount <= 0.0 then resources
+    else resources.updated(Resource.Gold, resources.getOrElse(Resource.Gold, 0.0) + amount)
 
   // Minotaur is the only "large" unit today (Vampire/Tree are bigger in some other sense —
   // HP, size — but the vault never calls them out as a size class the way Minotaur.md
@@ -313,7 +390,11 @@ object CombatEngine:
   // long-run hit rate stays exactly one per interval regardless of how deltaMs happens to
   // divide it — the same "preserve the phase" approach spawnCountdownMs/flashMs use
   // elsewhere in this domain.
-  private def tickDamageCooldown(building: Building, deltaMs: Double, intervalMs: Double): (Building, Boolean) =
+  private def tickDamageCooldown(
+      building: Building,
+      deltaMs: Double,
+      intervalMs: Double
+  ): (Building, Boolean) =
     val remaining = building.damageCooldownMs - deltaMs
     if remaining <= 0.0 then (building.copy(damageCooldownMs = intervalMs + remaining), true)
     else (building.copy(damageCooldownMs = remaining), false)
@@ -334,28 +415,33 @@ object CombatEngine:
   // sets its own flashMs (Building.flashMs's doc) to the UI's kill-flash duration; a gate
   // with no qualifying death nearby this tick just counts flashMs down toward 0 instead,
   // same shape as spawnCountdownMs/frozenMs elsewhere in the domain.
-  private def applyPassingGateHarvest(state: MazeState, dead: List[Creature], deltaMs: Double): MazeState =
+  private def applyPassingGateHarvest(
+      state: MazeState,
+      dead: List[Creature],
+      deltaMs: Double
+  ): MazeState =
     val deadByCell = dead.map(c => GridConfig.cellOf(c.pos) -> c.kind)
     val (buildings, goldReward) =
       state.buildings.foldLeft((List.empty[Building], 0.0)) { case ((acc, reward), b) =>
         // Still under construction: no harvest ability yet (Building.constructionRemainingMs's
         // doc) — passed through unchanged rather than fading a flashMs that's still 0 anyway.
-        if b.kind != BuildingKind.PassingGate || b.constructionRemainingMs > 0.0 then (b :: acc, reward)
+        if b.kind != BuildingKind.PassingGate || b.constructionRemainingMs > 0.0 then
+          (b :: acc, reward)
         else
           val adjacent = Pathfinding.neighbors((b.col, b.row)).toSet
-          val harvestedKinds = deadByCell.collect { case (cell, kind) if adjacent.contains(cell) => kind }
+          val harvestedKinds = deadByCell.collect {
+            case (cell, kind) if adjacent.contains(cell) => kind
+          }
           if harvestedKinds.nonEmpty then
             val gateReward = harvestedKinds.map { kind =>
-              val spawningBuildingCost = BuildingSpecs.all(CreatureSpecs.spawningBuilding(kind)).cost.values.sum
+              val spawningBuildingCost =
+                BuildingSpecs.all(CreatureSpecs.spawningBuilding(kind)).cost.values.sum
               Balance.PassingGateHarvestFraction * spawningBuildingCost
             }.sum
             (b.copy(flashMs = Balance.PassingGateFlashMs) :: acc, reward + gateReward)
           else (b.copy(flashMs = math.max(0.0, b.flashMs - deltaMs)) :: acc, reward)
       }
-    val resources =
-      if goldReward > 0 then state.resources.updated(Resource.Gold, state.resources.getOrElse(Resource.Gold, 0.0) + goldReward)
-      else state.resources
-    state.copy(buildings = buildings.reverse, resources = resources)
+    state.copy(buildings = buildings.reverse, resources = addGold(state.resources, goldReward))
 
   // A creature only dies from a source it actually took damage from this tick — Paladin
   // shielding can zero out one source's contribution to `damaged` without it being absent
@@ -464,24 +550,47 @@ object CombatEngine:
     if corruptors.isEmpty then (state, Nil, Map.empty)
     else
       val sombresLevel = attackerResearchLevels.getOrElse(BuildingKind.LaboSombre, 0)
-      val sombresMultiplier = 1.0 + ResearchSpecs.all(BuildingKind.LaboSombre).effectAtLevel(sombresLevel)
+      val sombresMultiplier =
+        1.0 + ResearchSpecs.all(BuildingKind.LaboSombre).effectAtLevel(sombresLevel)
       val corruptionByCell = corruptors
-        .groupMapReduce(c => GridConfig.cellOf(c.pos))(c => corruptionRatesPerSec(c.kind) * sombresMultiplier * deltaMs / 1000.0)(
+        .groupMapReduce(c => GridConfig.cellOf(c.pos))(c =>
+          corruptionRatesPerSec(c.kind) * sombresMultiplier * deltaMs / 1000.0
+        )(
           _ + _
         )
-      val updated = state.buildings.map { b =>
-        val hits = Pathfinding.neighbors((b.col, b.row)).flatMap(corruptionByCell.get).sum
-        if hits <= 0.0 then b
-        else b.copy(corruptionPercent = math.min(Balance.CorruptionMaxPercent, b.corruptionPercent + hits))
-      }
-      val (destroyed, remaining) = updated.partition(_.corruptionPercent >= Balance.CorruptionMaxPercent)
-      val corrosions = destroyed.map(b => Corrosion(b.id, b.kind, b.col, b.row, BuildingSpecs.all(b.kind).cost))
+      val (corrosions, remaining) = splitDestroyed(
+        applyCorruptionHits(state.buildings, corruptionByCell)
+      )
       val buildingCellsBefore = state.buildings.map(b => (b.col, b.row)).toSet
       val hitCountByCreature = corruptors.map { c =>
         val cell = GridConfig.cellOf(c.pos)
         c.id -> Pathfinding.neighbors(cell).count(buildingCellsBefore.contains)
       }.toMap
       (state.copy(buildings = remaining), corrosions, hitCountByCreature)
+
+  // A building whose corruptionPercent reached Balance.CorruptionMaxPercent this tick is
+  // removed from the maze and reported as a Corrosion for the caller to refund — the
+  // "resolve this tick's destructions" half of applyCorruption.
+  private def splitDestroyed(buildings: List[Building]): (List[Corrosion], List[Building]) =
+    val (destroyed, remaining) =
+      buildings.partition(_.corruptionPercent >= Balance.CorruptionMaxPercent)
+    (
+      destroyed.map(b => Corrosion(b.id, b.kind, b.col, b.row, BuildingSpecs.all(b.kind).cost)),
+      remaining
+    )
+
+  private def applyCorruptionHits(
+      buildings: List[Building],
+      corruptionByCell: Map[(Int, Int), Double]
+  ): List[Building] =
+    buildings.map { b =>
+      val hits = Pathfinding.neighbors((b.col, b.row)).flatMap(corruptionByCell.get).sum
+      if hits <= 0.0 then b
+      else
+        b.copy(corruptionPercent =
+          math.min(Balance.CorruptionMaxPercent, b.corruptionPercent + hits)
+        )
+    }
 
   // Not from the vault's own numbers — added at the project owner's explicit request (see
   // Balance.GroveCorruptionHealPercentPerSec's doc): each tier heals at its own rate.
@@ -510,7 +619,8 @@ object CombatEngine:
             .filter(h => chebyshevDistance((h.col, h.row), (b.col, b.row)) <= 1)
             .map(h => natureCorruptionHealPercentPerSec(h.kind) * deltaMs / 1000.0)
             .sum
-          if heal <= 0.0 then b else b.copy(corruptionPercent = math.max(0.0, b.corruptionPercent - heal))
+          if heal <= 0.0 then b
+          else b.copy(corruptionPercent = math.max(0.0, b.corruptionPercent - heal))
       })
 
   // Ame.md: "Chaque fois qu'elle corrompt un batiment, elle soigne le Necromancien... de 1
@@ -519,10 +629,17 @@ object CombatEngine:
   // not any Necromancer present in the maze. A Soul whose summoner has already died simply
   // heals no one (summonedBy no longer matches any living creature) — same "lost, not an
   // error" shape as Corrosion crediting a side that has since changed.
-  private def healSummoners(state: MazeState, hitsByCreature: Map[Long, Int], deltaMs: Double): MazeState =
+  private def healSummoners(
+      state: MazeState,
+      hitsByCreature: Map[Long, Int],
+      deltaMs: Double
+  ): MazeState =
     val healPerSummoner = state.creatures
-      .filter(c => c.kind == UnitKind.Soul && c.summonedBy.isDefined && hitsByCreature.getOrElse(c.id, 0) > 0)
-      .groupMapReduce(_.summonedBy.get)(c => hitsByCreature(c.id) * Balance.SoulHealPerSecPerBuilding * deltaMs / 1000.0)(
+      .filter(c => c.kind == UnitKind.Soul && hitsByCreature.getOrElse(c.id, 0) > 0)
+      .flatMap(c => c.summonedBy.map(summonerId => summonerId -> c.id))
+      .groupMapReduce(_._1)(pair =>
+        hitsByCreature(pair._2) * Balance.SoulHealPerSecPerBuilding * deltaMs / 1000.0
+      )(
         _ + _
       )
     if healPerSummoner.isEmpty then state
@@ -540,52 +657,68 @@ object CombatEngine:
   // `state.creatures` and consumes `state.nextId` itself instead of returning a count for
   // the caller to deliver elsewhere.
   private def advanceCreatureSummons(state: MazeState, deltaMs: Double): MazeState =
-    val summoners = state.creatures.filter(c => CreatureSpecs.all(c.kind).spawns.isDefined)
+    // flatMap over the Option (not a filter + a later .get) so a summoner's (kind,
+    // interval) pair is proven to exist by construction, never re-derived unsafely below.
+    val summoners =
+      state.creatures.flatMap(c => CreatureSpecs.all(c.kind).spawns.map(spawn => (c, spawn)))
     if summoners.isEmpty then state
     else
       val blocked = state.buildingCells
       val (updatedSummoners, newCreatures, nextId) =
         summoners.foldLeft((List.empty[Creature], List.empty[Creature], state.nextId)) {
-          case ((accUpdated, accNew, id), summoner) =>
+          case ((accUpdated, accNew, id), (summoner, (summonedKind, intervalMs))) =>
             val summonerSpec = CreatureSpecs.all(summoner.kind)
-            val (summonedKind, intervalMs) = summonerSpec.spawns.get
             val remaining = summoner.spawnCountdownMs - deltaMs
-            if remaining > 0 then (summoner.copy(spawnCountdownMs = remaining) :: accUpdated, accNew, id)
+            if remaining > 0 then
+              (summoner.copy(spawnCountdownMs = remaining) :: accUpdated, accNew, id)
             else
-              val spec = CreatureSpecs.all(summonedKind)
-              val spawnPos =
-                if summonerSpec.spawnAtNextCell then nextPathCellCenter(summoner, blocked) else summoner.pos
-              // Arbre Anime.md: a self-clone (summonedKind == summoner.kind, i.e. a Tree
-              // cloning a Tree) is smaller than whatever made it, not just the original —
-              // any creature reachable through this chain can keep cloning. A different-
-              // kind summon (e.g. Necromancer -> Soul) is unaffected, full size as always.
-              val childSizeFraction =
-                if summonedKind == summoner.kind then
-                  math.max(Balance.TreeMinCloneSizeFraction, summoner.sizeFraction - Balance.TreeCloneSizeStepFraction)
-                else 1.0
-              val summoned = Creature(
-                id,
-                spawnPos,
-                spec.maxHp * childSizeFraction,
-                spec.maxHp * childSizeFraction,
-                spec.speedPerMs,
-                summonedKind,
-                spawnCountdownMs = spec.spawns.map(_._2).getOrElse(0.0),
-                summonedBy = Some(summoner.id),
-                sizeFraction = childSizeFraction
-              )
+              val summoned = summonChild(id, summoner, summonerSpec, summonedKind, blocked)
               (
                 summoner.copy(
                   spawnCountdownMs = remaining + intervalMs,
                   frozenMs = summonerSpec.spawnFreezeMs
-                ) :: accUpdated,
+                )
+                  :: accUpdated,
                 summoned :: accNew,
                 id + 1
               )
         }
-      val summonerIds = summoners.map(_.id).toSet
+      val summonerIds = summoners.map(_._1.id).toSet
       val untouched = state.creatures.filterNot(c => summonerIds.contains(c.id))
       state.copy(creatures = untouched ++ updatedSummoners ++ newCreatures, nextId = nextId)
+
+  private def summonChild(
+      id: Long,
+      summoner: Creature,
+      summonerSpec: CreatureSpec,
+      summonedKind: UnitKind,
+      blocked: Set[(Int, Int)]
+  ): Creature =
+    val spec = CreatureSpecs.all(summonedKind)
+    val spawnPos =
+      if summonerSpec.spawnAtNextCell then nextPathCellCenter(summoner, blocked) else summoner.pos
+    // Arbre Anime.md: a self-clone (summonedKind == summoner.kind, i.e. a Tree cloning a
+    // Tree) is smaller than whatever made it, not just the original — any creature
+    // reachable through this chain can keep cloning. A different-kind summon (e.g.
+    // Necromancer -> Soul) is unaffected, full size as always.
+    val childSizeFraction =
+      if summonedKind == summoner.kind then
+        math.max(
+          Balance.TreeMinCloneSizeFraction,
+          summoner.sizeFraction - Balance.TreeCloneSizeStepFraction
+        )
+      else 1.0
+    Creature(
+      id,
+      spawnPos,
+      spec.maxHp * childSizeFraction,
+      spec.maxHp * childSizeFraction,
+      spec.speedPerMs,
+      summonedKind,
+      spawnCountdownMs = spec.spawns.map(_._2).getOrElse(0.0),
+      summonedBy = Some(summoner.id),
+      sizeFraction = childSizeFraction
+    )
 
   // Arbre Anime.md: a self-cloning Tree's copy appears one cell further along its own path
   // (not on top of it, like the Necromancer/Soul's same-position summon — see
@@ -618,9 +751,17 @@ object CombatEngine:
   // level compounds ONLY its own Crystal output, not any other building's production of any
   // other resource. Exposed (not private) so GameApp's per-building tooltip (effectiveRate)
   // shows the exact same number this applies, same reasoning as engendreBoost below.
-  def researchProductionMultiplier(state: MazeState, kind: BuildingKind, resource: Resource): Double =
+  def researchProductionMultiplier(
+      state: MazeState,
+      kind: BuildingKind,
+      resource: Resource
+  ): Double =
     if resource != Resource.Crystal then 1.0
-    else math.pow(1.0 + Balance.LaboCrystalBoostPerResearchLevel, state.researchLevels.getOrElse(kind, 0).toDouble)
+    else
+      math.pow(
+        1.0 + Balance.LaboCrystalBoostPerResearchLevel,
+        state.researchLevels.getOrElse(kind, 0).toDouble
+      )
 
   // Engendre.md's resource-generation cycle, keyed by *target* — the resource whose
   // producer-buildings boost `resource`'s own production rate (see Balance.
@@ -650,7 +791,9 @@ object CombatEngine:
       case None => 0.0
       case Some(source) =>
         val sourceBuildingCount =
-          state.buildings.count(b => BuildingSpecs.all(b.kind).produces.getOrElse(source, 0.0) > 0.0)
+          state.buildings.count(b =>
+            BuildingSpecs.all(b.kind).produces.getOrElse(source, 0.0) > 0.0
+          )
         Balance.EngendreBoostPerBuilding * sourceBuildingCount
 
   // Balance.ConstructionMsPerCostUnit's doc — counts every building's construction timer
@@ -668,7 +811,8 @@ object CombatEngine:
       })
 
   private def produceResources(state: MazeState, deltaMs: Double): MazeState =
-    val produced = Resource.values.map(res => res -> productionPerSec(state, res) * deltaMs / 1000.0)
+    val produced =
+      Resource.values.map(res => res -> productionPerSec(state, res) * deltaMs / 1000.0)
     state.copy(
       resources = produced.foldLeft(state.resources) { case (acc, (res, amount)) =>
         acc.updated(res, acc.getOrElse(res, 0.0) + amount)
@@ -680,11 +824,16 @@ object CombatEngine:
   // Labyrinth — Faction.Chaos); every other spawner (Tomb, BlackCastle, DeathHouse,
   // Stonehenge) always resets to its own plain BuildingSpecs interval below, regardless of
   // this maze's own Chaotiques research level.
-  private def advanceSpawnTimers(state: MazeState, deltaMs: Double): (MazeState, Map[UnitKind, Int]) =
+  private def advanceSpawnTimers(
+      state: MazeState,
+      deltaMs: Double
+  ): (MazeState, Map[UnitKind, Int]) =
     val chaotiquesLevel = state.researchLevels.getOrElse(BuildingKind.LaboDuChaos, 0)
-    val chaotiquesReduction = ResearchSpecs.all(BuildingKind.LaboDuChaos).effectAtLevel(chaotiquesLevel)
+    val chaotiquesReduction =
+      ResearchSpecs.all(BuildingKind.LaboDuChaos).effectAtLevel(chaotiquesLevel)
     def effectiveInterval(kind: BuildingKind, intervalMs: Double): Double =
-      if EntityNames.buildingInfo(kind).faction == Faction.Chaos then intervalMs * (1.0 - chaotiquesReduction)
+      if EntityNames.buildingInfo(kind).faction == Faction.Chaos then
+        intervalMs * (1.0 - chaotiquesReduction)
       else intervalMs
     val (buildings, spawned) =
       state.buildings.foldLeft((List.empty[Building], Map.empty[UnitKind, Int])) {

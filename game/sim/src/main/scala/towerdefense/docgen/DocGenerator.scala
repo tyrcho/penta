@@ -43,9 +43,17 @@ object DocGenerator:
         written += writePage(vaultRoot.resolve(EntityNames.unitPath(kind, lang)), unitPage(kind, lang))
       // Gold (ResourceKindInfo.faction = None) gets no dedicated wiki page — a faction-less
       // wildcard currency doesn't fit the vault's per-faction structure any of the other 5
-      // resources live in (see ResourceKindInfo's own doc).
-      for res <- Resource.values if EntityNames.resourceInfo(res).faction.isDefined do
-        written += writePage(vaultRoot.resolve(EntityNames.resourcePath(res, lang)), resourcePage(res, lang))
+      // resources live in (see ResourceKindInfo's own doc). Binding `faction` here (instead
+      // of an `isDefined` filter + a `.get` below) gives resourcePath/resourcePage a proven
+      // Faction directly — Gold simply can't reach either call.
+      for
+        res <- Resource.values
+        faction <- EntityNames.resourceInfo(res).faction
+      do
+        written += writePage(
+          vaultRoot.resolve(EntityNames.resourcePath(res, faction, lang)),
+          resourcePage(res, faction, lang)
+        )
     Console.err.println(s"DocGenerator: wrote $written pages under $repoRoot")
 
   private def writePage(path: Path, content: String): Int =
@@ -169,11 +177,14 @@ object DocGenerator:
   // produces/costs it already links back here). Shadow has no image at all (see
   // ResourceKindInfo's doc) — Ombre.md has always shipped without one.
 
-  // .get: only ever called for a resource the `generate` loop's own faction.isDefined
-  // filter already let through (i.e. never Gold — see ResourceKindInfo's own doc).
-  private def resourcePage(res: Resource, lang: Lang): String =
+  // faction is a parameter (the `generate` loop's own proven Faction), not re-derived from
+  // ResourceKindInfo.faction here — see that loop's doc.
+  private def resourcePage(res: Resource, faction: Faction, lang: Lang): String =
     val info = EntityNames.resourceInfo(res)
     val fm = frontmatter(
-      List("type" -> resourceTypeValue(lang), "faction" -> yamlQuoted(EntityNames.factionLink(info.faction.get, lang)))
+      List(
+        "type" -> resourceTypeValue(lang),
+        "faction" -> yamlQuoted(EntityNames.factionLink(faction, lang))
+      )
     )
     info.asset.fold(fm)(image => s"$fm\n![${info.name(lang)}](../../game/assets/$image)\n")
