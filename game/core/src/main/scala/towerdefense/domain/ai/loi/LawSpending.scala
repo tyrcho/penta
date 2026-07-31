@@ -68,11 +68,42 @@ case object LawSpending extends SpendingPolicy:
   private val laboFondamentalCap = 1
   private val allLabKinds = ResearchSpecs.all.keySet + BuildingKind.LaboFondamental
 
+  // Defensive matchup lever (maze-corruption vs maze-law: baseline 3/12) — diagnosed via
+  // `sim/run maze-corruption maze-law --log`: every corrupted-to-dust building in a lost
+  // seed's transcript died to a SIMULTANEOUS wave (Tomb+DeathHouse+BlackCastle each firing
+  // a Zombie/Vampire/Soul around the same time), not a lone raider — Watchtower kills only
+  // its one nearest target per Balance.DamageTickIntervalMs (1 kill/sec/tower, see
+  // CombatEngine's watchtowerFiring), so every OTHER corruptor standing adjacent that same
+  // second corrodes completely unopposed. Angel is the one Loi kind that doesn't share that
+  // limit: like Forest/Jungle/PassingGate it's an AURA (CombatEngine.auraBuildingKinds),
+  // hitting *every* adjacent creature each tick simultaneously (Balance.AngelDamagePerSec)
+  // plus a 25% slow (Balance.AngelSlowFraction) that gives Watchtower/other Angels more
+  // ticks to finish each one off — the actual counter to a multi-corruptor swarm arriving
+  // in the same window, not more single-target throughput.
+  //
+  // Currently starved out: Angel ties Church/Barracks/Watchtower on loiBonus alone, and
+  // Watchtower's own uncapped defenseBonus above wins that tie every time it's affordable
+  // (by design, see its own doc) — a measured loss built 53 Watchtower against only 8
+  // Angel. This bonus is deliberately BELOW defenseBonus (1.0+0.8=1.8 vs Watchtower's
+  // 1.0+2.0=3.0), so Watchtower still wins every head-to-head and Chaos's already-perfect
+  // 12/12 leg (tuned specifically on "Watchtower wins the fallback tie-break too") is
+  // untouched — this only changes which of Church/Barracks/Angel wins THEIR OWN three-way
+  // tie once Watchtower isn't the pick that tick, giving Law real aura coverage against
+  // swarm corrosion instead of Barracks' zero-dps Soldier or Church's lone-target Paladin
+  // shield. Capped (6): still a corner of the build order, not a full pivot away from the
+  // building-count race the other 3 kinds still need to win outright.
+  private val angelSwarmDefenseCap = 6
+  private val angelSwarmDefenseBonus = 0.8
+
   def score(state: MazeState, opponent: MazeState, kind: BuildingKind): Double =
     val loiBonus = if loiKinds.contains(kind) then 1.0 else 0.0
     val watchtowerCount = state.buildings.count(_.kind == BuildingKind.Watchtower)
     val defenseBonus =
       if kind == BuildingKind.Watchtower && watchtowerCount < watchtowerDefenseCap then 2.0 else 0.0
+    val angelCount = state.buildings.count(_.kind == BuildingKind.Angel)
+    val angelBonus =
+      if kind == BuildingKind.Angel && angelCount < angelSwarmDefenseCap then angelSwarmDefenseBonus
+      else 0.0
     val labCount = state.buildings.count(b => allLabKinds.contains(b.kind))
     val labBonus =
       if kind == BuildingKind.LaboFondamental && watchtowerCount >= 2 && labCount < laboFondamentalCap
@@ -81,7 +112,8 @@ case object LawSpending extends SpendingPolicy:
     val natureCount = state.buildings.count(b => natureKinds.contains(b.kind))
     val naturePenalty =
       if natureKinds.contains(kind) && natureCount >= natureBuildingCap then -1.0 else 0.0
-    loiBonus + defenseBonus + labBonus + naturePenalty + 0.25 * SpendingPolicy.resourceScore(
-      state,
-      kind
-    )
+    loiBonus + defenseBonus + angelBonus + labBonus + naturePenalty + 0.25 * SpendingPolicy
+      .resourceScore(
+        state,
+        kind
+      )
