@@ -1,4 +1,4 @@
-.PHONY: dev test test-js sim sim-tune sim-tournament sim-rps docs build clean help
+.PHONY: dev test test-js sim sim-tune sim-tournament sim-rps sim-faction-matrix docs build clean help
 
 help:
 	@echo "make dev            — compile + watch + dev server on :8082"
@@ -10,6 +10,8 @@ help:
 	@echo "make sim-tournament — Swiss tournament + top-8 playoff bracket across the AiStrategy ladder, parallel across cores:"
 	@echo "                      make sim-tournament ARGS='2 3000 100 tournament-matches.log tournament-report.md 8'"
 	@echo "make sim-rps        — verify the 5-faction rock-paper-scissors cycle: make sim-rps ARGS='20 3500'"
+	@echo "make sim-faction-matrix — all 10 pairings among the 5 faction rush strategies, RPS legs tagged:"
+	@echo "                      make sim-faction-matrix ARGS='12 3500'"
 	@echo "make docs           — regenerate the vault's building/unit/resource/research pages (FR in place, EN under ../Resources-en/)"
 	@echo "make build          — production JS build → public/"
 	@echo "make clean          — remove build artifacts"
@@ -34,6 +36,9 @@ sim-tournament:
 
 sim-rps:
 	sbt --batch "sim/runMain towerdefense.sim.rockPaperScissors $(ARGS)"
+
+sim-faction-matrix:
+	sbt --batch "sim/runMain towerdefense.sim.factionMatrix $(ARGS)"
 
 docs:
 	sbt --batch "sim/runMain towerdefense.docgen.generate"
