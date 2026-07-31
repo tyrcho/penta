@@ -1,5 +1,7 @@
 package towerdefense.domain.i18n
 
+import towerdefense.domain.economy.*
+
 // Shared number formatting for both the game UI (GameApp's tooltips) and the doc
 // generator, so a rate/percentage/duration is never spelled out two different ways in
 // the two places that show it.

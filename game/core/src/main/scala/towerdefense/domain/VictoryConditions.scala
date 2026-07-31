@@ -1,5 +1,8 @@
 package towerdefense.domain
 
+import towerdefense.domain.combat.*
+import towerdefense.domain.economy.*
+
 enum MatchResult(val reason: String) derives CanEqual:
   case PlayerWins(override val reason: String) extends MatchResult(reason)
   case AiWins(override val reason: String) extends MatchResult(reason)
@@ -158,7 +161,7 @@ object VictoryConditions:
       case WinCondition.Chaos =>
         s"Chaos plunder: ${state.resourcesPlundered.toInt} resources stolen (target ${plunderTarget(opponent).toInt})."
       case WinCondition.Mort =>
-        s"Mort corruption: ${state.buildingsCorrupted.toInt} enemy buildings corrupted to dust " +
+        s"Mort corruption: ${state.buildingsCorrupted} enemy buildings corrupted to dust " +
           s"(target ${corruptionTarget(opponent).toInt})."
       case WinCondition.Loi =>
         s"Loi's eternal peace: ${loiBuildingCount(state)} Loi buildings standing after ${battle.elapsedTicks} ticks " +

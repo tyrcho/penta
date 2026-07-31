@@ -1,6 +1,10 @@
 package towerdefense.sim
 
 import towerdefense.domain.*
+import towerdefense.domain.ai.*
+import towerdefense.domain.combat.*
+import towerdefense.domain.economy.*
+import towerdefense.domain.grid.*
 
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicInteger

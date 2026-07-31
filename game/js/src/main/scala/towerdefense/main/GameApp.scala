@@ -7,7 +7,10 @@ import scala.concurrent.ExecutionContext.Implicits.global
 import scala.scalajs.js
 import scala.util.Random
 import towerdefense.domain.*
-import towerdefense.domain.geometry.Vec2
+import towerdefense.domain.ai.*
+import towerdefense.domain.combat.*
+import towerdefense.domain.economy.*
+import towerdefense.domain.grid.*
 import towerdefense.domain.i18n.*
 import towerdefense.pixi.*
 import towerdefense.sim.MatchLog
@@ -154,7 +157,7 @@ private class MazeSprites:
   // change" guard as directionalFacing, avoiding restarting the animation every tick.
   val necromancerSummoning = mutable.Set.empty[Long]
   val buildings = mutable.Map.empty[Long, Sprite]
-  // Only populated for kinds with a spawn timer (BuildingSpecs.all(_).spawns.isDefined) —
+  // Only populated for kinds with a spawn timer (BuildingKind.spawns.isDefined) —
   // Watchtower is naturally absent, no special-casing needed.
   val buildingTimers = mutable.Map.empty[Long, Double]
   // Which BuildingKind each sprite is currently textured/sized/tinted for — Placement's
@@ -432,7 +435,7 @@ private def displayName(kind: BuildingKind): String = EntityNames.buildingName(k
 // by upgrading an existing Grove/Forest (see Placement.tryUpgradeBuilding), so they get
 // no build-<slug> button at all (see wireBuildingButtons/updateBuildButtonsAffordability).
 private def buildableKinds: List[BuildingKind] =
-  BuildingKind.values.toList.filter(BuildingSpecs.all(_).buildableDirectly)
+  BuildingKind.values.toList.filter(_.buildableDirectly)
 
 private val MazeGapPx = GridConfig.cellSize
 
@@ -590,7 +593,7 @@ def onReady(app: Application, textures: js.Dictionary[Texture]): Unit =
   // hovered/selectedTarget (those only latch onto an actual creature/building, not blank
   // cells) — feeds the aura/damage range-preview overlay while a buildable kind is selected
   // (see updateAuraOverlay). None whenever the cursor is outside the player's grid.
-  var hoveredCell: Option[(Int, Int)] = None
+  var hoveredCell: Option[Pos] = None
   var speed = new GameSpeed
   var msSinceLastSave = 0.0
   val playerSprites = new MazeSprites
@@ -666,8 +669,8 @@ def onReady(app: Application, textures: js.Dictionary[Texture]): Unit =
     "pointerup",
     (e: FederatedPointerEvent) => {
       val clickedBuilding =
-        cellAt(app, e, mode).flatMap { case (col, row) =>
-          buildingAt(battle.player, isPlayer = true, col, row)
+        cellAt(app, e, mode).flatMap { cell =>
+          buildingAt(battle.player, isPlayer = true, cell.col, cell.row)
         }
       clickedBuilding match
         case Some(target) =>
@@ -853,7 +856,7 @@ private def drawGrid(): Graphics =
   g
 
 private def cellColor(col: Int, row: Int): Int =
-  val cell = (col, row)
+  val cell = Pos(col, row)
   if cell == GridConfig.spawnCell then 0x22c55e
   else if cell == GridConfig.goalCell then 0xef4444
   else 0x1e2140
@@ -902,7 +905,7 @@ private def updateAuraOverlay(
     maze: MazeState,
     selectedTarget: Option[HoverTarget],
     selectedBuilding: BuildingKind,
-    hoveredCell: Option[(Int, Int)],
+    hoveredCell: Option[Pos],
     mode: Mode
 ): Unit =
   g.clear()
@@ -912,7 +915,7 @@ private def updateAuraOverlay(
       maze.buildings.find(_.id == id).map(b => (kind, b.col, b.row))
   }.flatten
   val placingPreview =
-    if mode == Mode.Playing then hoveredCell.map { case (col, row) => (selectedBuilding, col, row) }
+    if mode == Mode.Playing then hoveredCell.map(cell => (selectedBuilding, cell.col, cell.row))
     else None
   builtSelection.orElse(placingPreview).foreach { case (kind, col, row) =>
     auraShapeFor(kind).foreach(shape => drawAuraShape(g, shape, col, row))
@@ -947,13 +950,12 @@ private def fillCell(g: Graphics, col: Int, row: Int): Unit =
 // ── Input (only the left/player maze is tappable; both buildings are available —
 // symmetric game, see CLAUDE.md — so the player picks one via the toolbar buttons) ──
 
-// The static build-button tooltip for a kind — cost/production from BuildingSpecs
-// (TooltipText.buildingButtonTooltip), any combat ability BuildingSpec doesn't model
+// The static build-button tooltip for a kind — cost/production from BuildingKind
+// (TooltipText.buildingButtonTooltip), any combat ability BuildingKind doesn't model
 // (TooltipText.buildingOwnAbility), and what unit it spawns, if any (spawnAbilitySuffix) —
 // recomputed on every hover (not cached) so it always reflects `currentLang`.
 private def buildingTooltip(kind: BuildingKind): String =
-  val spec = BuildingSpecs.all(kind)
-  TooltipText.buildingButtonTooltip(kind, spec.cost, spec.produces, currentLang) +
+  TooltipText.buildingButtonTooltip(kind, kind.cost, kind.produces, currentLang) +
     TooltipText.buildingOwnAbility(kind, currentLang) + spawnAbilitySuffix(kind)
 
 // canAfford is read at click time (not baked into the closure) since the player's
@@ -985,7 +987,7 @@ private def wireBuildClick(
   )
 
 private def canAfford(maze: MazeState, kind: BuildingKind): Boolean =
-  Placement.canAfford(maze.resources, BuildingSpecs.all(kind).cost)
+  Placement.canAfford(maze.resources, kind.cost)
 
 // Reflects afford-ability in real time, since the player's resources move every tick
 // even without any click — see wireBuildClick for the matching input gate.
@@ -1254,7 +1256,7 @@ private def clearSprites(world: Container, sprites: MazeSprites): Unit =
 // AI's maze, which the player never directly interacts with) — always at full scale
 // regardless of aiScaleFor(mode), so this bound never needs to shrink to match a smaller
 // AI maze; only `layout`'s overall size (and so vt.scale/offset) depends on it.
-private def cellAt(app: Application, e: FederatedPointerEvent, mode: Mode): Option[(Int, Int)] =
+private def cellAt(app: Application, e: FederatedPointerEvent, mode: Mode): Option[Pos] =
   val layout = currentLayout(
     app.screen.width,
     app.screen.height,
@@ -1264,7 +1266,7 @@ private def cellAt(app: Application, e: FederatedPointerEvent, mode: Mode): Opti
   val localX = (e.globalX - vt.offsetX) / vt.scale
   val localY = (e.globalY - vt.offsetY) / vt.scale
   if localX < 0 || localX >= GridConfig.width || localY < 0 || localY >= GridConfig.height then None
-  else Some(((localX / GridConfig.cellSize).toInt, (localY / GridConfig.cellSize).toInt))
+  else Some(Pos((localX / GridConfig.cellSize).toInt, (localY / GridConfig.cellSize).toInt))
 
 private def handleTap(
     app: Application,
@@ -1276,11 +1278,12 @@ private def handleTap(
   if battle.outcome.isDefined then battle
   else
     cellAt(app, e, mode) match
-      case None             => battle
-      case Some((col, row)) =>
+      case None       => battle
+      case Some(cell) =>
         battle.copy(
-          player =
-            Placement.tryPlaceBuilding(battle.player, choice, col, row).getOrElse(battle.player)
+          player = Placement
+            .tryPlaceBuilding(battle.player, choice, cell.col, cell.row)
+            .getOrElse(battle.player)
         )
 
 // The inverse of Demolition.tryDestroy's lookup: which building (if any) occupies a
@@ -1555,7 +1558,7 @@ private def syncCreatures(
     necromancerSummonFrames: js.Array[Texture],
     treeFrames: Map[String, js.Array[Texture]],
     flames: js.Array[Texture],
-    blocked: Set[(Int, Int)],
+    blocked: Set[Pos],
     isPlayer: Boolean,
     setHovered: Option[HoverTarget] => Unit
 ): Unit =
@@ -1823,7 +1826,7 @@ private def syncBuildings(
     // look the rest of the time, instead of a continuous idle glow.
     if b.kind == BuildingKind.PassingGate then
       g.tint = if b.flashMs > 0 then PassingGateFlashTint else visual.tint.getOrElse(0xffffff)
-    BuildingSpecs.all(b.kind).spawns.foreach { (unitKind, _) =>
+    b.kind.spawns.foreach { (unitKind, _) =>
       val previousCountdown = sprites.buildingTimers.getOrElse(b.id, b.spawnCountdownMs)
       sprites.buildingTimers(b.id) = b.spawnCountdownMs
       if hasWrapped(previousCountdown, b.spawnCountdownMs) then
@@ -1920,13 +1923,13 @@ private def removeStaleWithEffect[T <: Container](
 private def angleTo(from: Vec2, to: Vec2): Double =
   math.atan2(to.y - from.y, to.x - from.x)
 
-private def creatureFacingAngle(c: Creature, blocked: Set[(Int, Int)]): Option[Double] =
+private def creatureFacingAngle(c: Creature, blocked: Set[Pos]): Option[Double] =
   val currentCell = GridConfig.cellOf(c.pos)
   if currentCell == GridConfig.goalCell then None
   else
     Pathfinding.shortestPath(currentCell, GridConfig.goalCell, blocked).collect {
       case path if path.size > 1 =>
-        angleTo(c.pos, GridConfig.cellCenter(path(1)._1, path(1)._2))
+        angleTo(c.pos, GridConfig.cellCenter(path(1)))
     }
 
 // ── Sprite/effect helpers ───────────────────────────────────────────────
@@ -2142,7 +2145,7 @@ private def destroyInfo(target: HoverTarget, maze: MazeState): Option[(Int, Int,
       // live building avoids showing a stale cost after an upgrade.
       case HoverKind.BuildingH(_) =>
         maze.buildings.find(_.id == target.id).map { b =>
-          val cost = BuildingSpecs.all(b.kind).cost
+          val cost = b.kind.cost
           val refundText = cost.toList
             .filter(_._2 > 0.0)
             .sortBy(_._1.ordinal)
@@ -2223,9 +2226,8 @@ private def specializeOption(
     nextKind: BuildingKind,
     maze: MazeState
 ): (BuildingKind, String, Boolean, String) =
-  val nextSpec = BuildingSpecs.all(nextKind)
-  val costText = TooltipText.costIcons(nextSpec.cost)
-  val previewCountdown = nextSpec.spawns.map(_._2).getOrElse(0.0)
+  val costText = TooltipText.costIcons(nextKind.cost)
+  val previewCountdown = nextKind.spawns.map(_._2).getOrElse(0.0)
   // Upgrading always grants at least level 1 for free (see Placement.upgradeBuilding's
   // doc) — the preview reflects that immediately, rather than showing "no bonus yet" for a
   // lab the click is about to unlock.
@@ -2247,11 +2249,11 @@ private def specializeOption(
   // (MaxCountReached), so this keeps the button's disabled look an accurate preview of
   // whether clicking would do anything.
   val slotAvailable =
-    nextSpec.maxPerMaze.forall(max => maze.buildings.count(_.kind == nextKind) < max)
+    nextKind.maxPerMaze.forall(max => maze.buildings.count(_.kind == nextKind) < max)
   (
     nextKind,
     TooltipText.upgradeLabel(nextKind, costText, currentLang),
-    slotAvailable && Placement.canAfford(maze.resources, nextSpec.cost),
+    slotAvailable && Placement.canAfford(maze.resources, nextKind.cost),
     preview
   )
 
@@ -2363,9 +2365,9 @@ private def hoverText(target: HoverTarget, battle: BattleState): Option[String] 
     case HoverKind.BuildingH(_) =>
       maze.buildings.find(_.id == target.id).map(b => buildingHoverText(b.kind, b, maze))
 
-// Kept as hand-written per-kind text (not derived from BuildingSpecs), same as the
-// tooltip constants above — the ability sentences (Forest's aura, Watchtower's ranged
-// damage) describe combat behavior that lives outside BuildingSpec by design (see the
+// Kept as hand-written per-kind text (not derived from BuildingKind's own fields), same as
+// the tooltip constants above — the ability sentences (Forest's aura, Watchtower's ranged
+// damage) describe combat behavior that lives outside BuildingKind by design (see the
 // refactor's confirmed scope), so there's nothing generic left to derive them from.
 // `maze` is needed (not just `b`) so every "+X resource/s" line can show the *live*
 // Engendre-boosted rate (see effectiveRate) rather than the flat Balance constant, which
@@ -2389,10 +2391,10 @@ private def unitAbilitySummary(kind: UnitKind): String =
 // Appended to any building's tooltip (static build-button hover — buildingTooltip — or
 // live per-building hover — buildingHoverText) that spawns a unit, so its value proposition
 // is visible whether or not the building has been placed yet. Empty for a kind with no
-// spawn (BuildingSpecs.all(_).spawns = None — Watchtower, Angel, PassingGate, every Science
+// spawn (BuildingKind.spawns = None — Watchtower, Angel, PassingGate, every Science
 // lab), which already describes its own (non-unit) ability directly in its own text.
 private def spawnAbilitySuffix(kind: BuildingKind): String =
-  BuildingSpecs.all(kind).spawns match
+  kind.spawns match
     case Some((unitKind, _)) =>
       s" — ${EntityNames.unitName(unitKind, currentLang)} ${unitAbilitySummary(unitKind)}"
     case None => ""
@@ -2413,7 +2415,7 @@ private def constructionSuffix(b: Building): String =
 // CombatEngine.productionPerSec itself applies, so this can never silently drift from
 // the actual number the top summary panel and the real tick both use).
 private def effectiveRate(maze: MazeState, kind: BuildingKind, resource: Resource): Double =
-  BuildingSpecs.all(kind).produces.getOrElse(resource, 0.0) *
+  kind.produces.getOrElse(resource, 0.0) *
     CombatEngine.researchProductionMultiplier(maze, kind, resource) *
     (1.0 + CombatEngine.engendreBoost(maze, resource))
 
@@ -2626,7 +2628,7 @@ private def updateMazePanel(prefix: String, maze: MazeState, opponent: MazeState
   document.getElementById(s"$prefix-plundered").textContent =
     s"${maze.resourcesPlundered.toInt}/${plunderTarget.toInt}"
   document.getElementById(s"$prefix-corrupted").textContent =
-    s"${maze.buildingsCorrupted.toInt}/${corruptionTarget.toInt}"
+    s"${maze.buildingsCorrupted}/${corruptionTarget.toInt}"
   updateProgressBar(s"$prefix-forests-bar", forestCount, forestTarget)
   updateProgressBar(s"$prefix-plundered-bar", maze.resourcesPlundered, plunderTarget)
   updateProgressBar(s"$prefix-corrupted-bar", maze.buildingsCorrupted, corruptionTarget)

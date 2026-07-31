@@ -1,6 +1,9 @@
 package towerdefense.sim
 
 import towerdefense.domain.*
+import towerdefense.domain.ai.*
+import towerdefense.domain.combat.*
+import towerdefense.domain.economy.*
 
 // Pure formatting/diffing logic for a plain-text, one-line-per-event match transcript —
 // no I/O here, callers own where the lines actually go (a PrintWriter for `Simulator.run`'s
@@ -60,7 +63,7 @@ object MatchLog:
       researchLines(tick, side, before, after) ++
       deaths.map(deathLine(tick, side, _)) ++
       corrupted.map(corruptLine(tick, side, _)) ++
-      arrivals.filter(k => CreatureSpecs.all(k).plunder.isEmpty).map(arriveLine(tick, side, _))
+      arrivals.filter(k => k.plunder.isEmpty).map(arriveLine(tick, side, _))
 
   // `corrupted` (from TickEvents, not diffed) tells builtIds/destroyedIds apart from a
   // plain demolish: a corrupted-to-death building would otherwise look identical to a
@@ -87,7 +90,7 @@ object MatchLog:
 
     val built = builtIds.map { id =>
       val b = afterById(id)
-      val cost = fmtResources(BuildingSpecs.all(b.kind).cost)
+      val cost = fmtResources(b.kind.cost)
       formatLine(tick, side, "BUILD", s"${b.kind} (${b.col},${b.row}) cost $cost")
     }
     val upgraded = upgradedIds.map { id =>
@@ -97,13 +100,13 @@ object MatchLog:
         tick,
         side,
         "UPGRADE",
-        s"$fromKind→${b.kind} (${b.col},${b.row}) cost ${fmtResources(BuildingSpecs.all(b.kind).cost)}"
+        s"$fromKind→${b.kind} (${b.col},${b.row}) cost ${fmtResources(b.kind.cost)}"
       )
     }
     val destroyed = destroyedIds.map { id =>
       val b = beforeById(id)
       val refund =
-        BuildingSpecs.all(b.kind).cost.view.mapValues(_ * Balance.DemolishRefundFraction).toMap
+        b.kind.cost.view.mapValues(_ * Balance.DemolishRefundFraction).toMap
       formatLine(
         tick,
         side,
@@ -131,15 +134,10 @@ object MatchLog:
       after: MazeState
   ): Option[String] =
     val delta = after.buildingsCorrupted - before.buildingsCorrupted
-    if delta <= 0.0 then None
+    if delta <= 0 then None
     else
       Some(
-        formatLine(
-          tick,
-          side,
-          "CORRUPTED_TOTAL",
-          s"+${delta.toInt} (total ${after.buildingsCorrupted.toInt})"
-        )
+        formatLine(tick, side, "CORRUPTED_TOTAL", s"+$delta (total ${after.buildingsCorrupted})")
       )
 
   // Science's research levels (MazeState.researchLevels) aren't in `buildings`, so they
@@ -200,7 +198,7 @@ object MatchLog:
     val forestTarget = VictoryConditions.forestTarget(state, opponent).toInt
     val plunderTarget = VictoryConditions.plunderTarget(opponent).toInt
     val plundered = state.resourcesPlundered
-    val corrupted = state.buildingsCorrupted.toInt
+    val corrupted = state.buildingsCorrupted
     val corruptionTarget = VictoryConditions.corruptionTarget(opponent).toInt
     val resources = fmtResources(state.resources)
     val research = ResearchSpecs.orderedLabs

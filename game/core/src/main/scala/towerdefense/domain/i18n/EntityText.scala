@@ -1,6 +1,7 @@
 package towerdefense.domain.i18n
 
 import towerdefense.domain.*
+import towerdefense.domain.economy.*
 
 // Long-form, doc-page prose for every building and unit, in French and English — what
 // DocGenerator embeds as each generated page's body. Every number here is read straight
@@ -10,15 +11,15 @@ import towerdefense.domain.*
 // tuning (e.g. Loup.md's "PV: 40" vs Balance.WolfMaxHp's actual 30, or Jungle.md's
 // "toutes les 5 sec" vs Balance.WolfSpawnIntervalMs's actual 10s).
 //
-// Ability sentences that aren't captured by BuildingSpec/CreatureSpec at all (auras,
+// Ability sentences that aren't captured by BuildingKind/UnitKind's own fields at all (auras,
 // shields, corruption, cloning — these stay hand-coded per-kind special cases in
 // CombatEngine by design, see BuildingSpecs' doc) are necessarily hand-written here too,
 // same as they were in the original vault pages — there's no generic data table to derive
 // "Forest's Ents deal aura damage" from. Only their *numbers* are pulled from Balance.
 //
 // Every kind's body text is written once, as a value in `buildingBodies`/`unitBodies`
-// below (a Map literal), the same "data, not a switch" shape BuildingSpecs.all/
-// CreatureSpecs.all already use — there's no `kind match { ... }` anywhere in this file.
+// below (a Map literal), the same "data, not a switch" shape BuildingKind's/UnitKind's
+// own literal fields already use — there's no `kind match { ... }` anywhere in this file.
 // Cross-links to another kind's name/file (e.g. Grove's body linking to Elf) read
 // EntityNames' info tables directly, which is always already fully built by the time any
 // entry here is evaluated (this file only *depends on* that data, nothing in EntityNames
@@ -646,7 +647,7 @@ object EntityText:
 
   // What's listed here is drained from the VICTIM *and* credited to the ATTACKER — a
   // genuine transfer, the same resource on both ends (Elf: real Wood, Goblin/Minotaur:
-  // real Gold — CreatureSpecs.all/BattleEngine.creditPlunder), never a conversion into
+  // real Gold — UnitKind.plunder/BattleEngine.creditPlunder), never a conversion into
   // some other currency. resourceLink assumes a real wiki page (crashes on Gold, which
   // has none — see EntityNames' doc), so Gold is displayed with the plain resourceName
   // instead. The credit is always the FULL nominal amount below, never reduced by how

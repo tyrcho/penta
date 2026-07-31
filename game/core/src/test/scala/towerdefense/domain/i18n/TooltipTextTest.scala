@@ -1,6 +1,7 @@
 package towerdefense.domain.i18n
 
 import towerdefense.domain.*
+import towerdefense.domain.economy.*
 
 class TooltipTextTest extends munit.FunSuite:
 

@@ -1,6 +1,8 @@
 package towerdefense.domain.i18n
 
 import towerdefense.domain.*
+import towerdefense.domain.combat.*
+import towerdefense.domain.economy.*
 
 // A localized version of VictoryConditions.winReason. That function's own return value is
 // baked into MatchResult.reason and persisted verbatim (Persistence.encodeOutcome, the
@@ -42,12 +44,12 @@ object VictoryText:
       s"Pillage du Chaos : ${plundered.toInt} ressources volées (objectif ${target.toInt})."
     case Lang.En => s"Chaos plunder: ${plundered.toInt} resources stolen (target ${target.toInt})."
 
-  private def mortReason(corrupted: Double, target: Double, lang: Lang): String = lang match
+  private def mortReason(corrupted: Int, target: Double, lang: Lang): String = lang match
     case Lang.Fr =>
-      s"Corruption Totale de la Mort : ${corrupted.toInt} bâtiments ennemis corrompus jusqu'à disparition " +
+      s"Corruption Totale de la Mort : $corrupted bâtiments ennemis corrompus jusqu'à disparition " +
         s"(objectif ${target.toInt})."
     case Lang.En =>
-      s"Death's total corruption: ${corrupted.toInt} enemy buildings corrupted to dust (target ${target.toInt})."
+      s"Death's total corruption: $corrupted enemy buildings corrupted to dust (target ${target.toInt})."
 
   private def loiReason(count: Int, opponentCount: Int, lang: Lang): String = lang match
     case Lang.Fr =>

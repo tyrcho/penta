@@ -1,6 +1,8 @@
 package towerdefense.sim
 
 import towerdefense.domain.*
+import towerdefense.domain.combat.*
+import towerdefense.domain.economy.*
 
 // Pure formatting/diffing logic, no simulation needed: every case is a hand-built pair of
 // consecutive BattleState snapshots (plus a hand-built TickEvents for deaths/arrivals,
@@ -14,7 +16,7 @@ class MatchLogTest extends munit.FunSuite:
       buildings: List[Building] = Nil,
       resources: Map[Resource, Double] = Map.empty,
       resourcesPlundered: Double = 0.0,
-      buildingsCorrupted: Double = 0.0
+      buildingsCorrupted: Int = 0
   ): MazeState =
     MazeState.initial.copy(
       buildings = buildings,
@@ -34,7 +36,7 @@ class MatchLogTest extends munit.FunSuite:
     assertEquals(
       lines,
       Seq(
-        s"tick 0  a  BUILD  Grove (3,5) cost ${MatchLog.fmtResources(BuildingSpecs.all(BuildingKind.Grove).cost)}"
+        s"tick 0  a  BUILD  Grove (3,5) cost ${MatchLog.fmtResources(BuildingKind.Grove.cost)}"
       )
     )
   }
@@ -48,7 +50,7 @@ class MatchLogTest extends munit.FunSuite:
     assertEquals(
       lines,
       Seq(
-        s"tick 10  b  UPGRADE  Grove→Forest (3,5) cost ${MatchLog.fmtResources(BuildingSpecs.all(BuildingKind.Forest).cost)}"
+        s"tick 10  b  UPGRADE  Grove→Forest (3,5) cost ${MatchLog.fmtResources(BuildingKind.Forest.cost)}"
       )
     )
   }
@@ -58,12 +60,8 @@ class MatchLogTest extends munit.FunSuite:
     val before = battle(maze(buildings = List(cave)), maze())
     val after = battle(maze(), maze())
     val lines = MatchLog.diff(tick = 20, before, after, noEvents)
-    val refund = BuildingSpecs
-      .all(BuildingKind.Cave)
-      .cost
-      .view
-      .mapValues(_ * Balance.DemolishRefundFraction)
-      .toMap
+    val refund =
+      BuildingKind.Cave.cost.view.mapValues(_ * Balance.DemolishRefundFraction).toMap
     assertEquals(
       lines,
       Seq(s"tick 20  a  DESTROY  Cave (8,2) refund ${MatchLog.fmtResources(refund)}")
@@ -133,9 +131,9 @@ class MatchLogTest extends munit.FunSuite:
   test("a corrupted-to-death building on side a produces a CORRUPT line, not a DESTROY line") {
     val grove = Building(1, 3, 5, BuildingKind.Grove, 0.0)
     val before = battle(maze(buildings = List(grove)), maze())
-    val after = battle(maze(buildingsCorrupted = 0.0), maze())
+    val after = battle(maze(buildingsCorrupted = 0), maze())
     val corrosion =
-      Corrosion(1, BuildingKind.Grove, 3, 5, BuildingSpecs.all(BuildingKind.Grove).cost)
+      Corrosion(1, BuildingKind.Grove, 3, 5, BuildingKind.Grove.cost)
     val events =
       TickEvents(Nil, Nil, Nil, Nil, playerCorrupted = List(corrosion), aiCorrupted = Nil)
     val lines = MatchLog.diff(tick = 80, before, after, events)
@@ -143,14 +141,14 @@ class MatchLogTest extends munit.FunSuite:
       lines,
       Seq(
         s"tick 80  a  CORRUPT  Grove (3,5) corrupted to dust, opponent refunded " +
-          s"${MatchLog.fmtResources(BuildingSpecs.all(BuildingKind.Grove).cost)}"
+          s"${MatchLog.fmtResources(BuildingKind.Grove.cost)}"
       )
     )
   }
 
   test("an increase in buildingsCorrupted on side b produces a CORRUPTED_TOTAL line") {
-    val before = battle(maze(), maze(buildingsCorrupted = 1.0))
-    val after = battle(maze(), maze(buildingsCorrupted = 2.0))
+    val before = battle(maze(), maze(buildingsCorrupted = 1))
+    val after = battle(maze(), maze(buildingsCorrupted = 2))
     val lines = MatchLog.diff(tick = 85, before, after, noEvents)
     assertEquals(lines, Seq("tick 85  b  CORRUPTED_TOTAL  +1 (total 2)"))
   }

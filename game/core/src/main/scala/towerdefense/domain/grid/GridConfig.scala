@@ -1,0 +1,36 @@
+package towerdefense.domain.grid
+
+import towerdefense.domain.*
+
+object GridConfig:
+  val cols: Int = 12
+  val rows: Int = 12
+  val cellSize: Double = 50.0
+  val width: Double = cols * cellSize
+  val height: Double = rows * cellSize
+
+  val spawnCell: Pos = Pos(0, 0)
+  val goalCell: Pos = Pos(cols - 1, rows - 1)
+
+  def cellCenter(col: Int, row: Int): Vec2 =
+    Vec2((col + 0.5) * cellSize, (row + 0.5) * cellSize)
+
+  def cellCenter(pos: Pos): Vec2 = cellCenter(pos.col, pos.row)
+
+  def cellOf(pos: Vec2): Pos =
+    val col = (pos.x / cellSize).toInt.max(0).min(cols - 1)
+    val row = (pos.y / cellSize).toInt.max(0).min(rows - 1)
+    Pos(col, row)
+
+  def isInBounds(col: Int, row: Int): Boolean =
+    col >= 0 && col < cols && row >= 0 && row < rows
+
+  def isInBounds(pos: Pos): Boolean = isInBounds(pos.col, pos.row)
+
+  // Every cell in row-major order — shared by any AiStrategy that scans the whole grid
+  // for a buildable spot (LinearStrategy, CompositeStrategy).
+  def allCells: Seq[Pos] =
+    for
+      row <- 0 until rows
+      col <- 0 until cols
+    yield Pos(col, row)

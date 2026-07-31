@@ -1,6 +1,7 @@
 package towerdefense.domain.i18n
 
 import towerdefense.domain.*
+import towerdefense.domain.economy.*
 
 // Short, in-game tooltip/hover fragments — the terse counterpart to EntityText's doc-page
 // prose. Kept as its own file (not reusing EntityText's sentences) because the two have
@@ -52,7 +53,7 @@ object TooltipText:
   // Icon-based counterpart to costText, for the in-game #tooltip div only (see
   // resourceIcon's doc for why the wiki keeps costText's plain names instead) — same
   // "amount + amount" shape, just a glyph instead of a written-out name per resource. A
-  // resource whose cost is 0 (e.g. Cave's own Wood — BuildingSpecs.all(Cave).cost) is
+  // resource whose cost is 0 (e.g. Cave's own Wood — BuildingKind.Cave.cost) is
   // dropped entirely rather than printed as a bare, meaningless "0 🪵".
   def costIcons(cost: Map[Resource, Double]): String =
     cost.toList
@@ -406,7 +407,7 @@ object TooltipText:
   )
 
   // The extra sentence a building's own tooltip needs beyond cost/production/spawn —
-  // either a combat ability BuildingSpec doesn't model (Watchtower/Angel/PassingGate's
+  // either a combat ability BuildingKind doesn't model (Watchtower/Angel/PassingGate's
   // aura or ranged damage — see BuildingSpecs' doc on why those stay hand-coded special
   // cases), or Grove's own upgrade-chain hint. Absent for every other kind, whose tooltip
   // is already complete from buildingButtonTooltip + unitAbilitySummary alone.

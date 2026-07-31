@@ -22,9 +22,15 @@ ThisBuild / scalaVersion := "3.3.3"
 // are filtered back out of Test's scalacOptions directly.
 import wartremover.Wart
 lazy val banOptionGetWarts = Seq(
-  Compile / wartremoverErrors := Seq(Wart.OptionPartial, Wart.EitherProjectionPartial, Wart.TryPartial),
+  Compile / wartremoverErrors := Seq(
+    Wart.OptionPartial,
+    Wart.EitherProjectionPartial,
+    Wart.TryPartial
+  ),
   Test / wartremoverErrors := Seq.empty,
-  Test / scalacOptions := (Test / scalacOptions).value.filterNot(_.startsWith("-P:wartremover:traverser:"))
+  Test / scalacOptions := (Test / scalacOptions).value.filterNot(
+    _.startsWith("-P:wartremover:traverser:")
+  )
 )
 
 // Method-length checking uses scripts/check-method-length.py, not scalastyle — scalastyle
@@ -45,7 +51,7 @@ lazy val core = crossProject(JSPlatform, JVMPlatform)
     name := "towerdefense-core",
     libraryDependencies += "org.scalameta" %%% "munit" % "1.0.0" % Test,
     testFrameworks += new TestFramework("munit.Framework"),
-    banOptionGetWarts,
+    banOptionGetWarts
   )
 
 lazy val coreJS = core.js
@@ -61,7 +67,7 @@ lazy val js = project
     name := "towerdefense-js",
     scalaJSUseMainModuleInitializer := true,
     libraryDependencies += "org.scala-js" %%% "scalajs-dom" % "2.8.0",
-    banOptionGetWarts,
+    banOptionGetWarts
   )
 
 // ── Sim: headless JVM AI-vs-AI battle runner (no Node/browser, no rendering) ────
@@ -73,15 +79,16 @@ lazy val sim = project
     name := "towerdefense-sim",
     libraryDependencies += "org.scalameta" %%% "munit" % "1.0.0" % Test,
     testFrameworks += new TestFramework("munit.Framework"),
-    banOptionGetWarts,
+    banOptionGetWarts
   )
 
 // ── Dev server task (attached to js project) ──────────────────────────────
 
 lazy val devServer = taskKey[Unit]("Start live-reload dev server on :8082 (background)")
 devServer := {
-  val root   = (ThisBuild / baseDirectory).value.toPath
-  val jsFile = (js / Compile / fastLinkJS / scalaJSLinkerOutputDirectory).value.toPath.resolve("main.js")
+  val root = (ThisBuild / baseDirectory).value.toPath
+  val jsFile =
+    (js / Compile / fastLinkJS / scalaJSLinkerOutputDirectory).value.toPath.resolve("main.js")
   DevServer.start(root, jsFile, port = 8082)
   streams.value.log.info("Dev server: http://localhost:8082")
   DevServer.lanAddress().foreach(ip => streams.value.log.info(s"On your WiFi:  http://$ip:8082"))

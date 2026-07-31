@@ -3,10 +3,12 @@ package towerdefense.docgen
 import java.nio.charset.StandardCharsets
 import java.nio.file.{Files, Path, Paths}
 import towerdefense.domain.*
+import towerdefense.domain.economy.*
+import towerdefense.domain.grid.*
 import towerdefense.domain.i18n.*
 
 // Regenerates the vault's per-building/per-unit/per-resource pages from the game's own
-// balance data (Balance/BuildingSpecs/CreatureSpecs — see core's i18n package for the
+// balance data (Balance/BuildingKind/UnitKind — see core's i18n package for the
 // text/asset tables this reads), in both French and English:
 //
 //   - French pages are written *in place* under Resources/<Faction>/, at the exact same
@@ -16,8 +18,8 @@ import towerdefense.domain.i18n.*
 //   - English pages are written under a sibling Resources-en/<Faction>/ tree this
 //     generator owns outright (a fresh set of files, not previously hand-written).
 //
-// Scope is deliberately just buildings/units/resources (BuildingSpecs.all/CreatureSpecs.
-// all/Resource.values) — the faction overview pages (Nature.md etc.), the Relations/
+// Scope is deliberately just buildings/units/resources (BuildingKind.values/UnitKind.
+// values/Resource.values) — the faction overview pages (Nature.md etc.), the Relations/
 // cross-influence pages, and Science's Note sur les laboratoires.md are hand-written
 // narrative content outside what Balance can drive, and stay untouched (generated pages
 // link to the FR originals for those — see EntityNames.outOfScopeLink/factionLink). The
@@ -95,7 +97,7 @@ object DocGenerator:
   )
 
   // Gold is the only resource a unit ever plunders that no building ever produces
-  // (Goblin/Minotaur/Dragon steal it directly — see CreatureSpecs) — producesKeys above
+  // (Goblin/Minotaur/Dragon steal it directly — see UnitKind.plunder) — producesKeys above
   // has no Gold entry for exactly that reason, but plunderKeys needs one.
   private val plunderKeys: Map[Resource, I18nText] = Map(
     Resource.Wood -> I18nText("pillage en bois", "plunder in wood"),
@@ -127,39 +129,37 @@ object DocGenerator:
 
   private def buildingPage(kind: BuildingKind, lang: Lang): String =
     val info = EntityNames.buildingInfo(kind)
-    val spec = BuildingSpecs.all(kind)
-    // Skips a resource entirely at cost 0 (e.g. BuildingSpecs.Cave's Wood -> 0.0, kept in
-    // the data model only for map-shape uniformity) — matches the original vault's own
-    // convention of just not mentioning a cost that doesn't apply, rather than showing
-    // a "cout en bois: 0" line no hand-written page ever had.
+    // Skips a resource entirely at cost 0 (e.g. Cave's Wood -> 0.0, kept in the enum only
+    // for map-shape uniformity) — matches the original vault's own convention of just not
+    // mentioning a cost that doesn't apply, rather than showing a "cout en bois: 0" line no
+    // hand-written page ever had.
     val costFields = Resource.values.toList.flatMap(res =>
-      spec.cost
+      kind.cost
         .get(res)
         .filter(_ > 0.0)
         .map(amount => costKeys(res)(lang) -> NumberFormat.decimal(amount))
     )
     val producesFields = Resource.values.toList.flatMap(res =>
-      spec.produces
+      kind.produces
         .get(res)
         .filter(_ > 0.0)
         .map(amount => producesKeys(res)(lang) -> NumberFormat.decimal(amount))
     )
-    val dpsField = Option.when(spec.dps > 0.0)(dpsKey(lang) -> NumberFormat.decimal(spec.dps))
-    val upgradeFromField = BuildingSpecs.upgradeFrom
-      .get(kind)
+    val dpsField = Option.when(kind.dps > 0.0)(dpsKey(lang) -> NumberFormat.decimal(kind.dps))
+    val upgradeFromField = kind.upgradeFrom
       .map(source =>
-        upgradeFromKey(lang) -> yamlQuoted(EntityNames.buildingLink(info.faction, source, lang))
+        upgradeFromKey(lang) -> yamlQuoted(EntityNames.buildingLink(kind.faction, source, lang))
       )
     val upgradeToField = BuildingSpecs.upgradeOptions
       .get(kind)
       .map(targets =>
-        upgradeToKey(lang) -> yamlList(targets.map(EntityNames.buildingLink(info.faction, _, lang)))
+        upgradeToKey(lang) -> yamlList(targets.map(EntityNames.buildingLink(kind.faction, _, lang)))
       )
     val fm = frontmatter(
       List(
         "type" -> buildingTypeValue(lang),
-        "faction" -> yamlQuoted(EntityNames.factionLink(info.faction, lang)),
-        "tier" -> spec.tier.toString
+        "faction" -> yamlQuoted(EntityNames.factionLink(kind.faction, lang)),
+        "tier" -> kind.tier.toString
       ) ++ costFields ++ producesFields ++ dpsField.toList ++ upgradeFromField.toList ++ upgradeToField.toList
     )
     val imageLine = s"![${info.name(lang)}](../../game/assets/${info.asset})"
@@ -169,10 +169,11 @@ object DocGenerator:
 
   private def unitPage(kind: UnitKind, lang: Lang): String =
     val info = EntityNames.unitInfo(kind)
-    val spec = CreatureSpecs.all(kind)
-    val spawningBuilding = CreatureSpecs.spawningBuilding(kind)
+    val spawnedByField = kind.producedFrom.map(building =>
+      spawnedByKey(lang) -> yamlQuoted(EntityNames.buildingLink(kind.faction, building, lang))
+    )
     val plunderFields = Resource.values.toList.flatMap(res =>
-      spec.plunder
+      kind.plunder
         .get(res)
         .filter(_ > 0.0)
         .map(amount => plunderKeys(res)(lang) -> NumberFormat.decimal(amount))
@@ -180,18 +181,15 @@ object DocGenerator:
     // speedPerMs is px/ms; GridConfig.cellSize (px/cell) converts it to the same
     // cells/sec unit the vault's own hand-written prose already uses (e.g. Ame.md:
     // "vitesse normale (1 case/sec)") — see GridConfig.cellSize's doc.
-    val cellsPerSec = spec.speedPerMs * 1000.0 / GridConfig.cellSize
+    val cellsPerSec = kind.speedPerMs * 1000.0 / GridConfig.cellSize
     val fm = frontmatter(
       List(
         "type" -> unitTypeValue(lang),
-        "faction" -> yamlQuoted(EntityNames.factionLink(info.faction, lang)),
-        hpKey(lang) -> yamlQuoted(NumberFormat.decimal(spec.maxHp)),
-        "tier" -> spec.tier.toString,
-        spawnedByKey(lang) -> yamlQuoted(
-          EntityNames.buildingLink(info.faction, spawningBuilding, lang)
-        ),
+        "faction" -> yamlQuoted(EntityNames.factionLink(kind.faction, lang)),
+        hpKey(lang) -> yamlQuoted(NumberFormat.decimal(kind.maxHp)),
+        "tier" -> kind.tier.toString,
         speedKey(lang) -> NumberFormat.decimal(cellsPerSec)
-      ) ++ plunderFields
+      ) ++ spawnedByField.toList ++ plunderFields
     )
     val imageLine = s"![${info.name(lang)}](../../game/assets/${info.asset})"
     s"$fm\n$imageLine\n\n${EntityText.unitBody(kind, lang)}\n"

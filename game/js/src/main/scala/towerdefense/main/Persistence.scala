@@ -3,7 +3,10 @@ package towerdefense.main
 import org.scalajs.dom
 import scala.scalajs.js
 import towerdefense.domain.*
-import towerdefense.domain.geometry.Vec2
+import towerdefense.domain.ai.*
+import towerdefense.domain.combat.*
+import towerdefense.domain.economy.*
+import towerdefense.domain.grid.*
 
 // Saves/restores BattleState across page refreshes via localStorage. Best-effort: any
 // failure (storage disabled, quota exceeded, malformed JSON from an older save format)
@@ -118,7 +121,7 @@ private object Persistence:
         case UnitKind.Dragon      => "Dragon"
         case UnitKind.Soldier     => "Soldier"
         case UnitKind.Orc         => "Orc",
-      // Only Necromancer/Tree ever have a nonzero countdown/frozenMs (see CreatureSpec.
+      // Only Necromancer/Tree ever have a nonzero countdown/frozenMs (see UnitKind.
       // spawns/spawnFreezeMs), and only a Soul or a cloned Tree has a summonedBy — inert
       // (0.0/null/1.0) for every other kind, same "cheap to carry" choice as Building's
       // own spawnCountdownMs.
@@ -182,10 +185,10 @@ private object Persistence:
       resources = decodeResources(d),
       resourcesSpent = decodeResourcesSpent(d.resourcesSpent),
       resourcesPlundered = asDouble(d.resourcesPlundered),
-      // Pre-Mort saves have no buildingsCorrupted field — default to 0.0, same fallback
+      // Pre-Mort saves have no buildingsCorrupted field — default to 0, same fallback
       // shape as Shadow/Crystal's decodeResources migration above.
       buildingsCorrupted =
-        if js.isUndefined(d.buildingsCorrupted) then 0.0 else asDouble(d.buildingsCorrupted),
+        if js.isUndefined(d.buildingsCorrupted) then 0 else asDouble(d.buildingsCorrupted).toInt,
       researchLevels = decodeResearchLevels(d.researchLevels),
       nextId = asDouble(d.nextId).toLong
     )

@@ -1,5 +1,9 @@
 package towerdefense.domain
 
+import towerdefense.domain.combat.*
+import towerdefense.domain.economy.*
+import towerdefense.domain.grid.*
+
 class VictoryConditionsTest extends munit.FunSuite:
 
   private def forestBuilding(col: Int, row: Int): Building =
@@ -183,7 +187,7 @@ class VictoryConditionsTest extends munit.FunSuite:
   test("ai wins once it has corrupted enough enemy buildings (Mort)") {
     val battle = BattleState(
       player = MazeState.initial,
-      ai = MazeState.initial.copy(buildingsCorrupted = Balance.MortVictoryCorruptionTarget)
+      ai = MazeState.initial.copy(buildingsCorrupted = Balance.MortVictoryCorruptionTarget.toInt)
     )
     assertEquals(
       VictoryConditions.evaluate(battle).map(_.isInstanceOf[MatchResult.AiWins]),
@@ -193,7 +197,8 @@ class VictoryConditionsTest extends munit.FunSuite:
 
   test("the player can also win via corruption (symmetric)") {
     val battle = BattleState(
-      player = MazeState.initial.copy(buildingsCorrupted = Balance.MortVictoryCorruptionTarget),
+      player =
+        MazeState.initial.copy(buildingsCorrupted = Balance.MortVictoryCorruptionTarget.toInt),
       ai = MazeState.initial
     )
     assertEquals(
@@ -206,8 +211,11 @@ class VictoryConditionsTest extends munit.FunSuite:
     "clearing the corruption floor isn't enough once the opponent has caught up: must double them too"
   ) {
     val battle = BattleState(
-      player = MazeState.initial.copy(buildingsCorrupted = Balance.MortVictoryCorruptionTarget),
-      ai = MazeState.initial.copy(buildingsCorrupted = Balance.MortVictoryCorruptionTarget / 2 + 1)
+      player =
+        MazeState.initial.copy(buildingsCorrupted = Balance.MortVictoryCorruptionTarget.toInt),
+      ai = MazeState.initial.copy(buildingsCorrupted =
+        (Balance.MortVictoryCorruptionTarget / 2 + 1).toInt
+      )
     )
     assertEquals(VictoryConditions.evaluate(battle), None)
   }
@@ -476,7 +484,8 @@ class VictoryConditionsTest extends munit.FunSuite:
 
   test("winningCondition reports Mort when the corruption target decided the match") {
     val battle = BattleState(
-      player = MazeState.initial.copy(buildingsCorrupted = Balance.MortVictoryCorruptionTarget),
+      player =
+        MazeState.initial.copy(buildingsCorrupted = Balance.MortVictoryCorruptionTarget.toInt),
       ai = MazeState.initial
     )
     assertEquals(

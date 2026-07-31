@@ -1,6 +1,7 @@
 package towerdefense.sim
 
-import towerdefense.domain.{AiStrategy, VictoryConditions}
+import towerdefense.domain.VictoryConditions
+import towerdefense.domain.ai.AiStrategy
 
 // Smoke tests for the headless simulator: prove it runs to completion on the JVM and
 // produces well-formed results. Win-rate numbers are exploratory, not a correctness
@@ -151,8 +152,8 @@ class SimulatorTest extends munit.FunSuite:
     // an exact-zero assertion, not just "non-negative", since this case is fully predictable.
     val tooShort =
       Simulator.runMatch(
-        towerdefense.domain.AiStrategy.all("linear"),
-        towerdefense.domain.AiStrategy.all("linear"),
+        AiStrategy.all("linear"),
+        AiStrategy.all("linear"),
         maxTicks = 1,
         deltaMs = 100.0
       )
@@ -160,8 +161,8 @@ class SimulatorTest extends munit.FunSuite:
     assertEquals(tooShort.totalResearchB, 0)
 
     val longEnough = Simulator.runMatch(
-      towerdefense.domain.AiStrategy.all("linear"),
-      towerdefense.domain.AiStrategy.all("linear"),
+      AiStrategy.all("linear"),
+      AiStrategy.all("linear"),
       maxTicks = 3_000,
       deltaMs = 100.0
     )
@@ -191,8 +192,8 @@ class SimulatorTest extends munit.FunSuite:
   test("runLoggedMatch writes a transcript, ending in a WINS line whenever the match resolves") {
     val lines = scala.collection.mutable.ArrayBuffer.empty[String]
     val outcome = Simulator.runLoggedMatch(
-      towerdefense.domain.AiStrategy.all("linear"),
-      towerdefense.domain.AiStrategy.all("linear"),
+      AiStrategy.all("linear"),
+      AiStrategy.all("linear"),
       maxTicks = 300,
       deltaMs = 100.0,
       logEvery = 100,
