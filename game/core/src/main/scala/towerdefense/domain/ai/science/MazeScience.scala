@@ -9,9 +9,16 @@ import towerdefense.domain.ai.*
 // strategy before this either ignored the 5-lab-building requirement entirely or only
 // ever researched opportunistically, never on purpose (see ScienceSpending's own doc).
 // maze-science@1s now tops the entire ladder — see AiStrategyTest's ladder-order test.
+//
+// Wrapped in ScienceShared.FondamentaleFirstResearch (rather than plain ComposedStrategy)
+// to replace maybeResearch — normally a flat AiStrategy.researchAnyAffordable — with
+// ScienceShared.researchFondamentaleFirst; see that wrapper's own doc for why this needs
+// to be a delegating wrapper rather than a subclass override.
 object MazeScience
-    extends ComposedStrategy(
-      ForcedOpeningLayout(ScienceShared.opening, FreeformLayout),
-      ScienceSpending,
-      name = "maze-science"
+    extends FondamentaleFirstResearch(
+      ComposedStrategy(
+        ForcedOpeningLayout(ScienceShared.opening, FreeformLayout),
+        ScienceSpending,
+        name = "maze-science"
+      )
     )

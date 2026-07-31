@@ -82,6 +82,29 @@ case object ScienceSpending extends SpendingPolicy:
   private val natureKinds = Set(BuildingKind.Grove, BuildingKind.Forest, BuildingKind.Jungle)
   private val natureBuildingCap = 2
 
+  // StasisField (Balance.CrystalPerSecPerStasisField = 0.4/sec, double LaboFondamental's
+  // own 0.2/sec, and never capped by scienceLabKinds/maxPerMaze — Note sur les
+  // laboratoires.md's "one lab per kind" rule applies only to the five specific Labo*
+  // kinds) is this policy's second Crystal-producing avenue, but with no bonus of its own
+  // it only ever competed via the plain 0.25*resourceScore fallback, which structurally
+  // favors spending whichever currency has the most slack (SpendingPolicy.marginFor) —
+  // exactly backwards once Crystal, not Wood/Fire/Light/Shadow, is what's actually gating
+  // every Labo* upgrade AND every research level (confirmed via transcript: Fire/Shadow
+  // piled up past 200-300 unspent while Crystal stayed under 30 the whole match — see
+  // ScienceShared.researchFondamentaleFirst's own doc for the same transcript's research
+  // side). A flat bonus, same tier as the producers/Watchtower above, keeps this policy
+  // investing in Crystal throughput for as long as a candidate remains affordable, purely
+  // additive (StasisField was never penalized before, so this can only raise how often it
+  // wins a build slot, never remove a candidate or a slot from anything else already
+  // working — unlike a cap/penalty on OTHER kinds, which a seeded `sim/run maze-plunder
+  // maze-science --seed 1` A/B showed costs this policy real, hard-won defensive matches
+  // against Chaos: Cave/Tomb/Church/Barracks/WarCamp/Labyrinth/BlackCastle/DeathHouse all
+  // also spawn a raiding unit that lands in the OPPONENT's maze, so capping how many of
+  // them this policy builds also caps how much incidental pressure Science puts on
+  // whichever opponent it's facing, even though none of that pressure serves Science's own
+  // win condition on purpose. Left alone here rather than chased further).
+  private val crystalBonus = 1.5
+
   def score(state: MazeState, opponent: MazeState, kind: BuildingKind): Double =
     val missingProducerBonus = producers
       .collectFirst {
@@ -115,5 +138,6 @@ case object ScienceSpending extends SpendingPolicy:
     val labBonus =
       if kind == BuildingKind.LaboFondamental && labCount < scienceLabKinds.size - 1 then 1.0
       else 0.0
-    missingProducerBonus + defenseBonus + labBonus + naturePenalty + 0.25 * SpendingPolicy
-      .resourceScore(state, kind)
+    val crystalScoreBonus = if kind == BuildingKind.StasisField then crystalBonus else 0.0
+    missingProducerBonus + defenseBonus + labBonus + naturePenalty + crystalScoreBonus +
+      0.25 * SpendingPolicy.resourceScore(state, kind)
