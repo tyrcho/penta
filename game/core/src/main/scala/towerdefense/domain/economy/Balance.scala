@@ -401,8 +401,22 @@ object Balance:
   // Champ de Stase.md (new, tier 2): produces more Crystal than LaboFondamental, and
   // slows enemy units adjacent to it by half — mirrors Angel's own slow exactly (see
   // CombatEngine.effectiveSpeedPerMs), just from a different faction/building.
+  //
+  // Raised from 0.4 (5-faction rock-paper-scissors tuning, round 1->2): the
+  // Science-vs-Nature leg's own agent measured, across several seeded transcripts, that
+  // Science accumulates only ~150-200 Crystal by the tick Nature's forest-count race
+  // resolves (~2,250-2,280 ticks, essentially fixed regardless of what Science does) —
+  // roughly 3.5-5x short of even the CHEAPEST real win path (Fondamentale level 3 + the
+  // other 4 labs at level 3, ~740 Crystal total, not the ~2,420 a full level-5 push
+  // costs; see NatureVictoryForestTarget's own doc, which assumed the more expensive
+  // level-5 path when that target was last raised). StasisField is uncapped and Science's
+  // only building whose entire purpose is Crystal income (unlike the 5 specific labs,
+  // whose 0.2-0.3/sec rates are deliberately near-equal to each other — see
+  // LaboFondamental's own doc — so raising any one of THOSE breaks that documented
+  // invariant instead), making it the one lever that speeds Science's economy without
+  // touching any other faction's own race or the 5-lab rates' sibling parity.
   val StasisFieldCostCrystal: Double = 20.0
-  val CrystalPerSecPerStasisField: Double = 0.4
+  val CrystalPerSecPerStasisField: Double = 1.0
   val StasisSlowFraction: Double = 0.5
 
   // Five labs, one per other faction (Note sur les laboratoires.md: "un seul laboratoire de
