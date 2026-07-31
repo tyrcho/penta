@@ -417,13 +417,18 @@ class SpendingPolicyTest extends munit.FunSuite:
     )
   }
 
-  test("CorruptionSpending breaks ties between Tomb and BlackCastle by affordability margin") {
+  // blackCastleBonus (see CorruptionSpending's own doc) deliberately overrides the plain
+  // affordability tie-break: Tomb's Zombie only breaks even (at best) against Nature's
+  // building self-heal, while BlackCastle's Vampire reliably beats it — so BlackCastle
+  // outscores Tomb once affordable, even though Tomb (wood5/shadow10) leaves a much
+  // larger raw margin than BlackCastle (wood20/shadow40).
+  test("CorruptionSpending favors BlackCastle over Tomb once BlackCastle is affordable") {
     val state =
       MazeState.initial.copy(resources = Map(Resource.Wood -> 100.0, Resource.Shadow -> 100.0))
     assert(
-      CorruptionSpending.score(state, noOpponent, BuildingKind.Tomb) >
-        CorruptionSpending.score(state, noOpponent, BuildingKind.BlackCastle),
-      "Tomb (wood5/shadow10) leaves a much larger margin than BlackCastle (wood20/shadow40)"
+      CorruptionSpending.score(state, noOpponent, BuildingKind.BlackCastle) >
+        CorruptionSpending.score(state, noOpponent, BuildingKind.Tomb),
+      "BlackCastle's Vampire reliably beats Nature's building self-heal, unlike Tomb's Zombie"
     )
   }
 
@@ -454,12 +459,17 @@ class SpendingPolicyTest extends munit.FunSuite:
     )
   }
 
-  test("LawSpending breaks ties between Barracks and Angel by affordability margin") {
+  // angelSwarmDefenseBonus (see LawSpending's own doc) deliberately overrides the plain
+  // affordability tie-break below its cap: Angel's aura answers a simultaneous
+  // multi-corruptor swarm that Barracks' zero-dps Soldier can't, so Angel outscores
+  // Barracks once affordable, even though Barracks (wood5/light10) leaves a much larger
+  // raw margin than Angel (light50).
+  test("LawSpending favors Angel over Barracks below the angel swarm-defense cap") {
     val state = withResources(wood = 100.0, fire = 0.0, light = 100.0)
     assert(
-      LawSpending.score(state, noOpponent, BuildingKind.Barracks) > LawSpending
-        .score(state, noOpponent, BuildingKind.Angel),
-      "Barracks (wood5/light10) leaves a much larger margin than Angel (light50)"
+      LawSpending.score(state, noOpponent, BuildingKind.Angel) > LawSpending
+        .score(state, noOpponent, BuildingKind.Barracks),
+      "Angel's aura answers a simultaneous multi-corruptor swarm, unlike Barracks' Soldier"
     )
   }
 
@@ -610,7 +620,7 @@ class SpendingPolicyTest extends munit.FunSuite:
   // building) is still the more robust first line. Same fix
   // ScienceSpending/LawSpending already use for themselves — a capped Watchtower priority
   // tier, borrowed from Loi the same way ScienceSpending borrows Cave/Church/Tomb.
-  test("NatureSpending favors Watchtower over Grove while fewer than 8 Watchtowers exist") {
+  test("NatureSpending favors Watchtower over Grove while fewer than 10 Watchtowers exist") {
     val state = withResources(wood = 100.0, fire = 0.0, light = 100.0)
     assert(
       NatureSpending.score(state, noOpponent, BuildingKind.Watchtower) >
@@ -619,15 +629,15 @@ class SpendingPolicyTest extends munit.FunSuite:
     )
   }
 
-  test("NatureSpending stops favoring Watchtower once 8 already exist") {
-    val eightWatchtowers = withResources(wood = 100.0, fire = 0.0, light = 100.0).copy(
-      buildings = (1 to 8).map(id => building(id, id, 1, BuildingKind.Watchtower)).toList
+  test("NatureSpending stops favoring Watchtower once 10 already exist") {
+    val tenWatchtowers = withResources(wood = 100.0, fire = 0.0, light = 100.0).copy(
+      buildings = (1 to 10).map(id => building(id, id, 1, BuildingKind.Watchtower)).toList
     )
     assertEqualsDouble(
-      NatureSpending.score(eightWatchtowers, noOpponent, BuildingKind.Watchtower),
-      0.25 * SpendingPolicy.resourceScore(eightWatchtowers, BuildingKind.Watchtower),
+      NatureSpending.score(tenWatchtowers, noOpponent, BuildingKind.Watchtower),
+      0.25 * SpendingPolicy.resourceScore(tenWatchtowers, BuildingKind.Watchtower),
       1e-9,
-      "a ninth Watchtower should score via the plain fallback once defense is already secured"
+      "an eleventh Watchtower should score via the plain fallback once defense is already secured"
     )
   }
 
