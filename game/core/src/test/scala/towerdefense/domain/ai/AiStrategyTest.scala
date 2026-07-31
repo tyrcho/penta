@@ -178,7 +178,7 @@ class AiStrategyTest extends munit.FunSuite:
   // research elsewhere). Ranked by Elo rating, weakest to strongest, ascending.
   test("the ladder is ordered weakest to strongest by measured Elo rating") {
     assertEquals(
-      AiStrategy.ladder.map(_._1),
+      AiStrategy.ladder.map(_.name),
       Seq(
         "maze-corruption@8s",
         "comb-corruption@3s",
@@ -215,15 +215,18 @@ class AiStrategyTest extends munit.FunSuite:
   }
 
   test("all contains both the catalog's plain names and the ladder's speed-suffixed names") {
-    assertEquals(AiStrategy.all, (AiStrategy.catalog ++ AiStrategy.ladder).toMap)
-    assertEquals(AiStrategy.all("linear"), AiStrategy.catalog.toMap.apply("linear"))
+    assertEquals(
+      AiStrategy.all,
+      (AiStrategy.catalog ++ AiStrategy.ladder).map(s => s.name -> s).toMap
+    )
+    assertEquals(AiStrategy.all("linear"), LinearStrategy)
     assert(AiStrategy.all.contains("linear@1s"))
   }
 
   test("every ladder entry's buildCooldownMs matches its name's speed suffix") {
-    AiStrategy.ladder.foreach { case (name, strategy) =>
-      val periodSec = name.split("@")(1).stripSuffix("s").toInt
-      assertEqualsDouble(strategy.buildCooldownMs, periodSec * 1_000.0, 1e-9, name)
+    AiStrategy.ladder.foreach { strategy =>
+      val periodSec = strategy.name.split("@")(1).stripSuffix("s").toInt
+      assertEqualsDouble(strategy.buildCooldownMs, periodSec * 1_000.0, 1e-9, strategy.name)
     }
   }
 

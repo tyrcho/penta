@@ -16,12 +16,20 @@ private case class Candidate(kind: BuildingKind, col: Int, row: Int, result: Maz
 // NoLayoutPreference) and TemplateStrategy (LayoutPolicy = TemplateLayout,
 // SpendingPolicy = GrovePriority). Side-agnostic and opponent-aware like any AiStrategy —
 // see AiStrategy's doc.
+// name defaults to "composed" for the many ad-hoc instances built directly by tests and
+// Simulator.searchWeights that are never looked up by name — every catalog entry (see
+// AiStrategy.catalog) instead extends this case class as a named object with its own
+// explicit `name`, e.g. `object MazePlunder extends ComposedStrategy(..., name =
+// "maze-plunder")`, so the name travels with the value through copy (reseed's own
+// `copy(random = ...)` keeps every other field, name included) the same way every other
+// field does.
 case class ComposedStrategy(
     layout: LayoutPolicy,
     spending: SpendingPolicy,
     layoutWeight: Double = 1.0,
     spendingWeight: Double = 1.0,
-    random: scala.util.Random = new scala.util.Random()
+    random: scala.util.Random = new scala.util.Random(),
+    name: String = "composed"
 ) extends AiStrategy:
 
   // See AiStrategy.reseed's own doc — this is the one implementation that actually has

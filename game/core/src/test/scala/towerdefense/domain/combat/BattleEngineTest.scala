@@ -113,6 +113,7 @@ class BattleEngineTest extends munit.FunSuite:
 
   test("a strategy's maybeDestroy is applied to its own side, before it builds again") {
     val demolisher: AiStrategy = new AiStrategy:
+      val name = "demolisher"
       def maybeBuild(state: MazeState, opponent: MazeState): MazeState = state
       override def maybeDestroy(state: MazeState, opponent: MazeState): MazeState =
         Demolition.tryDestroy(state, 5, 5).getOrElse(state)

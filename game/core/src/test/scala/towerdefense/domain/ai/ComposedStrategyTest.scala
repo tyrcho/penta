@@ -1,6 +1,7 @@
 package towerdefense.domain.ai
 
 import towerdefense.domain.*
+import towerdefense.domain.ai.chaos.PlunderSpending
 import towerdefense.domain.combat.*
 import towerdefense.domain.economy.*
 import towerdefense.domain.grid.*

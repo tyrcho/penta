@@ -862,7 +862,7 @@ object Simulator:
     val logPath = args.lift(3).getOrElse("tournament-matches.log")
     val mdPath = args.lift(4).getOrElse("tournament-report.md")
     val playoffSize = args.lift(5).map(_.toInt).getOrElse(8)
-    val names = AiStrategy.ladder.map(_._1)
+    val names = AiStrategy.ladder.map(_.name)
     val rounds = swissRounds(names.size)
     val reporter = new ProgressReporter("tournament", rounds)
     val writer = new java.io.PrintWriter(logPath)

@@ -23,7 +23,7 @@ private object Persistence:
   // whatever index that name holds in the *current* ladder at load time instead.
   def save(battle: BattleState, aiLevelIndex: Int): Unit =
     try
-      val name = AiStrategy.ladder(aiLevelIndex)._1
+      val name = AiStrategy.ladder(aiLevelIndex).name
       dom.window.localStorage.setItem(StorageKey, js.JSON.stringify(encodeSave(battle, name)))
     catch case _: Throwable => ()
 
@@ -173,7 +173,7 @@ private object Persistence:
   // falls back the same way, rather than silently resolving to some unrelated strategy.
   private def decodeAiLevelIndex(d: js.Dynamic): Int =
     if js.isUndefined(d.aiLevelName) then 0
-    else AiStrategy.ladder.indexWhere(_._1 == d.aiLevelName.asInstanceOf[String]).max(0)
+    else AiStrategy.ladder.indexWhere(_.name == d.aiLevelName.asInstanceOf[String]).max(0)
 
   private def decodeMaze(d: js.Dynamic): MazeState =
     val buildings =

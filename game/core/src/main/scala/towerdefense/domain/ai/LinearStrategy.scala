@@ -40,6 +40,8 @@ import towerdefense.domain.grid.*
 // here, silently making it unbuildable by this strategy, until that test caught it.
 object LinearStrategy extends AiStrategy:
 
+  val name = "linear"
+
   private[domain] val buildOrder: Seq[BuildingKind] = Seq(
     BuildingKind.Stonehenge,
     BuildingKind.Church,

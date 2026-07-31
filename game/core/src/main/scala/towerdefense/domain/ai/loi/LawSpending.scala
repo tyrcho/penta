@@ -1,16 +1,17 @@
-package towerdefense.domain.ai
+package towerdefense.domain.ai.loi
 
 import towerdefense.domain.*
+import towerdefense.domain.ai.SpendingPolicy
 import towerdefense.domain.economy.*
 
 // Races Loi's "Paix Éternelle" victory condition (VictoryConditions.hasWonViaLoi) the same
-// way PlunderSpending/CorruptionSpending race Chaos/Mort's: build as many of the four Loi
-// kinds (Church/Watchtower/Angel/Barracks) as possible before Balance.
+// way chaos.PlunderSpending/mort.CorruptionSpending race Chaos/Mort's: build as many of
+// the four Loi kinds (Church/Watchtower/Angel/Barracks) as possible before Balance.
 // LoiVictoryTickThreshold elapses, since it's a pure building-count comparison at that
 // instant, not a resource total. Watchtower doubles as this strategy's own defense (10
-// dmg/sec, 2-cell range — same mechanic ScienceSpending borrows via a separate bonus
-// tier, see its own doc) at zero extra cost here, since Watchtower is already one of the
-// four counted kinds.
+// dmg/sec, 2-cell range — same mechanic science.ScienceSpending borrows via a separate
+// bonus tier, see its own doc) at zero extra cost here, since Watchtower is already one of
+// the four counted kinds.
 //
 // Also penalizes incidental Grove/Forest/Jungle past a small cap (same mechanism
 // ScienceSpending uses for itself) — diagnosed via a real transcript: none of the 4 Loi
@@ -54,15 +55,16 @@ case object LawSpending extends SpendingPolicy:
   // reordering for the "which of the 5 it upgrades into" half of this. Gated on already
   // having 2+ Watchtowers up so this doesn't derail the early defense rush itself.
   //
-  // The cap itself is enforced by AiStrategy's own CountCapLayout wrapping (a hard veto),
-  // not a SpendingPolicy penalty here — diagnosed via transcript that even a -1_000 flat
-  // penalty on a second LaboFondamental still lost the tie-break during a genuine Wood
-  // drought (none of Law's own 4 kinds produce Wood): every OTHER candidate hit
-  // SpendingPolicy.marginFor's own UnaffordableMarginFloor (-1_000_000), so a
-  // merely-very-negative LaboFondamental still won by comparison. See CountCapLayout's own
-  // doc for why a layout-level veto (immune to every other candidate's score) was the fix.
-  // This policy still needs its own labCount check for the BONUS below the cap — the veto
-  // only stops going OVER it, it doesn't make Law want to build one in the first place.
+  // The cap itself is enforced by AiStrategy's own CountCapLayout wrapping (a hard veto,
+  // see loi.MazeLaw's own use of LoiShared.labKinds), not a SpendingPolicy penalty here —
+  // diagnosed via transcript that even a -1_000 flat penalty on a second LaboFondamental
+  // still lost the tie-break during a genuine Wood drought (none of Law's own 4 kinds
+  // produce Wood): every OTHER candidate hit SpendingPolicy.marginFor's own
+  // UnaffordableMarginFloor (-1_000_000), so a merely-very-negative LaboFondamental still
+  // won by comparison. See CountCapLayout's own doc for why a layout-level veto (immune to
+  // every other candidate's score) was the fix. This policy still needs its own labCount
+  // check for the BONUS below the cap — the veto only stops going OVER it, it doesn't
+  // make Law want to build one in the first place.
   private val laboFondamentalCap = 1
   private val allLabKinds = ResearchSpecs.all.keySet + BuildingKind.LaboFondamental
 

@@ -1,6 +1,7 @@
-package towerdefense.domain.ai
+package towerdefense.domain.ai.chaos
 
 import towerdefense.domain.*
+import towerdefense.domain.ai.SpendingPolicy
 
 // Always favors Chaos (every one of its 4 buildings — Cave/Labyrinth/WarCamp/DragonsLair)
 // regardless of the opponent's own faction mix, racing the Chaos/plunder victory condition
@@ -14,13 +15,13 @@ import towerdefense.domain.*
 // raid — but a flat, equal bonus for every Chaos kind alone never actually got it built in
 // practice (confirmed via `sim/run maze-plunder maze-science --log`): Cave's near-zero
 // cost always won the fallback margin tie-break, so a real match just spammed Cave
-// forever. DragonsLair gets its own priority tier instead (mirroring ScienceSpending's
-// tiered bonuses), guaranteeing at least one gets built once some Chaos economy already
-// exists — capped at 1 (its whole value is one raid's magnitude, not volume), and gated on
-// already owning a Cave/WarCamp: an UNgated priority bonus was confirmed (via the same
-// transcript) to spend this policy's entire starting Gold on a turn-1 DragonsLair — a
-// building with zero economic return — the exact Gold-starvation lockout
-// ScienceSpending's own producer bonuses exist to avoid.
+// forever. DragonsLair gets its own priority tier instead (mirroring science.
+// ScienceSpending's tiered bonuses), guaranteeing at least one gets built once some Chaos
+// economy already exists — capped at 1 (its whole value is one raid's magnitude, not
+// volume), and gated on already owning a Cave/WarCamp: an UNgated priority bonus was
+// confirmed (via the same transcript) to spend this policy's entire starting Gold on a
+// turn-1 DragonsLair — a building with zero economic return — the exact Gold-starvation
+// lockout ScienceSpending's own producer bonuses exist to avoid.
 //
 // A Watchtower-defense tier (mirroring ScienceSpending's) was tried and reverted here —
 // it overcorrected Law-vs-Chaos into a total Chaos sweep without fixing Chaos-vs-Science

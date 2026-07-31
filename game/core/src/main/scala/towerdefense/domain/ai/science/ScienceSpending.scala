@@ -1,21 +1,22 @@
-package towerdefense.domain.ai
+package towerdefense.domain.ai.science
 
 import towerdefense.domain.*
+import towerdefense.domain.ai.SpendingPolicy
 import towerdefense.domain.combat.*
 import towerdefense.domain.economy.*
 
 // Races Science's "Recherche fondamentale" victory condition (VictoryConditions.
-// hasWonViaFondamentale) the same way PlunderSpending/CorruptionSpending race Chaos/Mort's
-// — but Science's win condition isn't "build more of one kind forever": it needs exactly 5
-// Science-lab buildings (one LaboFondamental placed per slot, each maxPerMaze: Some(1) once
-// upgraded into LaboDeRecherche or one of the 4 "other" kinds — see BuildingSpecs.
-// upgradeOptions), then research levels on each, not more labs. So the flat bonus targets
-// LaboFondamental specifically (the only directly-buildable Science kind) and only while
-// fewer than 5 Science-lab buildings exist yet; past that, AiStrategy.upgradeAnyAffordable
-// and researchAnyAffordable (already wired into every ComposedStrategy unconditionally —
-// see its doc) take over diversifying and leveling them, and this policy falls back to the
-// same 0.25*resourceScore economy term PlunderSpending/CorruptionSpending use once their own
-// racing kind is no longer scarce.
+// hasWonViaFondamentale) the same way chaos.PlunderSpending/mort.CorruptionSpending race
+// Chaos/Mort's — but Science's win condition isn't "build more of one kind forever": it
+// needs exactly 5 Science-lab buildings (one LaboFondamental placed per slot, each
+// maxPerMaze: Some(1) once upgraded into LaboDeRecherche or one of the 4 "other" kinds —
+// see BuildingSpecs.upgradeOptions), then research levels on each, not more labs. So the
+// flat bonus targets LaboFondamental specifically (the only directly-buildable Science
+// kind) and only while fewer than 5 Science-lab buildings exist yet; past that,
+// AiStrategy.upgradeAnyAffordable and researchAnyAffordable (already wired into every
+// ComposedStrategy unconditionally — see its doc) take over diversifying and leveling
+// them, and this policy falls back to the same 0.25*resourceScore economy term
+// PlunderSpending/CorruptionSpending use once their own racing kind is no longer scarce.
 //
 // A pure lab rush alone starves itself: every research level on LaboSombre/LaboDuChaos/
 // LaboDeLaLoi also costs that lab's own currency (Shadow/Fire/Light respectively — see
@@ -90,7 +91,7 @@ case object ScienceSpending extends SpendingPolicy:
       }
       .getOrElse(0.0)
     val watchtowerCount = state.buildings.count(_.kind == BuildingKind.Watchtower)
-    // A real penalty above the cap, not just "no bonus" (same fix applied to LawSpending's
+    // A real penalty above the cap, not just "no bonus" (same fix applied to loi.LawSpending's
     // own Watchtower/lab tiers — see its doc): diagnosed via transcript that the bonus
     // alone only stopped ADDING a reason to build Watchtower, but didn't stop the plain
     // 0.25*resourceScore fallback from picking it anyway once Wood/Light were abundant —

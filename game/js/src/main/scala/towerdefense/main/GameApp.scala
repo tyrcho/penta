@@ -703,8 +703,8 @@ def onReady(app: Application, textures: js.Dictionary[Texture]): Unit =
     val wasUnresolved = battle.outcome.isEmpty
     val (tickAiStrategy, tickPlayerStrategy) = mode match
       case Mode.Spectating(leftIdx, rightIdx) =>
-        (AiStrategy.ladder(rightIdx)._2, Some(AiStrategy.ladder(leftIdx)._2))
-      case Mode.Playing => (AiStrategy.ladder(aiLevelIndex)._2, None)
+        (AiStrategy.ladder(rightIdx), Some(AiStrategy.ladder(leftIdx)))
+      case Mode.Playing => (AiStrategy.ladder(aiLevelIndex), None)
     tickCounter += 1
     val (steppedBattle, tickEvents) = BattleEngine.tickDetailed(
       battle,
@@ -1106,10 +1106,10 @@ private def rateText(perSec: Double): String =
 private def wireAiLevelSelect(initialIndex: Int, onSelect: Int => Unit): Unit =
   val select = document.getElementById("ai-level-select").asInstanceOf[dom.html.Select]
   select.replaceChildren()
-  AiStrategy.ladder.zipWithIndex.foreach { case ((name, _), i) =>
+  AiStrategy.ladder.zipWithIndex.foreach { case (strategy, i) =>
     val option = document.createElement("option").asInstanceOf[dom.html.Option]
     option.value = i.toString
-    option.text = s"${i + 1}. $name"
+    option.text = s"${i + 1}. ${strategy.name}"
     select.appendChild(option)
   }
   select.selectedIndex = initialIndex
@@ -1132,8 +1132,8 @@ private def updateModeUi(mode: Mode): Unit =
   document.body.classList.toggle("mode-spectating", mode.isInstanceOf[Mode.Spectating])
   mode match
     case Mode.Spectating(leftIdx, rightIdx) =>
-      val leftName = AiStrategy.ladder(leftIdx)._1
-      val rightName = AiStrategy.ladder(rightIdx)._1
+      val leftName = AiStrategy.ladder(leftIdx).name
+      val rightName = AiStrategy.ladder(rightIdx).name
       document.getElementById("spectate-label").textContent =
         Ui.spectateLabel(leftName, rightName, currentLang)
     case Mode.Playing => ()

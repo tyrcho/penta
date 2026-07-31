@@ -1,6 +1,11 @@
 package towerdefense.domain.ai
 
 import towerdefense.domain.*
+import towerdefense.domain.ai.chaos.PlunderSpending
+import towerdefense.domain.ai.loi.LawSpending
+import towerdefense.domain.ai.mort.CorruptionSpending
+import towerdefense.domain.ai.nature.NatureSpending
+import towerdefense.domain.ai.science.ScienceSpending
 import towerdefense.domain.combat.*
 import towerdefense.domain.economy.*
 import towerdefense.domain.grid.*

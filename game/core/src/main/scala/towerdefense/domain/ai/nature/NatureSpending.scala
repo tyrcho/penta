@@ -1,20 +1,21 @@
-package towerdefense.domain.ai
+package towerdefense.domain.ai.nature
 
 import towerdefense.domain.*
+import towerdefense.domain.ai.SpendingPolicy
 
 // Races Nature's own forest-count victory condition (VictoryConditions.forestCount) the
-// same way PlunderSpending/CorruptionSpending/LawSpending race their factions' —
-// GrovePriority (below) only ever chases Grove itself via a very different flat-1000/
-// rawMargin shape, so it isn't a fair "pure Nature rush" comparable to the other three;
-// this targets the whole Grove/Forest/Jungle upgrade chain plus Stonehenge instead.
+// same way chaos.PlunderSpending/mort.CorruptionSpending/loi.LawSpending race their
+// factions' — GrovePriority only ever chases Grove itself via a very different
+// flat-1000/rawMargin shape, so it isn't a fair "pure Nature rush" comparable to the other
+// three; this targets the whole Grove/Forest/Jungle upgrade chain plus Stonehenge instead.
 //
-// Also builds a little defense (Watchtower, same capped tier ScienceSpending/LawSpending
-// use for themselves) — diagnosed via a real transcript: unlike Chaos/Science/Law's win
-// conditions (cumulative stats that don't undo), a Forest corrupted to death is REMOVED
-// from Nature's own forestCount, so Mort's corruption doesn't just race its own target,
-// it actively reverses Nature's progress. Forest/Jungle's own passive corruption
-// self-heal (0.1-0.5%/sec, well below a Zombie/Vampire's 1.15-3.0%/sec corruption rate)
-// never stops a sustained assault alone.
+// Also builds a little defense (Watchtower, same capped tier science.ScienceSpending/
+// LawSpending use for themselves) — diagnosed via a real transcript: unlike Chaos/
+// Science/Law's win conditions (cumulative stats that don't undo), a Forest corrupted to
+// death is REMOVED from Nature's own forestCount, so Mort's corruption doesn't just race
+// its own target, it actively reverses Nature's progress. Forest/Jungle's own passive
+// corruption self-heal (0.1-0.5%/sec, well below a Zombie/Vampire's 1.15-3.0%/sec
+// corruption rate) never stops a sustained assault alone.
 case object NatureSpending extends SpendingPolicy:
   private val natureKinds =
     Set(BuildingKind.Grove, BuildingKind.Forest, BuildingKind.Jungle, BuildingKind.Stonehenge)
