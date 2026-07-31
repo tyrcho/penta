@@ -31,7 +31,24 @@ case object NatureSpending extends SpendingPolicy:
   // let a Science opponent's incidental Cave-spawned Goblins/Minotaurs accumulate enough
   // stolen Gold to win via Chaos's plunder condition first — an unrelated confound winning
   // before either side's own intended race did.
-  private val watchtowerDefenseCap = 8
+  // Raised again from 8 to 10 (off-cycle round-1 pass, `sim/run maze-plunder maze-nature`):
+  // unlike Mort's corruption (which actively reverses Nature's own forestCount — see this
+  // object's own top-level doc), a Chaos raider that reaches the far end just needs to
+  // "arrive" once to bank its plunder toward Chaos's small, fixed, never-undone
+  // ChaosVictoryPlunderTarget — so even a defense already killing the "large majority" of
+  // raiders in transit (confirmed by a `--log --seed` transcript: Watchtower/Aura kills
+  // vastly outnumber the handful of PLUNDER events) still eventually leaks enough raiders
+  // over a long match to hit that small target before Nature's own (much slower)
+  // forestCount race finishes. 2 extra Watchtowers measurably delayed and reduced Chaos's
+  // plunder rate in seeded testing (1/12 -> 2/12 wins for Nature, `--seed 0`) with ZERO
+  // regression on the favored maze-nature-vs-maze-corruption matchup at the same seed
+  // (still 6/6) — cap 12 was also tried and rejected here: it cost 2 of 6 favored-matchup
+  // wins for no further gain against Chaos, confirming this lever is close to its ceiling
+  // without trading away the favored matchup, which this pass will not do (see
+  // NatureSpending's package-level constraint against self-nerfing to manufacture a result
+  // elsewhere). The remaining gap against Chaos looks structural (ChaosVictoryPlunderTarget
+  // itself, not this policy) — see this round's balance complaint.
+  private val watchtowerDefenseCap = 10
 
   def score(state: MazeState, opponent: MazeState, kind: BuildingKind): Double =
     val natureBonus = if natureKinds.contains(kind) then 1.0 else 0.0
