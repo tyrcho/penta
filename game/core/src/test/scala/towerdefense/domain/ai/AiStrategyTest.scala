@@ -159,57 +159,42 @@ class AiStrategyTest extends munit.FunSuite:
     assertEquals(count(result, BuildingKind.Grove), 0)
   }
 
-  // Re-measured via `sim/runMain towerdefense.sim.tournament` (30 entries, up from 25) after
-  // adding ScienceSpending/maze-science: a full-ladder tournament turned up 0 Science
-  // victories out of 118 decisive matches before this addition (see ScienceSpending's own
-  // doc), so a 6th base strategy joined the other 5 at all 5 speeds specifically to make
-  // that victory condition reachable. A first pass (labs + Cave/Church/Tomb producers, no
-  // defense) fixed a Gold-starvation lockout but still lost almost every match to Chaos
-  // plunder on the clock, landing maze-science in the bottom half at every speed.
-  //
-  // Second pass, re-measured after ScienceSpending also learned to secure 1-2 Watchtowers
-  // before over-investing in labs: maze-science@1s now TOPS the entire 30-entry ladder,
-  // 5-0 in the Swiss phase, and reached the top-8 playoff bracket's semifinal. Confirmed via
-  // `sim/run maze-science maze-plunder 1 --log`: Watchtower kills the opponent's Goblin/
-  // Elf/Zombie raiders on sight (10 dmg/sec, one-shots most of them), buying enough time for
-  // all 5 Science labs to reach deep research levels before the match resolves — 21 of 147
-  // decisive matches this tournament won via Science mastery specifically (up from 2, and
-  // this time actually attributable to maze-science entries, not incidental opportunistic
-  // research elsewhere). Ranked by Elo rating, weakest to strongest, ascending.
+  // Re-measured via `sim/runMain towerdefense.sim.tournament 2` (25 entries, replacing the
+  // previous 6-base-strategy mix — see AiStrategy.ladder's own doc) after the 2-round
+  // multi-agent tuning pass gave every faction a real, individually-tuned rush strategy
+  // worth playing against. 25 strategies/5 Swiss rounds/2 matches per pairing:
+  // maze-science@1s anchors the bottom (its lab economy is the slowest to compound), and
+  // maze-science@3s tops the ladder, narrowly ahead of maze-nature@1s/maze-nature@2s/
+  // maze-science@5s. Ranked by Elo rating, weakest to strongest, ascending.
   test("the ladder is ordered weakest to strongest by measured Elo rating") {
     assertEquals(
       AiStrategy.ladder.map(_.name),
       Seq(
+        "maze-science@1s",
         "maze-corruption@8s",
-        "comb-corruption@3s",
-        "comb-corruption@5s",
-        "linear@8s",
-        "balanced@8s",
-        "comb-corruption@2s",
-        "balanced@5s",
-        "maze-corruption@2s",
-        "comb-corruption@8s",
-        "resource-maze@8s",
-        "maze-science@2s",
-        "maze-corruption@1s",
-        "comb-corruption@1s",
-        "linear@3s",
-        "balanced@3s",
-        "resource-maze@3s",
         "maze-corruption@5s",
-        "resource-maze@5s",
-        "linear@5s",
-        "maze-science@3s",
         "maze-science@8s",
-        "maze-science@5s",
-        "balanced@2s",
+        "maze-nature@5s",
+        "maze-corruption@2s",
+        "maze-corruption@1s",
+        "maze-nature@8s",
+        "maze-law@1s",
+        "maze-law@8s",
+        "maze-law@5s",
+        "maze-nature@3s",
+        "maze-law@3s",
+        "maze-science@2s",
+        "maze-law@2s",
+        "maze-plunder@8s",
+        "maze-plunder@5s",
         "maze-corruption@3s",
-        "resource-maze@2s",
-        "linear@2s",
-        "linear@1s",
-        "resource-maze@1s",
-        "balanced@1s",
-        "maze-science@1s"
+        "maze-plunder@3s",
+        "maze-plunder@2s",
+        "maze-plunder@1s",
+        "maze-nature@2s",
+        "maze-nature@1s",
+        "maze-science@5s",
+        "maze-science@3s"
       )
     )
   }
@@ -220,7 +205,7 @@ class AiStrategyTest extends munit.FunSuite:
       (AiStrategy.catalog ++ AiStrategy.ladder).map(s => s.name -> s).toMap
     )
     assertEquals(AiStrategy.all("linear"), LinearStrategy)
-    assert(AiStrategy.all.contains("linear@1s"))
+    assert(AiStrategy.all.contains("maze-science@1s"))
   }
 
   test("every ladder entry's buildCooldownMs matches its name's speed suffix") {

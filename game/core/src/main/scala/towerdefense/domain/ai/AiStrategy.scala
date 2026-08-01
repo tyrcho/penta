@@ -180,71 +180,58 @@ object AiStrategy:
   )
 
   // The AI difficulty ladder GameApp actually drives players/spectators through (see
-  // GameApp.aiLevelIndex): 25 levels built by crossing 5 of catalog's strongest/most
-  // distinct base strategies with 5 build-speed periods (1/2/3/5/8 seconds per build, via
-  // RateLimited — see AiStrategy.buildCooldownMs's doc), then ordering all 25 combinations
-  // by measured Elo rating. Build speed turned out to dominate strategy choice at every
-  // tier (each base strategy's own @1s beats its @2s beats its @3s, ..., monotonically),
-  // so the ladder interleaves strategies and speeds rather than grouping by either alone.
-  // Each base strategy is referenced by its own object (not looked up by name), so a
-  // rename of a catalog entry's `name` can't silently break the ladder's own wiring.
+  // GameApp.aiLevelIndex): 25 levels built by crossing the 5 faction rush strategies —
+  // one true "own win condition" strategy per faction, see chaos/mort/science/loi/nature's
+  // own MazePlunder/MazeCorruption/MazeScience/MazeLaw/MazeNature docs — with 5 build-speed
+  // periods (1/2/3/5/8 seconds per build, via RateLimited — see AiStrategy.buildCooldownMs's
+  // doc), then ordering all 25 combinations by measured Elo rating. Each base strategy is
+  // referenced by its own object (not looked up by name), so a rename of a catalog entry's
+  // `name` can't silently break the ladder's own wiring.
   //
-  // Re-measured via `sim/runMain towerdefense.sim.tournament 2` (Swiss rounds, not a full
-  // round-robin — see Simulator.swissStandings) after fixing SpendingPolicy.marginFor to
-  // treat a zero-stock resource as affordable when Gold covers it. The *previous*
-  // measurement (comb-corruption leading every speed tier) turned out to be an artifact of
-  // a real lockout, not real strategic strength: every maze now starts at 0 of every named
-  // resource, and the old Gold-blind marginFor penalized any building needing one of them
-  // as catastrophically unaffordable regardless of Gold on hand — Cave was the sole
-  // exception (its Wood cost happens to be exactly 0.0), so every strategy on the ladder
-  // got stuck building only Cave forever, and comb-corruption/maze-corruption's flat
-  // Mort-kind scoring bonus was the only thing left differentiating anyone. With
-  // diversifying into Grove/Tomb/labs actually possible again, resource-aware strategies
-  // (resource-maze, then linear, which never touched Science/labs either way) now
-  // dominate the top of the ladder at every speed, and comb-corruption fell to the bottom
-  // tier at every speed except @8s. See AiStrategyTest's ladder-order test for the exact
-  // ranking this produced.
-  //
-  // maze-science joins the other 5 base strategies at all 5 speeds (30 entries total, up
-  // from 25) after ScienceSpending was added specifically to make Science's victory
-  // condition actually reachable — see science.MazeScience's own doc. Re-measured via
-  // `sim/runMain towerdefense.sim.tournament` after ScienceSpending also learned to secure
-  // a Watchtower or two before over-investing in labs: maze-science@1s now leads the
-  // entire ladder, 5-0 in the Swiss phase and into the top-8 playoff bracket.
+  // Replaces the previous 6-base-strategy mix (maze-corruption/comb-corruption/linear/
+  // balanced/resource-maze/maze-science — an ad hoc set predating the 5-faction rush
+  // rewrite) with exactly these 5, once every faction had a real, individually-tuned rush
+  // strategy worth playing against (see the 2-round multi-agent tuning pass that got
+  // SimulatorTest's rock-paper-scissors test passing). Re-measured via
+  // `sim/runMain towerdefense.sim.tournament 2` (Swiss rounds, not a full round-robin — see
+  // Simulator.swissStandings), 25 strategies/5 rounds/2 matches per pairing:
+  // maze-science@1s (Elo 1382) anchors the bottom, maze-science@3s (Elo 1620) edges out
+  // maze-nature@1s/maze-nature@2s/maze-science@5s for the top. Unlike the old ladder, build
+  // speed does NOT dominate monotonically for every strategy here: maze-plunder/
+  // maze-nature/maze-corruption still rank @1s highest among their own speed variants, but
+  // maze-science and maze-law both peak in the @2s-@5s range instead — not yet root-caused
+  // (a faster cooldown presumably wastes some attempts racing ahead of what Gold/production
+  // can afford, but this is an untested hypothesis, not a confirmed mechanism). See
+  // AiStrategyTest's ladder-order test for the exact ranking.
   private def rateLimited(strategy: AiStrategy, periodSec: Int): AiStrategy =
     RateLimited(strategy, buildCooldownMs = periodSec * 1_000.0)
 
   val ladder: Seq[AiStrategy] = Seq(
+    rateLimited(MazeScience, 1),
     rateLimited(MazeCorruption, 8),
-    rateLimited(CombCorruption, 3),
-    rateLimited(CombCorruption, 5),
-    rateLimited(LinearStrategy, 8),
-    rateLimited(Balanced, 8),
-    rateLimited(CombCorruption, 2),
-    rateLimited(Balanced, 5),
-    rateLimited(MazeCorruption, 2),
-    rateLimited(CombCorruption, 8),
-    rateLimited(ResourceMaze, 8),
-    rateLimited(MazeScience, 2),
-    rateLimited(MazeCorruption, 1),
-    rateLimited(CombCorruption, 1),
-    rateLimited(LinearStrategy, 3),
-    rateLimited(Balanced, 3),
-    rateLimited(ResourceMaze, 3),
     rateLimited(MazeCorruption, 5),
-    rateLimited(ResourceMaze, 5),
-    rateLimited(LinearStrategy, 5),
-    rateLimited(MazeScience, 3),
     rateLimited(MazeScience, 8),
-    rateLimited(MazeScience, 5),
-    rateLimited(Balanced, 2),
+    rateLimited(MazeNature, 5),
+    rateLimited(MazeCorruption, 2),
+    rateLimited(MazeCorruption, 1),
+    rateLimited(MazeNature, 8),
+    rateLimited(MazeLaw, 1),
+    rateLimited(MazeLaw, 8),
+    rateLimited(MazeLaw, 5),
+    rateLimited(MazeNature, 3),
+    rateLimited(MazeLaw, 3),
+    rateLimited(MazeScience, 2),
+    rateLimited(MazeLaw, 2),
+    rateLimited(MazePlunder, 8),
+    rateLimited(MazePlunder, 5),
     rateLimited(MazeCorruption, 3),
-    rateLimited(ResourceMaze, 2),
-    rateLimited(LinearStrategy, 2),
-    rateLimited(LinearStrategy, 1),
-    rateLimited(ResourceMaze, 1),
-    rateLimited(Balanced, 1),
-    rateLimited(MazeScience, 1)
+    rateLimited(MazePlunder, 3),
+    rateLimited(MazePlunder, 2),
+    rateLimited(MazePlunder, 1),
+    rateLimited(MazeNature, 2),
+    rateLimited(MazeNature, 1),
+    rateLimited(MazeScience, 5),
+    rateLimited(MazeScience, 3)
   )
 
   // Both catalog (named base combinations, for CLI experiments) and ladder (the 25
