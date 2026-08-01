@@ -29,7 +29,7 @@ object VictoryText:
         else
           val loiCount = VictoryConditions.loiBuildingCount(state)
           val opponentLoiCount = VictoryConditions.loiBuildingCount(opponent)
-          if battle.elapsedTicks >= Balance.LoiVictoryTickThreshold && loiCount > opponentLoiCount
+          if battle.elapsedMs >= Balance.LoiVictoryMsThreshold && loiCount > opponentLoiCount
           then loiReason(loiCount, opponentLoiCount, lang)
           else scienceReason(state.researchLevels.getOrElse(BuildingKind.LaboDeRecherche, 0), lang)
 

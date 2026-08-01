@@ -7,7 +7,7 @@ import towerdefense.domain.economy.*
 // Races Loi's "Paix Éternelle" victory condition (VictoryConditions.hasWonViaLoi) the same
 // way chaos.PlunderSpending/mort.CorruptionSpending race Chaos/Mort's: build as many of
 // the four Loi kinds (Church/Watchtower/Angel/Barracks) as possible before Balance.
-// LoiVictoryTickThreshold elapses, since it's a pure building-count comparison at that
+// LoiVictoryMsThreshold elapses, since it's a pure building-count comparison at that
 // instant, not a resource total. Watchtower doubles as this strategy's own defense (10
 // dmg/sec, 2-cell range — same mechanic science.ScienceSpending borrows via a separate
 // bonus tier, see its own doc) at zero extra cost here, since Watchtower is already one of
@@ -31,7 +31,7 @@ case object LawSpending extends SpendingPolicy:
   // bonus, margin-based tie-breaking let Law drift toward spamming Barracks (cheapest)
   // for raw volume, leaving only 1-2 Watchtowers up against a sustained Goblin/Orc/
   // Minotaur rush — Chaos's plunder target (a small, fixed number) kept getting hit well
-  // before Balance.LoiVictoryTickThreshold, regardless of how large Law's own building
+  // before Balance.LoiVictoryMsThreshold, regardless of how large Law's own building
   // lead would eventually have been.
   //
   // No cap at all (unlike Nature/Science's own 2-4 defense tiers): raised from an initial

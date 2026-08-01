@@ -52,7 +52,8 @@ private object Persistence:
         playerBuildCooldownMs = b.playerBuildCooldownMs,
         outcome = b.outcome.map(encodeOutcome).getOrElse(null),
         aiLevelName = aiLevelName,
-        elapsedTicks = b.elapsedTicks
+        elapsedTicks = b.elapsedTicks,
+        elapsedMs = b.elapsedMs
       )
       .asInstanceOf[js.Object]
 
@@ -161,10 +162,13 @@ private object Persistence:
         if js.isUndefined(d.playerBuildCooldownMs) then 0.0 else asDouble(d.playerBuildCooldownMs),
       outcome = decodeOutcome(d.outcome),
       // Pre-Loi-victory saves have no elapsedTicks at all — default to 0, same fallback
-      // shape as playerBuildCooldownMs above: a resumed match's Loi "sudden death" clock
-      // just restarts from 0, which is safe (only delays that condition, never wrongly
-      // triggers it early).
-      elapsedTicks = if js.isUndefined(d.elapsedTicks) then 0 else asDouble(d.elapsedTicks).toInt
+      // shape as playerBuildCooldownMs above.
+      elapsedTicks = if js.isUndefined(d.elapsedTicks) then 0 else asDouble(d.elapsedTicks).toInt,
+      // Pre-elapsedMs-fix saves (from before Loi's condition switched off the tick count)
+      // have no elapsedMs at all — default to 0.0, same fallback shape as elapsedTicks
+      // above: a resumed match's Loi "sudden death" clock just restarts from 0, which is
+      // safe (only delays that condition, never wrongly triggers it early).
+      elapsedMs = if js.isUndefined(d.elapsedMs) then 0.0 else asDouble(d.elapsedMs)
     )
 
   // Old saves (before the difficulty ladder existed) have no aiLevelName — default to

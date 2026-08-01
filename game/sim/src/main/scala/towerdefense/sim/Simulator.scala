@@ -1014,9 +1014,10 @@ object Simulator:
   // A real correctness bar now lives in SimulatorTest's own rock-paper-scissors test (>=60%
   // of matches won by the expected faction via its own condition) — this CLI stays the
   // exploratory/diagnostic tool for tuning toward that bar, not a replacement for it.
-  // maxTicks defaults comfortably above Balance.LoiVictoryTickThreshold (3_000) so the
-  // Mort->Loi and Loi->Chaos legs get real margin past the threshold for Loi's sudden-death
-  // comparison to actually decide a strict inequality, not just barely reach it.
+  // maxTicks (3_500) * deltaMs (100.0) = 350_000ms simulated, comfortably above Balance.
+  // LoiVictoryMsThreshold (300_000ms) so the Mort->Loi and Loi->Chaos legs get real margin
+  // past the threshold for Loi's sudden-death comparison to actually decide a strict
+  // inequality, not just barely reach it.
   // seed defaults to 0 (reproducible by default — see runMatch's own doc for why this
   // matters: repeated measurements swung by tens of percentage points on tie-break noise
   // alone before seeding existed), pass "unseeded" as the 4th arg to opt back into

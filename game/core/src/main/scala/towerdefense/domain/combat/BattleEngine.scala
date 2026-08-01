@@ -14,18 +14,28 @@ import towerdefense.domain.grid.*
 // outcome freezes the battle once a side has won.
 // elapsedTicks: how many BattleEngine.tick calls this battle has been through — a plain
 // counter, not tied to deltaMs (which varies per caller: Simulator's headless matches use
-// a fixed 100ms, GameApp uses the real frame delta). Exists for Loi's own victory
-// condition (VictoryConditions.hasWonViaLoi), which only starts comparing each side's Loi
-// building count once a fixed number of ticks has passed — see Balance.
-// LoiVictoryTickThreshold's doc. Stops incrementing once `outcome` is set, same freeze
-// behavior as everything else in BattleState (see tickDetailed's outcome.isDefined guard).
+// a fixed 100ms, GameApp uses the real frame delta). Kept for logging/persistence (a tick
+// number to correlate log lines by), but no longer drives any victory condition: the same
+// tick count means wildly different real durations depending on the caller, which used to
+// make Loi's own condition fire ~6x too early for a human player at normal speed in the
+// browser (GameApp calls `tick` once per animation frame, ~16.67ms at 60fps, vs the
+// simulator's fixed 100ms) — see elapsedMs below for the fix.
+// elapsedMs: total simulated time (the sum of every deltaMs `tick` has been called with)
+// this battle has been through. Exists for Loi's own victory condition (VictoryConditions.
+// hasWonViaLoi), which only starts comparing each side's Loi building count once this much
+// simulated time has passed — see Balance.LoiVictoryMsThreshold's doc. Using accumulated
+// time rather than a tick count means the threshold means the same real duration whether
+// the caller is the simulator or the browser. Both fields stop advancing once `outcome` is
+// set, same freeze behavior as everything else in BattleState (see tickDetailed's
+// outcome.isDefined guard).
 case class BattleState(
     player: MazeState,
     ai: MazeState,
     aiBuildCooldownMs: Double = 0.0,
     playerBuildCooldownMs: Double = 0.0,
     outcome: Option[MatchResult] = None,
-    elapsedTicks: Int = 0
+    elapsedTicks: Int = 0,
+    elapsedMs: Double = 0.0
 )
 
 object BattleState:
@@ -110,7 +120,8 @@ object BattleEngine:
         aiFinal,
         aiNextCooldown,
         playerNextCooldown,
-        elapsedTicks = battle.elapsedTicks + 1
+        elapsedTicks = battle.elapsedTicks + 1,
+        elapsedMs = battle.elapsedMs + deltaMs
       )
       val events = TickEvents(
         playerDeaths = playerResult.deaths,

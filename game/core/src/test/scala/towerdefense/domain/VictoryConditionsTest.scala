@@ -355,9 +355,10 @@ class VictoryConditionsTest extends munit.FunSuite:
 
   // ── Loi: Paix Éternelle (Victoire.md's "W" condition) ───────────────────
   // Unlike the other 4, this isn't a race against a floor/opponent-multiplier target: it's
-  // a sudden-death comparison that only starts once Balance.LoiVictoryTickThreshold ticks
-  // have passed, at which point whoever has strictly more Loi buildings (Church/
-  // Watchtower/Angel/Barracks) wins — no minimum floor, even 1 vs 0 counts.
+  // a sudden-death comparison that only starts once Balance.LoiVictoryMsThreshold of
+  // simulated time (BattleState.elapsedMs) has passed, at which point whoever has strictly
+  // more Loi buildings (Church/Watchtower/Angel/Barracks) wins — no minimum floor, even
+  // 1 vs 0 counts.
 
   private def loiBuilding(id: Long, kind: BuildingKind): Building =
     Building(
@@ -368,22 +369,22 @@ class VictoryConditionsTest extends munit.FunSuite:
       spawnCountdownMs = 0.0
     )
 
-  test("no Loi win before the tick threshold, even with a lopsided building count") {
+  test("no Loi win before the ms threshold, even with a lopsided building count") {
     val battle = BattleState(
       player = MazeState.initial.copy(buildings = List(loiBuilding(1, BuildingKind.Church))),
       ai = MazeState.initial,
-      elapsedTicks = Balance.LoiVictoryTickThreshold - 1
+      elapsedMs = Balance.LoiVictoryMsThreshold - 1
     )
     assertEquals(VictoryConditions.evaluate(battle), None)
   }
 
   test(
-    "player wins via Loi with even 1 Loi building vs 0, once at the tick threshold (no minimum floor)"
+    "player wins via Loi with even 1 Loi building vs 0, once at the ms threshold (no minimum floor)"
   ) {
     val battle = BattleState(
       player = MazeState.initial.copy(buildings = List(loiBuilding(1, BuildingKind.Church))),
       ai = MazeState.initial,
-      elapsedTicks = Balance.LoiVictoryTickThreshold
+      elapsedMs = Balance.LoiVictoryMsThreshold
     )
     assertEquals(
       VictoryConditions.evaluate(battle).map(_.isInstanceOf[MatchResult.PlayerWins]),
@@ -395,7 +396,7 @@ class VictoryConditionsTest extends munit.FunSuite:
     val battle = BattleState(
       player = MazeState.initial,
       ai = MazeState.initial.copy(buildings = List(loiBuilding(1, BuildingKind.Watchtower))),
-      elapsedTicks = Balance.LoiVictoryTickThreshold
+      elapsedMs = Balance.LoiVictoryMsThreshold
     )
     assertEquals(
       VictoryConditions.evaluate(battle).map(_.isInstanceOf[MatchResult.AiWins]),
@@ -404,16 +405,16 @@ class VictoryConditionsTest extends munit.FunSuite:
   }
 
   test(
-    "a tie at the threshold does not resolve, and stays unresolved as more ticks pass while still tied"
+    "a tie at the threshold does not resolve, and stays unresolved as more time passes while still tied"
   ) {
     val tiedBuildings = List(loiBuilding(1, BuildingKind.Church))
     val atThreshold = BattleState(
       player = MazeState.initial.copy(buildings = tiedBuildings),
       ai = MazeState.initial.copy(buildings = List(loiBuilding(2, BuildingKind.Watchtower))),
-      elapsedTicks = Balance.LoiVictoryTickThreshold
+      elapsedMs = Balance.LoiVictoryMsThreshold
     )
     assertEquals(VictoryConditions.evaluate(atThreshold), None)
-    val muchLater = atThreshold.copy(elapsedTicks = Balance.LoiVictoryTickThreshold + 500)
+    val muchLater = atThreshold.copy(elapsedMs = Balance.LoiVictoryMsThreshold + 50_000)
     assertEquals(VictoryConditions.evaluate(muchLater), None)
   }
 
@@ -423,7 +424,7 @@ class VictoryConditionsTest extends munit.FunSuite:
         List(loiBuilding(1, BuildingKind.Church), loiBuilding(2, BuildingKind.Angel))
       ),
       ai = MazeState.initial.copy(buildings = List(loiBuilding(3, BuildingKind.Watchtower))),
-      elapsedTicks = Balance.LoiVictoryTickThreshold + 500
+      elapsedMs = Balance.LoiVictoryMsThreshold + 50_000
     )
     assertEquals(
       VictoryConditions.evaluate(playerAhead).map(_.isInstanceOf[MatchResult.PlayerWins]),
@@ -448,7 +449,7 @@ class VictoryConditionsTest extends munit.FunSuite:
     val battle = BattleState(
       player = MazeState.initial.copy(buildings = List(loiBuilding(1, BuildingKind.Church))),
       ai = MazeState.initial,
-      elapsedTicks = Balance.LoiVictoryTickThreshold
+      elapsedMs = Balance.LoiVictoryMsThreshold
     )
     val reason = VictoryConditions.evaluate(battle).map(_.reason).getOrElse("")
     assert(reason.contains("Loi"), s"expected the win reason to mention Loi, got: $reason")
@@ -498,7 +499,7 @@ class VictoryConditionsTest extends munit.FunSuite:
     val battle = BattleState(
       player = MazeState.initial.copy(buildings = List(loiBuilding(1, BuildingKind.Church))),
       ai = MazeState.initial,
-      elapsedTicks = Balance.LoiVictoryTickThreshold
+      elapsedMs = Balance.LoiVictoryMsThreshold
     )
     assertEquals(
       VictoryConditions.winningCondition(battle.player, battle.ai, battle),

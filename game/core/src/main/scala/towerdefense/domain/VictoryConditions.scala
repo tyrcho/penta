@@ -102,13 +102,13 @@ object VictoryConditions:
 
   // Victoire.md's "W: Paix Éternelle" — unlike the other four, this isn't a race against a
   // floor/opponent-multiplier target: it only starts comparing each side's Loi building
-  // count once Balance.LoiVictoryTickThreshold ticks have passed, and only fires on a
-  // STRICT inequality — a tie at or after the threshold returns false from both sides
-  // every tick until one side's count pulls ahead (see BattleState.elapsedTicks' doc).
+  // count once Balance.LoiVictoryMsThreshold of simulated time has passed, and only fires
+  // on a STRICT inequality — a tie at or after the threshold returns false from both sides
+  // every tick until one side's count pulls ahead (see BattleState.elapsedMs' doc).
   // Lives here (not folded into `hasWon`) since it needs the whole BattleState for
-  // elapsedTicks, not just the per-side MazeState `hasWon` receives.
+  // elapsedMs, not just the per-side MazeState `hasWon` receives.
   private def hasWonViaLoi(battle: BattleState, isPlayer: Boolean): Boolean =
-    battle.elapsedTicks >= Balance.LoiVictoryTickThreshold &&
+    battle.elapsedMs >= Balance.LoiVictoryMsThreshold &&
       (if isPlayer then loiBuildingCount(battle.player) > loiBuildingCount(battle.ai)
        else loiBuildingCount(battle.ai) > loiBuildingCount(battle.player))
 
@@ -147,7 +147,7 @@ object VictoryConditions:
     if forestCount(state, opponent) >= forestTarget(state, opponent) then WinCondition.Nature
     else if state.resourcesPlundered >= plunderTarget(opponent) then WinCondition.Chaos
     else if state.buildingsCorrupted >= corruptionTarget(opponent) then WinCondition.Mort
-    else if battle.elapsedTicks >= Balance.LoiVictoryTickThreshold && loiBuildingCount(
+    else if battle.elapsedMs >= Balance.LoiVictoryMsThreshold && loiBuildingCount(
         state
       ) > loiBuildingCount(opponent)
     then WinCondition.Loi
@@ -164,8 +164,8 @@ object VictoryConditions:
         s"Mort corruption: ${state.buildingsCorrupted} enemy buildings corrupted to dust " +
           s"(target ${corruptionTarget(opponent).toInt})."
       case WinCondition.Loi =>
-        s"Loi's eternal peace: ${loiBuildingCount(state)} Loi buildings standing after ${battle.elapsedTicks} ticks " +
-          s"(opponent had ${loiBuildingCount(opponent)})."
+        s"Loi's eternal peace: ${loiBuildingCount(state)} Loi buildings standing after " +
+          s"${(battle.elapsedMs / 1_000.0).toInt}s (opponent had ${loiBuildingCount(opponent)})."
       case WinCondition.Science =>
         val level = state.researchLevels.getOrElse(BuildingKind.LaboDeRecherche, 0)
         s"Science mastery: Recherche fondamentale reached level $level, every other lab at the required depth."

@@ -27,8 +27,8 @@ import towerdefense.domain.economy.*
 // and VictoryConditions.hasWonViaFondamentale/fondamentaleLevel/fondamentaleReadyLabCount.
 // Labs are wired up here only as Crystal producers; the research-level state itself lives
 // on MazeState.researchLevels, not on this enum. Loi's own victory condition ("Paix
-// Eternelle" — win by building count at a turn-count deadline) is wired too, via
-// BattleState.elapsedTicks and VictoryConditions.hasWonViaLoi.
+// Eternelle" — win by building count at a simulated-time deadline) is wired too, via
+// BattleState.elapsedMs and VictoryConditions.hasWonViaLoi.
 // dps: passive/ranged damage per second dealt to enemy creatures (Forest/Jungle/Angel/
 // PassingGate's adjacency aura, Watchtower's single-target range attack) — 0.0 (the
 // enum-level default) for every other kind. The actual targeting rule (adjacency vs

@@ -358,10 +358,13 @@ class BattleEngineTest extends munit.FunSuite:
     assertEquals(frozen, ticked)
   }
 
-  // Loi's own victory condition (VictoryConditions.hasWonViaLoi) needs to know how many
-  // ticks a match has run, not how much virtual time has elapsed (deltaMs varies per
-  // caller — Simulator uses 100ms, GameApp uses the real frame delta) — a plain per-tick
-  // counter, incremented once per BattleEngine.tick call regardless of deltaMs.
+  // A plain per-tick counter, incremented once per BattleEngine.tick call regardless of
+  // deltaMs — kept for logging/persistence (a tick number to correlate log lines by), but
+  // NOT what Loi's own victory condition compares against anymore: equal tick counts mean
+  // wildly different real durations depending on the caller (Simulator's fixed 100ms/tick
+  // vs GameApp's real, frame-rate-dependent delta — a browser at 60fps calls `tick` ~6x
+  // more often per second of wall-clock time than the simulator's 100ms convention
+  // assumes). See elapsedMs below, and Balance.LoiVictoryMsThreshold's doc, for the fix.
   test("elapsedTicks starts at 0 and increments by exactly 1 per tick, regardless of deltaMs") {
     assertEquals(BattleState.initial.elapsedTicks, 0)
     val once = BattleEngine.tick(BattleState.initial, deltaMs = 250.0)
@@ -392,4 +395,38 @@ class BattleEngineTest extends munit.FunSuite:
     assert(ticked.outcome.isDefined)
     val frozen = BattleEngine.tick(ticked, deltaMs = 10_000.0)
     assertEquals(frozen.elapsedTicks, ticked.elapsedTicks)
+  }
+
+  // elapsedMs accumulates actual simulated time (the sum of every deltaMs `tick` has been
+  // called with) rather than counting calls — this is what Loi's victory condition compares
+  // against Balance.LoiVictoryMsThreshold, so the same real duration means the same thing
+  // whether the caller is the simulator's fixed 100ms/tick or the browser's real frame delta.
+  test("elapsedMs starts at 0 and accumulates deltaMs per tick") {
+    assertEquals(BattleState.initial.elapsedMs, 0.0)
+    val once = BattleEngine.tick(BattleState.initial, deltaMs = 250.0)
+    assertEquals(once.elapsedMs, 250.0)
+    val twice = BattleEngine.tick(once, deltaMs = 16.67)
+    assertEquals(twice.elapsedMs, 266.67)
+  }
+
+  // Same "freeze on outcome" invariant as elapsedTicks above — a decided match's simulated
+  // clock must stop too, not just its call counter.
+  test("elapsedMs stops accumulating once the battle is frozen by an outcome") {
+    val forests = (0 until Balance.NatureVictoryForestTarget)
+      .map(i =>
+        Building(
+          i.toLong,
+          col = i % GridConfig.cols,
+          row = 1 + i / GridConfig.cols,
+          BuildingKind.Forest,
+          spawnCountdownMs = Double.MaxValue
+        )
+      )
+      .toList
+    val battle =
+      BattleState(player = MazeState.initial.copy(buildings = forests), ai = MazeState.initial)
+    val ticked = BattleEngine.tick(battle, deltaMs = 1.0)
+    assert(ticked.outcome.isDefined)
+    val frozen = BattleEngine.tick(ticked, deltaMs = 10_000.0)
+    assertEquals(frozen.elapsedMs, ticked.elapsedMs)
   }

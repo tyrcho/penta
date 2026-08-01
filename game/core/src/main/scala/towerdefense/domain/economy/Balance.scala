@@ -599,23 +599,35 @@ object Balance:
 
   // Victoire.md, "W: Paix Éternelle — à la fin du nombre de tours définis, le joueur avec
   // le plus de bâtiments W gagne la partie si aucune autre condition n'est remplie" — the
-  // one victory condition that isn't a race, but a sudden-death comparison once this many
-  // ticks (BattleState.elapsedTicks) have passed.
+  // one victory condition that isn't a race, but a sudden-death comparison once this much
+  // simulated time (BattleState.elapsedMs) has passed.
   //
-  // Raised back to 3_000 (rock-paper-scissors tuning pass, reversing an earlier 2_000):
-  // confirmed via VictoryConditions.WinCondition-tagged transcripts that 2_000 fired far
-  // too early for legs where NEITHER side is actually racing Loi — Science-vs-Nature and
+  // Expressed in ms of simulated time, not a raw tick count, since a tick means a different
+  // real duration depending on the caller (BattleState.elapsedTicks' doc): the simulator
+  // calls BattleEngine.tick with a fixed 100ms deltaMs, while GameApp calls it once per
+  // browser animation frame (~16.67ms at 60fps). A tick-count threshold tuned against the
+  // simulator's convention (see history below) fired ~6x too early for a human player at
+  // normal speed in the browser — under a minute in, instead of the intended ~5 minutes.
+  // Comparing accumulated elapsedMs directly fixes that: the same real/simulated duration
+  // now means the same thing everywhere, regardless of how often or how unevenly `tick` is
+  // called to get there.
+  //
+  // 300_000 (5 simulated minutes) preserves the value from the tick-based threshold's own
+  // tuning history: raised back to a tick count of 3_000 (rock-paper-scissors tuning pass,
+  // reversing an earlier 2_000) after confirming via VictoryConditions.WinCondition-tagged
+  // transcripts that 2_000 ticks (200s at the simulator's fixed 100ms/tick) fired far too
+  // early for legs where NEITHER side is actually racing Loi — Science-vs-Nature and
   // Nature-vs-Mort both ended up decided mostly by an incidental Loi building-count lead
   // (whichever side's fallback spending happened to pick up a stray Watchtower/Church)
   // rather than either side's own intended condition, since those matchups routinely run
-  // past 2_000 ticks before Science's labs or Nature/Mort's own race concludes. 3_000 lets
-  // those genuine races resolve first; Loi-vs-Chaos (the one matchup Loi's sudden-death is
+  // past 200s before Science's labs or Nature/Mort's own race concludes. 300s lets those
+  // genuine races resolve first; Loi-vs-Chaos (the one matchup Loi's sudden-death is
   // actually meant to decide) still gets a real look, since Law reliably amasses far more
-  // Loi buildings than needed well before 3_000 (86 vs an opponent's 1, in one measured
+  // Loi buildings than needed well before 300s (86 vs an opponent's 1, in one measured
   // match) — the deciding factor there is whether Chaos's OWN plunder race (a small,
-  // eventually-reachable fixed target) resolves before 3_000 either way, same tension as
+  // eventually-reachable fixed target) resolves before 300s either way, same tension as
   // before, just without dragging in the other 3 legs as collateral.
-  val LoiVictoryTickThreshold: Int = 3_000
+  val LoiVictoryMsThreshold: Double = 300_000.0
 
   // POC default: tearing a building down returns half of what it cost, so reshaping a
   // maze isn't free (discourages build/destroy spam) but also isn't punitive.
