@@ -84,16 +84,26 @@ case object LawSpending extends SpendingPolicy:
   // Currently starved out: Angel ties Church/Barracks/Watchtower on loiBonus alone, and
   // Watchtower's own uncapped defenseBonus above wins that tie every time it's affordable
   // (by design, see its own doc) — a measured loss built 53 Watchtower against only 8
-  // Angel. This bonus is deliberately BELOW defenseBonus (1.0+0.8=1.8 vs Watchtower's
+  // Angel. This bonus is deliberately BELOW defenseBonus (1.0+1.3=2.3 vs Watchtower's
   // 1.0+2.0=3.0), so Watchtower still wins every head-to-head and Chaos's already-perfect
   // 12/12 leg (tuned specifically on "Watchtower wins the fallback tie-break too") is
   // untouched — this only changes which of Church/Barracks/Angel wins THEIR OWN three-way
   // tie once Watchtower isn't the pick that tick, giving Law real aura coverage against
   // swarm corrosion instead of Barracks' zero-dps Soldier or Church's lone-target Paladin
-  // shield. Capped (6): still a corner of the build order, not a full pivot away from the
-  // building-count race the other 3 kinds still need to win outright.
-  private val angelSwarmDefenseCap = 6
-  private val angelSwarmDefenseBonus = 0.8
+  // shield.
+  //
+  // Bonus 0.8->1.3 and cap 6->10 (round 2, re-tuned against mort.CorruptionSpending's own
+  // round-1 strengthening — spendingWeight 1.0->3.0 plus a BlackCastle-specific bonus, see
+  // its own doc): the round-1 numbers were measured against Mort's OLD, diluted-scoring
+  // code (3/12, briefly 4/12) and collapsed to 0/12 once Mort actually committed to a real
+  // Tomb/BlackCastle rush every turn instead of drifting into Watchtower/Grove filler.
+  // Vampire in particular (BlackCastle's own unit) has 50 HP against Zombie's 15 — one
+  // Watchtower alone needs 5 ticks to solo-kill it, plenty of time for its 2.5%/sec
+  // corruption to land repeatedly — so more simultaneous Angel aura coverage (hits every
+  // adjacent creature every tick, not just Watchtower's own one-nearest-target) is worth
+  // more of the build order now than it was against the weaker round-1 Mort.
+  private val angelSwarmDefenseCap = 10
+  private val angelSwarmDefenseBonus = 1.3
 
   def score(state: MazeState, opponent: MazeState, kind: BuildingKind): Double =
     val loiBonus = if loiKinds.contains(kind) then 1.0 else 0.0
