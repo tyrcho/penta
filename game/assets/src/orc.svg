@@ -1,0 +1,77 @@
+<svg id="art" viewBox="0 0 400 400" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="orcSkin" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#8fbf4a"/>
+      <stop offset="100%" stop-color="#5f8f2e"/>
+    </linearGradient>
+    <linearGradient id="orcPauldron" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#8a6a48"/>
+      <stop offset="100%" stop-color="#5f4a30"/>
+    </linearGradient>
+  </defs>
+
+  <!-- far shoulder / body (behind head) -->
+  <path d="M96,388 Q80,300 130,264 Q160,246 200,246 Q240,246 270,264 Q320,300 304,388 Z"
+        fill="url(#orcSkin)" stroke="#2b1d12" stroke-width="8" stroke-linejoin="round"/>
+
+  <!-- studded leather pauldron, near shoulder -->
+  <path d="M244,300 Q296,286 328,320 Q344,344 328,368 Q300,384 264,372 Q252,340 244,300 Z"
+        fill="url(#orcPauldron)" stroke="#2b1d12" stroke-width="7" stroke-linejoin="round"/>
+  <circle cx="282" cy="320" r="7" fill="#c9c2b4" stroke="#2b1d12" stroke-width="3"/>
+  <circle cx="308" cy="336" r="7" fill="#c9c2b4" stroke="#2b1d12" stroke-width="3"/>
+  <circle cx="286" cy="352" r="7" fill="#c9c2b4" stroke="#2b1d12" stroke-width="3"/>
+
+  <!-- neck -->
+  <path d="M168,268 Q168,240 200,238 Q232,240 232,268 L226,296 L174,296 Z"
+        fill="#6e9a38" stroke="#2b1d12" stroke-width="7" stroke-linejoin="round"/>
+
+  <!-- head -->
+  <path d="M118,168 Q112,104 172,78 Q200,66 228,78 Q288,104 282,168
+           Q288,206 262,234 Q236,258 200,258 Q164,258 138,234 Q112,206 118,168 Z"
+        fill="url(#orcSkin)" stroke="#2b1d12" stroke-width="8" stroke-linejoin="round"/>
+
+  <!-- jaw shading -->
+  <path d="M138,234 Q164,258 200,258 Q236,258 262,234 Q252,214 200,214 Q148,214 138,234 Z"
+        fill="#4d7524" opacity="0.55"/>
+
+  <!-- head highlight -->
+  <path d="M140,120 Q160,90 196,80 Q168,96 152,128 Q142,150 140,170 Q134,146 140,120 Z"
+        fill="#b6e07a" opacity="0.55"/>
+
+  <!-- mohawk -->
+  <path d="M150,90 Q170,34 200,26 Q230,34 250,90 Q224,66 200,64 Q176,66 150,90 Z"
+        fill="#241a10" stroke="#2b1d12" stroke-width="7" stroke-linejoin="round"/>
+
+  <!-- brow ridge -->
+  <path d="M136,150 Q160,132 188,140" fill="none" stroke="#2b1d12" stroke-width="9" stroke-linecap="round"/>
+  <path d="M212,140 Q240,132 264,150" fill="none" stroke="#2b1d12" stroke-width="9" stroke-linecap="round"/>
+
+  <!-- eyes -->
+  <ellipse cx="168" cy="160" rx="11" ry="9" fill="#ffd94a" stroke="#2b1d12" stroke-width="4"/>
+  <ellipse cx="232" cy="160" rx="11" ry="9" fill="#ffd94a" stroke="#2b1d12" stroke-width="4"/>
+  <circle cx="171" cy="161" r="4" fill="#2b1d12"/>
+  <circle cx="229" cy="161" r="4" fill="#2b1d12"/>
+
+  <!-- battle scar over left eye -->
+  <path d="M126,132 L154,178" fill="none" stroke="#3a5c1a" stroke-width="6" stroke-linecap="round" opacity="0.8"/>
+
+  <!-- nose -->
+  <path d="M188,176 Q200,192 212,176 Q206,196 200,198 Q194,196 188,176 Z"
+        fill="#4d7524" stroke="#2b1d12" stroke-width="5" stroke-linejoin="round"/>
+
+  <!-- lower jaw / mouth -->
+  <path d="M150,206 Q200,232 250,206 Q244,224 200,232 Q156,224 150,206 Z"
+        fill="#3a5c1a" stroke="#2b1d12" stroke-width="6" stroke-linejoin="round"/>
+
+  <!-- tusks -->
+  <path d="M170,214 Q164,240 176,250 Q186,244 182,220 Z"
+        fill="#f0ead8" stroke="#2b1d12" stroke-width="5" stroke-linejoin="round"/>
+  <path d="M230,214 Q236,240 224,250 Q214,244 218,220 Z"
+        fill="#f0ead8" stroke="#2b1d12" stroke-width="5" stroke-linejoin="round"/>
+
+  <!-- ears -->
+  <path d="M116,150 Q92,138 92,110 Q108,120 126,142 Z"
+        fill="#6e9a38" stroke="#2b1d12" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M284,150 Q308,138 308,110 Q292,120 274,142 Z"
+        fill="#6e9a38" stroke="#2b1d12" stroke-width="6" stroke-linejoin="round"/>
+</svg>

@@ -1,0 +1,105 @@
+<svg id="art" viewBox="0 0 400 400" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <radialGradient id="wcFireGlow" cx="50%" cy="58%" r="55%">
+      <stop offset="0%" stop-color="#ffd35c" stop-opacity="0.95"/>
+      <stop offset="40%" stop-color="#ff9a2e" stop-opacity="0.75"/>
+      <stop offset="75%" stop-color="#ff6a1a" stop-opacity="0.35"/>
+      <stop offset="100%" stop-color="#ff6a1a" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="wcOuterGlow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#ff9a2e" stop-opacity="0.85"/>
+      <stop offset="100%" stop-color="#ff9a2e" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="wcTentLeft" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#9c7a52"/>
+      <stop offset="100%" stop-color="#725a3a"/>
+    </linearGradient>
+    <linearGradient id="wcTentRight" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#8a6a48"/>
+      <stop offset="100%" stop-color="#5f4a30"/>
+    </linearGradient>
+  </defs>
+
+  <!-- ground shadow -->
+  <ellipse cx="200" cy="360" rx="152" ry="20" fill="#000000" opacity="0.18"/>
+
+  <!-- dirt mound -->
+  <path d="M48,355 Q42,320 88,314 Q78,298 120,292 Q142,268 200,272 Q260,266 284,292 Q322,296 316,318 Q358,324 352,355 Z"
+        fill="#7a4a26" stroke="#2b1d12" stroke-width="7" stroke-linejoin="round"/>
+  <path d="M66,340 Q116,330 166,338" fill="none" stroke="#5c3719" stroke-width="5" stroke-linecap="round" opacity="0.7"/>
+  <path d="M232,342 Q282,332 322,340" fill="none" stroke="#5c3719" stroke-width="5" stroke-linecap="round" opacity="0.7"/>
+
+  <!-- outer campfire glow bleeding onto the whole camp -->
+  <circle cx="200" cy="240" r="150" fill="url(#wcOuterGlow)"/>
+
+  <!-- left tent (jagged asymmetric chaos silhouette) -->
+  <g transform="translate(112,238)">
+    <path d="M-72,86 L-18,-84 L2,-60 L54,86 Z"
+          fill="url(#wcTentLeft)" stroke="#2b1d12" stroke-width="8" stroke-linejoin="round"/>
+    <path d="M-18,-84 L2,-60 L-6,86 L-40,86 Z" fill="#000000" opacity="0.18"/>
+    <path d="M-58,60 L-24,-40 L-14,-40 L-30,60 Z" fill="#c9ac82" opacity="0.35"/>
+    <path d="M-6,86 L-16,20 L4,20 L10,86 Z" fill="#241a10" stroke="#2b1d12" stroke-width="5" stroke-linejoin="round"/>
+    <path d="M-16,20 Q-6,10 4,20" fill="none" stroke="#2b1d12" stroke-width="5"/>
+  </g>
+
+  <!-- right tent, smaller, further back -->
+  <g transform="translate(290,258) scale(0.82)">
+    <path d="M-60,74 L-10,-70 L46,74 Z"
+          fill="url(#wcTentRight)" stroke="#2b1d12" stroke-width="7" stroke-linejoin="round"/>
+    <path d="M-10,-70 L18,74 L46,74 Z" fill="#000000" opacity="0.2"/>
+    <path d="M-48,50 L-16,-34 L-8,-34 L-22,50 Z" fill="#c9ac82" opacity="0.3"/>
+  </g>
+
+  <!-- crossed spear and jagged axe leaning on left tent -->
+  <g transform="translate(96,150) rotate(-8)">
+    <rect x="-4" y="-6" width="8" height="176" rx="3" fill="#8a5a2e" stroke="#2b1d12" stroke-width="5"/>
+    <path d="M-14,-6 L0,-40 L14,-6 Z" fill="#c9c2b4" stroke="#2b1d12" stroke-width="5" stroke-linejoin="round"/>
+  </g>
+  <g transform="translate(120,150) rotate(10)">
+    <rect x="-4" y="-6" width="8" height="176" rx="3" fill="#6e4526" stroke="#2b1d12" stroke-width="5"/>
+    <path d="M4,-4 Q34,-24 40,-2 Q42,16 16,18 Q0,16 4,-4 Z" fill="#9aa0a6" stroke="#2b1d12" stroke-width="5" stroke-linejoin="round"/>
+  </g>
+
+  <!-- campfire ring of stones -->
+  <g fill="#5a5148" stroke="#2b1d12" stroke-width="4">
+    <ellipse cx="200" cy="330" rx="15" ry="9"/>
+    <ellipse cx="228" cy="322" rx="13" ry="8"/>
+    <ellipse cx="240" cy="340" rx="14" ry="8"/>
+    <ellipse cx="212" cy="346" rx="13" ry="8"/>
+    <ellipse cx="172" cy="322" rx="13" ry="8"/>
+    <ellipse cx="160" cy="340" rx="14" ry="8"/>
+    <ellipse cx="188" cy="346" rx="13" ry="8"/>
+  </g>
+
+  <!-- campfire glow halo -->
+  <ellipse cx="200" cy="300" rx="76" ry="72" fill="url(#wcFireGlow)"/>
+
+  <!-- crossed logs -->
+  <rect x="-46" y="-6" width="92" height="12" rx="5" fill="#5c3a1e" stroke="#2b1d12" stroke-width="4" transform="translate(200,320) rotate(18)"/>
+  <rect x="-46" y="-6" width="92" height="12" rx="5" fill="#6e4526" stroke="#2b1d12" stroke-width="4" transform="translate(200,320) rotate(-22)"/>
+
+  <!-- flames -->
+  <path d="M200,320 Q182,290 196,258 Q200,278 212,262 Q222,286 208,300 Q222,296 224,278 Q234,300 214,320 Q208,306 200,320 Z"
+        fill="#ffce54" stroke="#a13a06" stroke-width="4" stroke-linejoin="round"/>
+  <path d="M198,308 Q190,292 198,272 Q204,288 210,278 Q214,296 202,308 Z" fill="#fff3c4" opacity="0.85"/>
+
+  <!-- banner totem stake, right of camp -->
+  <g transform="translate(322,236) rotate(6)">
+    <rect x="-6" y="-92" width="12" height="176" rx="4" fill="#8a5a2e" stroke="#2b1d12" stroke-width="6"/>
+    <path d="M6,-10 L52,2 L38,14 L52,26 L6,38 Z" fill="#7a2fb0" stroke="#2b1d12" stroke-width="5" stroke-linejoin="round"/>
+    <g transform="translate(0,-88)">
+      <path d="M-18,0 Q-20,-22 0,-24 Q20,-22 18,0 Q18,12 10,15 L10,24 L4,24 L4,15 L-4,15 L-4,24 L-10,24 L-10,15 Q-18,12 -18,0 Z"
+            fill="#e8ddc7" stroke="#2b1d12" stroke-width="5" stroke-linejoin="round"/>
+      <ellipse cx="-7" cy="-2" rx="5" ry="7" fill="#2b1d12"/>
+      <ellipse cx="7" cy="-2" rx="5" ry="7" fill="#2b1d12"/>
+    </g>
+  </g>
+
+  <!-- chaos rune, upper left, above the camp -->
+  <g transform="translate(88,72) rotate(-10) scale(0.62)">
+    <path d="M0,-30 L7,-11 L24,-22 L14,-4 L34,-2 L13,7 L26,22 L6,14 L2,32
+             L-8,15 L-24,26 L-15,7 L-33,6 L-13,-5 L-22,-22 L-4,-13 Z"
+          fill="#b24bff" stroke="#3a1050" stroke-width="4.5" stroke-linejoin="round"/>
+    <circle cx="0" cy="0" r="7" fill="#e9c8ff"/>
+  </g>
+</svg>
